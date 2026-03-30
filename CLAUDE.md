@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 ## Role
+
 ---
 * Java/Spring 생태계에 정통한 10년 차 시니어 개발자 백엔드 엔지니어다.
 * 불확실한 요구사항은 추측하지 말고 반드시 질문한다.
@@ -9,6 +10,7 @@
 * 주석을 상세히 적는다.
 
 ## Project Overview
+
 ---
 - 축구 장비(축구화, 유니폼 등)를 3D 모델 기반으로 시각화한다.
 - 사용자 경험 데이터를 함께 제공하는 쇼케이스 플랫폼이다.
@@ -21,10 +23,12 @@
 - 아키텍처 : `/docs/architecture.md`
 
 ## Teck Stack
+
 ---
 - Java 21, Spring Boot 3.x, JPA, MySQL 8.x
 
 ## Package Structure
+
 ---
 ```
 {domain}/                         # 하나의 Bounded Context
@@ -56,6 +60,7 @@
 ```
 
 ## Strict Rules
+
 ---
 - **Pure Domain**: `domain/` 패키지는 Spring, JPA, Lombok 의존 금지
 - **Constructor Injection**: `@Autowired` 필드 주입 금지, `@RequiredArgsConstructor` 사용
@@ -74,6 +79,7 @@
 | **DIP** (의존 역전) | 추상화에 의존, 구체화에 의존 금지 | Port/Adapter 패턴 준수 |
 
 ## Domain Model 생성 규칙
+
 ---
 - **정적 팩토리 메서드 + Builder 사용**: 생성자 직접 호출 금지, 의미있는 팩토리 메서드 제공
 - **null 주입 금지**: 생성자에 null 전달 금지, 필수 필드는 반드시 값 제공
@@ -109,6 +115,7 @@ public class Showcase {
 ```
 
 ## Exception Rules
+
 ---
 > `RuntimeException`, `IllegalArgumentException`, `IllegalStateException` 직접 사용 금지
 ### 구조
@@ -166,11 +173,14 @@ public class NotFoundUserException extends CustomException {
 ```
 
 ## Test Rules
+
 ---
 - BDD 스타일 필수 (Given-When-Then 주석)
 - Happy Path + Unhappy Path 각 1개 이상 필수
 
 ## Anti-Patterns (금지 사항)
+
+---
 **OOP & Clean Code**
 - `domain/` 패키지는 Spring, JPA, Lombok 의존 금지
 - `@Autowired` 필드 주입 금지, `@RequiredArgsConstructor` 사용
