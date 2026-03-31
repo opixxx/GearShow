@@ -221,7 +221,7 @@ CustomException (extends RuntimeException)
 - Direct `RuntimeException`, `IllegalArgumentException`, `IllegalStateException` is **prohibited**.
 - Exception naming: `{Reason}{Entity}Exception`
 - ErrorCode naming: `{DOMAIN}_{REASON}` or `{DOMAIN}_{ENTITY}_{REASON}`
-- ErrorCode messages are written in **English**.
+- ErrorCode messages are written in **Korean**.
 
 ---
 

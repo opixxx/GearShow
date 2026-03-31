@@ -4,15 +4,15 @@
 
 ## 1. Language
 
-All code must be written in **English only**.
+코드의 **식별자(변수, 메서드, 클래스명)** 는 영문으로, **사람이 읽는 텍스트(주석, 로그, 메시지)** 는 **한글**로 작성한다.
 
-| Target | Language | Example |
+| 대상 | 언어 | 예시 |
 |:-------|:---------|:--------|
-| Comments / Javadoc | English | `/** Creates a new showcase. */` |
-| Log messages | English | `log.info("Showcase created: showcaseId={}", id)` |
-| Exception messages | English | `"Showcase not found: " + showcaseId` |
-| Variable / Method names | English | `findByOwnerId`, `catalogItemId` |
-| Bean Validation messages | English | `@NotBlank(message = "Title is required")` |
+| 주석 / Javadoc | 한글 | `/** 새로운 쇼케이스를 생성한다. */` |
+| 로그 메시지 | 한글 | `log.info("쇼케이스 생성 완료: showcaseId={}", id)` |
+| 예외 메시지 (ErrorCode) | 한글 | `"쇼케이스를 찾을 수 없습니다"` |
+| 변수 / 메서드명 | 영문 | `findByOwnerId`, `catalogItemId` |
+| Bean Validation 메시지 | 한글 | `@NotBlank(message = "제목은 필수입니다")` |
 
 ---
 
@@ -61,8 +61,8 @@ com.gearshow.backend.{domain}.{layer}.{sublayer}
 | Domain Policy | `{Name}Policy` | `ShowcaseImagePolicy` |
 | Domain Repository | `{Entity}Repository` | `ShowcaseRepository` |
 
-> Domain package (`domain/`) prohibits Spring and JPA dependencies.
-> **Exception**: Lombok `@Getter` and `@Builder` are allowed for domain models only.
+> `domain/` 패키지는 Spring, JPA 의존 금지.
+> **예외**: 도메인 모델에 한해 Lombok `@Getter`, `@Builder`만 허용.
 
 ### 2-5. Application
 
@@ -79,7 +79,7 @@ com.gearshow.backend.{domain}.{layer}.{sublayer}
 | Request DTO | `{Action}Request` | `CreateShowcaseRequest`, `LoginRequest` |
 | Response DTO | `{Action}Response` | `ShowcaseDetailResponse`, `ShowcaseListResponse` |
 
-> All DTOs must be Java `record` types. Lombok `@Data` is prohibited.
+> 모든 DTO는 Java `record` 타입을 사용한다. Lombok `@Data`는 사용 금지.
 
 ### 2-7. Exception
 
@@ -90,7 +90,7 @@ com.gearshow.backend.{domain}.{layer}.{sublayer}
 | Application Exception | `{Reason}{Action}Exception` | `FailedLoginException` |
 | External Exception | `{Provider}{Reason}Exception` | `TripoGenerationFailedException` |
 
-> All exceptions must extend `CustomException` via `ErrorCode`. Direct `RuntimeException` usage is prohibited.
+> 모든 예외는 `ErrorCode`를 통해 `CustomException`을 상속해야 한다. `RuntimeException` 직접 사용 금지.
 
 ### 2-8. ErrorCode
 
@@ -100,37 +100,30 @@ com.gearshow.backend.{domain}.{layer}.{sublayer}
 | `{DOMAIN}_{ENTITY}_{REASON}` | `USER_DUPLICATE_NICKNAME`, `CATALOG_ITEM_NOT_FOUND` |
 | `{DOMAIN}_{DETAIL}_{REASON}` | `SHOWCASE_MODEL_ALREADY_GENERATING`, `SHOWCASE_MIN_IMAGE_REQUIRED` |
 
-> - ErrorCode message is written in **English**. The frontend maps error codes to Korean messages for end users.
-> - Prefix must start with the domain the error belongs to.
-> - Use `{DOMAIN}_{REASON}` for simple cases, `{DOMAIN}_{ENTITY}_{REASON}` when the target needs to be explicit.
+> - ErrorCode 메시지는 **한글**로 작성한다.
+> - 접두사는 반드시 해당 도메인으로 시작한다.
+> - 단순한 경우 `{DOMAIN}_{REASON}`, 대상을 명시해야 할 때 `{DOMAIN}_{ENTITY}_{REASON}`을 사용한다.
 
 ```java
 // Good
 public enum ErrorCode {
     // AUTH
-    AUTH_INVALID_CODE(400, "Invalid authorization code"),
-    AUTH_EXPIRED_TOKEN(401, "Token has expired"),
+    AUTH_INVALID_CODE(400, "유효하지 않은 인가 코드입니다"),
+    AUTH_EXPIRED_TOKEN(401, "토큰이 만료되었습니다"),
 
     // USER
-    USER_NOT_FOUND(404, "User not found"),
-    USER_DUPLICATE_NICKNAME(400, "Nickname already in use"),
+    USER_NOT_FOUND(404, "사용자를 찾을 수 없습니다"),
+    USER_DUPLICATE_NICKNAME(400, "이미 사용 중인 닉네임입니다"),
 
     // SHOWCASE
-    SHOWCASE_NOT_FOUND(404, "Showcase not found"),
-    SHOWCASE_NOT_OWNER(403, "Only the showcase owner can modify or delete"),
-    SHOWCASE_MIN_IMAGE_REQUIRED(400, "At least one image is required"),
-    SHOWCASE_MODEL_ALREADY_GENERATING(400, "3D model is already being generated");
+    SHOWCASE_NOT_FOUND(404, "쇼케이스를 찾을 수 없습니다"),
+    SHOWCASE_NOT_OWNER(403, "쇼케이스 소유자만 수정 또는 삭제할 수 있습니다"),
+    SHOWCASE_MIN_IMAGE_REQUIRED(400, "최소 1개의 이미지가 필요합니다"),
+    SHOWCASE_MODEL_ALREADY_GENERATING(400, "3D 모델이 이미 생성 중입니다");
 
     private final int status;
     private final String message;
 }
-
-// Bad - Korean message
-SHOWCASE_NOT_FOUND(404, "쇼케이스를 찾을 수 없습니다")
-
-// Bad - no domain prefix
-NOT_FOUND(404, "Not found")
-EXPIRED_TOKEN(401, "Token has expired")
 ```
 
 ### 2-9. Test
@@ -144,71 +137,70 @@ EXPIRED_TOKEN(401, "Token has expired")
 
 ## 3. Code Style
 
-### 3-1. Log Messages
+### 3-1. 로그 메시지
 
 ```java
 // Good
-log.info("Showcase created: showcaseId={}", showcaseId);
-log.warn("3D model generation failed: showcaseId={}, reason={}", showcaseId, reason);
-log.error("Failed to fetch catalog item: catalogItemId={}", catalogItemId, ex);
+log.info("쇼케이스 생성 완료: showcaseId={}", showcaseId);
+log.warn("3D 모델 생성 실패: showcaseId={}, reason={}", showcaseId, reason);
+log.error("카탈로그 아이템 조회 실패: catalogItemId={}", catalogItemId, ex);
 
 // Bad
-log.info("쇼케이스 생성됨: showcaseId={}", showcaseId);
-log.info("Showcase created: " + showcaseId);  // string concatenation
+log.info("쇼케이스 생성 완료: " + showcaseId);  // 문자열 연결 금지
 ```
 
-### 3-2. Exception Messages
+### 3-2. 예외 메시지
 
 ```java
-// Good - via ErrorCode
+// Good - ErrorCode를 통해 관리
 public enum ErrorCode {
-    SHOWCASE_NOT_FOUND(404, "Showcase not found"),
-    USER_DUPLICATE_NICKNAME(400, "Nickname already in use"),
-    AUTH_EXPIRED_TOKEN(401, "Token has expired");
+    SHOWCASE_NOT_FOUND(404, "쇼케이스를 찾을 수 없습니다"),
+    USER_DUPLICATE_NICKNAME(400, "이미 사용 중인 닉네임입니다"),
+    AUTH_EXPIRED_TOKEN(401, "토큰이 만료되었습니다");
 }
 
-// Bad - direct message in exception
-throw new RuntimeException("Showcase not found");
-throw new CustomException(404, "Showcase not found");
+// Bad - 예외에 직접 메시지 작성
+throw new RuntimeException("쇼케이스를 찾을 수 없습니다");
+throw new CustomException(404, "쇼케이스를 찾을 수 없습니다");
 ```
 
-### 3-3. Comments / Javadoc
+### 3-3. 주석 / Javadoc
 
 ```java
 // Good
 /**
- * Creates a new showcase with the given command.
- * If modelSourceImages are provided, triggers async 3D model generation.
+ * 주어진 커맨드로 새로운 쇼케이스를 생성한다.
+ * modelSourceImages가 포함되면 비동기로 3D 모델 생성을 요청한다.
  *
- * @param command showcase creation command
- * @return created showcase ID and optional 3D model status
+ * @param command 쇼케이스 생성 커맨드
+ * @return 생성된 쇼케이스 ID 및 3D 모델 상태
  */
 public CreateShowcaseResult createShowcase(CreateShowcaseCommand command) { ... }
 
-// Bad
-/** 쇼케이스를 생성합니다. */
+// Bad - 영문 주석
+/** Creates a new showcase. */
 public CreateShowcaseResult createShowcase(CreateShowcaseCommand command) { ... }
 ```
 
-### 3-4. Bean Validation Messages
+### 3-4. Bean Validation 메시지
 
 ```java
 // Good
 public record CreateShowcaseRequest(
-    @NotNull(message = "Catalog item ID is required")
+    @NotNull(message = "카탈로그 아이템 ID는 필수입니다")
     Long catalogItemId,
 
-    @NotBlank(message = "Title is required")
-    @Size(max = 100, message = "Title must not exceed 100 characters")
+    @NotBlank(message = "제목은 필수입니다")
+    @Size(max = 100, message = "제목은 100자를 초과할 수 없습니다")
     String title,
 
-    @NotNull(message = "Condition grade is required")
+    @NotNull(message = "상태 등급은 필수입니다")
     ConditionGrade conditionGrade
 ) {}
 
-// Bad
+// Bad - 영문 메시지
 public record CreateShowcaseRequest(
-    @NotNull(message = "카탈로그 아이템 ID는 필수입니다")
+    @NotNull(message = "Catalog item ID is required")
     Long catalogItemId
 ) {}
 ```
@@ -216,7 +208,7 @@ public record CreateShowcaseRequest(
 ### 3-5. DTO
 
 ```java
-// Good - record type
+// Good - record 타입 사용
 public record ShowcaseDetailResponse(
     Long showcaseId,
     String title,
@@ -225,7 +217,7 @@ public record ShowcaseDetailResponse(
     boolean isForSale
 ) {}
 
-// Bad - Lombok @Data
+// Bad - Lombok @Data 사용
 @Data
 public class ShowcaseDetailResponse {
     private Long showcaseId;
@@ -233,10 +225,10 @@ public class ShowcaseDetailResponse {
 }
 ```
 
-### 3-6. Domain Model
+### 3-6. 도메인 모델
 
 ```java
-// Good - static factory method + Builder
+// Good - 정적 팩토리 메서드 + Builder
 @Getter
 public class Showcase {
 
@@ -257,7 +249,7 @@ public class Showcase {
     }
 
     /**
-     * Creates a new Showcase in ACTIVE status.
+     * ACTIVE 상태의 새로운 쇼케이스를 생성한다.
      */
     public static Showcase create(Long ownerId, String title, ConditionGrade conditionGrade) {
         validate(title);
@@ -276,7 +268,7 @@ public class Showcase {
     }
 }
 
-// Bad - public constructor, no validation
+// Bad - public 생성자, 검증 없음
 public class Showcase {
     public Showcase(String title) {
         this.title = title;
@@ -284,10 +276,10 @@ public class Showcase {
 }
 ```
 
-### 3-7. Dependency Injection
+### 3-7. 의존성 주입
 
 ```java
-// Good - constructor injection via @RequiredArgsConstructor
+// Good - @RequiredArgsConstructor를 통한 생성자 주입
 @Service
 @RequiredArgsConstructor
 public class CreateShowcaseService implements CreateShowcaseUseCase {
@@ -296,7 +288,7 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     private final CatalogItemPort catalogItemPort;
 }
 
-// Bad - field injection
+// Bad - 필드 주입
 @Service
 public class CreateShowcaseService {
 
@@ -305,11 +297,11 @@ public class CreateShowcaseService {
 }
 ```
 
-### 3-8. Test (BDD Style)
+### 3-8. 테스트 (BDD 스타일)
 
 ```java
 @Test
-@DisplayName("Should create showcase successfully with valid command")
+@DisplayName("유효한 커맨드로 쇼케이스를 성공적으로 생성한다")
 void createShowcase_success() {
     // Given
     var command = new CreateShowcaseCommand(1L, "Nike Mercurial Review", ConditionGrade.A);
@@ -324,7 +316,7 @@ void createShowcase_success() {
 }
 
 @Test
-@DisplayName("Should throw exception when catalog item not found")
+@DisplayName("카탈로그 아이템이 존재하지 않으면 예외를 던진다")
 void createShowcase_catalogItemNotFound() {
     // Given
     var command = new CreateShowcaseCommand(999L, "Invalid", ConditionGrade.A);

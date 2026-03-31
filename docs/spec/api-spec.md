@@ -18,8 +18,7 @@
 
 ### 응답 언어 정책
 
-> API 응답의 `message`, `errorCode`, `failureReason` 등 모든 문자열은 **영문**으로 작성한다.
-> 프론트엔드에서 에러 코드 기반으로 한글 메시지를 매핑하여 사용자에게 노출한다.
+> API 응답의 `message`, `errorCode`, `failureReason` 등 모든 문자열은 **한글**로 작성한다.
 
 ### 공통 응답 형식
 
@@ -933,56 +932,56 @@ DELETE /api/v1/showcases/{showcaseId}/comments/{commentId}
 
 ## 에러 코드 목록
 
-> 모든 에러 메시지는 영문으로 작성한다. 프론트엔드에서 에러 코드(`code`) 기반으로 한글 메시지를 매핑한다.
+> 모든 에러 메시지는 한글로 작성한다.
 
 ### 공통
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| INVALID_INPUT | 400 | Invalid input |
-| UNAUTHORIZED | 401 | Authentication required |
-| FORBIDDEN | 403 | Access denied |
-| INVALID_CURSOR | 400 | Invalid cursor value |
-| INTERNAL_ERROR | 500 | Internal server error |
+| INVALID_INPUT | 400 | 잘못된 입력입니다 |
+| UNAUTHORIZED | 401 | 인증이 필요합니다 |
+| FORBIDDEN | 403 | 접근이 거부되었습니다 |
+| INVALID_CURSOR | 400 | 유효하지 않은 커서 값입니다 |
+| INTERNAL_ERROR | 500 | 서버 내부 오류가 발생했습니다 |
 
 ### AUTH
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| AUTH_INVALID_CODE | 400 | Invalid authorization code |
-| AUTH_EXPIRED_TOKEN | 401 | Token has expired |
-| AUTH_INVALID_TOKEN | 401 | Invalid token |
+| AUTH_INVALID_CODE | 400 | 유효하지 않은 인가 코드입니다 |
+| AUTH_EXPIRED_TOKEN | 401 | 토큰이 만료되었습니다 |
+| AUTH_INVALID_TOKEN | 401 | 유효하지 않은 토큰입니다 |
 
 ### USER
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| USER_NOT_FOUND | 404 | User not found |
-| USER_DUPLICATE_NICKNAME | 400 | Nickname already in use |
-| USER_INVALID_VERIFICATION_CODE | 400 | Invalid verification code |
-| USER_EXPIRED_VERIFICATION_CODE | 400 | Verification code has expired |
+| USER_NOT_FOUND | 404 | 사용자를 찾을 수 없습니다 |
+| USER_DUPLICATE_NICKNAME | 400 | 이미 사용 중인 닉네임입니다 |
+| USER_INVALID_VERIFICATION_CODE | 400 | 유효하지 않은 인증 코드입니다 |
+| USER_EXPIRED_VERIFICATION_CODE | 400 | 인증 코드가 만료되었습니다 |
 
 ### CATALOG
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| CATALOG_ITEM_NOT_FOUND | 404 | Catalog item not found |
-| CATALOG_DUPLICATE_MODEL_CODE | 400 | Model code already exists |
+| CATALOG_ITEM_NOT_FOUND | 404 | 카탈로그 아이템을 찾을 수 없습니다 |
+| CATALOG_DUPLICATE_MODEL_CODE | 400 | 이미 존재하는 모델 코드입니다 |
 
 ### SHOWCASE
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| SHOWCASE_NOT_FOUND | 404 | Showcase not found |
-| SHOWCASE_NOT_OWNER | 403 | Only the showcase owner can modify or delete |
-| SHOWCASE_MIN_IMAGE_REQUIRED | 400 | At least one image is required |
-| SHOWCASE_INSUFFICIENT_MODEL_SOURCE_IMAGES | 400 | At least 4 images are required for 3D model generation |
-| SHOWCASE_MODEL_ALREADY_GENERATING | 400 | 3D model is already being generated |
-| SHOWCASE_MODEL_GENERATION_FAILED | 500 | 3D model generation failed |
+| SHOWCASE_NOT_FOUND | 404 | 쇼케이스를 찾을 수 없습니다 |
+| SHOWCASE_NOT_OWNER | 403 | 쇼케이스 소유자만 수정 또는 삭제할 수 있습니다 |
+| SHOWCASE_MIN_IMAGE_REQUIRED | 400 | 최소 1개의 이미지가 필요합니다 |
+| SHOWCASE_INSUFFICIENT_MODEL_SOURCE_IMAGES | 400 | 3D 모델 생성을 위해 최소 4개의 이미지가 필요합니다 |
+| SHOWCASE_MODEL_ALREADY_GENERATING | 400 | 3D 모델이 이미 생성 중입니다 |
+| SHOWCASE_MODEL_GENERATION_FAILED | 500 | 3D 모델 생성에 실패했습니다 |
 
 ### SHOWCASE COMMENT
 
 | 코드 | HTTP Status | 메시지 |
 |:----|:-----------|:------|
-| COMMENT_NOT_FOUND | 404 | Comment not found |
-| COMMENT_NOT_AUTHOR | 403 | Only the comment author can modify or delete |
+| COMMENT_NOT_FOUND | 404 | 댓글을 찾을 수 없습니다 |
+| COMMENT_NOT_AUTHOR | 403 | 댓글 작성자만 수정 또는 삭제할 수 있습니다 |

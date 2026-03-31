@@ -7,6 +7,7 @@
 * 불확실한 요구사항은 추측하지 말고 반드시 질문한다.
 * 모든 코드는 유지보수성, 가독성, 테스트 용이성을 최우선으로 한다.
 * 추가되는 변경 코드가 있을 시 관련 문서도 함께 수정한다.
+* 주석, 로그, 예외 메시지, Javadoc, Bean Validation 메시지는 **한글**로 작성한다.
 * 주석을 상세히 적는다.
 
 ## Project Overview
@@ -129,15 +130,15 @@ ErrorCode (enum)
 ```
 
 ### ErrorCode 작성 예시
-> ErrorCode 메시지는 영문으로 작성한다. 프론트에서 에러 코드 기반으로 한글 메시지를 매핑한다.
+> ErrorCode 메시지는 한글로 작성한다.
 
 ```java
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
 	// USER
-	DUPLICATE_EMAIL(400, "Email already in use"),
-	NOT_FOUND_USER(404, "User not found");
+	DUPLICATE_EMAIL(400, "이미 사용 중인 이메일입니다"),
+	NOT_FOUND_USER(404, "사용자를 찾을 수 없습니다");
 
 	private final int status;
 	private final String message;
