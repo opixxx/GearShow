@@ -18,7 +18,7 @@
 - 사용자간 거래를 가능하다.
 
 ### 참고 문서
-- 상세 비즈니스 규칙 : `/docs/biz-logic.md`
+- 상세 비즈니스 규칙 : `/docs/business/biz-logic.md`
 - ERD : `/docs/diagram/schema.md`
 - API 명세 : `/docs/spec/api-spec.md`
 - 코딩 컨벤션 : `/docs/spec/coding-convention.md`
