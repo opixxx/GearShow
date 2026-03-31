@@ -11,7 +11,7 @@
 |:--------------|:-----------|:---------|
 | USER | AUTH_ACCOUNT | FK |
 | CATALOG_ITEM | BOOTS_SPEC, UNIFORM_SPEC | FK |
-| SHOWCASE | SHOWCASE_IMAGE, SHOWCASE_3D_MODEL, SHOWCASE_COMMENT | FK |
+| SHOWCASE | SHOWCASE_IMAGE, SHOWCASE_3D_MODEL, MODEL_SOURCE_IMAGE, SHOWCASE_COMMENT | FK |
 | CHAT_ROOM | CHAT_MESSAGE | FK |
 | TRANSACTION | PAYMENT | FK |
 
@@ -109,10 +109,18 @@ erDiagram
         string previewImageUrl
         enum modelStatus
         string generationProvider
-        int sourceImageCount
         datetime requestedAt
         datetime generatedAt
         string failureReason
+        datetime createdAt
+    }
+
+    MODEL_SOURCE_IMAGE {
+        bigint modelSourceImageId PK
+        bigint showcase3dModelId FK "FK → SHOWCASE_3D_MODEL (같은 Aggregate)"
+        string imageUrl
+        enum angleType
+        int sortOrder
         datetime createdAt
     }
 
@@ -181,6 +189,7 @@ erDiagram
     USER ||--o{ SHOWCASE : owns
     SHOWCASE ||--|{ SHOWCASE_IMAGE : contains
     SHOWCASE ||--o| SHOWCASE_3D_MODEL : has
+    SHOWCASE_3D_MODEL ||--|{ MODEL_SOURCE_IMAGE : contains
     SHOWCASE ||--o{ SHOWCASE_COMMENT : has
     USER ||--o{ SHOWCASE_COMMENT : writes
     SHOWCASE ||--o{ CHAT_ROOM : has
@@ -311,10 +320,22 @@ erDiagram
 | previewImageUrl | string | | 미리보기 이미지 URL |
 | modelStatus | enum | NOT NULL | 모델 상태 (REQUESTED, GENERATING, COMPLETED, FAILED 등) |
 | generationProvider | string | | 생성 제공자 (tripo 등) |
-| sourceImageCount | int | | 원본 이미지 수 |
 | requestedAt | datetime | | 요청 일시 |
 | generatedAt | datetime | | 생성 완료 일시 |
 | failureReason | string | | 실패 사유 |
+| createdAt | datetime | NOT NULL | 생성일시 |
+
+### MODEL_SOURCE_IMAGE (3D 모델 소스 이미지)
+
+> Aggregate: **SHOWCASE** (SHOWCASE_3D_MODEL을 통해 FK로 연결)
+
+| 컬럼명 | 타입 | 제약조건 | 설명 |
+|:------|:-----|:--------|:-----|
+| modelSourceImageId | bigint | PK | 소스 이미지 고유 식별자 |
+| showcase3dModelId | bigint | NOT NULL, FK → SHOWCASE_3D_MODEL | 3D 모델 ID |
+| imageUrl | string | NOT NULL | 이미지 URL |
+| angleType | enum | NOT NULL | 촬영 각도 (FRONT, BACK, LEFT, RIGHT 등) |
+| sortOrder | int | NOT NULL | 정렬 순서 |
 | createdAt | datetime | NOT NULL | 생성일시 |
 
 ### SHOWCASE_COMMENT (쇼케이스 댓글)
@@ -404,6 +425,7 @@ erDiagram
 | CATALOG_ITEM → UNIFORM_SPEC | 1:0..1 | 유니폼 카탈로그는 유니폼 스펙을 가질 수 있음 |
 | SHOWCASE → SHOWCASE_IMAGE | 1:N (필수) | 쇼케이스는 1개 이상의 이미지를 가짐 |
 | SHOWCASE → SHOWCASE_3D_MODEL | 1:0..1 | 쇼케이스는 3D 모델을 가질 수 있음 |
+| SHOWCASE_3D_MODEL → MODEL_SOURCE_IMAGE | 1:N (필수) | 3D 모델은 1개 이상의 소스 이미지를 가짐 (앞/뒤/좌/우 기본 4장) |
 | SHOWCASE → SHOWCASE_COMMENT | 1:N | 쇼케이스에 여러 댓글이 달릴 수 있음 (쇼케이스 삭제 시 함께 삭제) |
 | CHAT_ROOM → CHAT_MESSAGE | 1:N | 채팅방에 여러 메시지가 포함됨 |
 | TRANSACTION → PAYMENT | 1:0..1 | 거래에 결제가 연결될 수 있음 |
