@@ -22,7 +22,7 @@
 - ERD : `/docs/diagram/schema.md`
 - API 명세 : `/docs/spec/api-spec.md`
 - 코딩 컨벤션 : `/docs/spec/coding-convention.md`
-- 아키텍처 : `/docs/architecture.md`
+- 아키텍처 : `/docs/spec/architecture-pattern.md`
 
 ## Teck Stack
 

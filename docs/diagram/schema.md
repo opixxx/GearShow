@@ -291,7 +291,7 @@ erDiagram
 | conditionGrade | enum | NOT NULL | 상태 등급 (S, A, B, C 등) |
 | wearCount | int | DEFAULT 0 | 착용 횟수 |
 | isForSale | boolean | NOT NULL, DEFAULT false | 판매 여부 |
-| showcaseStatus | enum | NOT NULL | 쇼케이스 상태 (ACTIVE, HIDDEN, DELETED 등) |
+| showcaseStatus | enum | NOT NULL | 쇼케이스 상태 (ACTIVE, HIDDEN, SOLD, DELETED) |
 | createdAt | datetime | NOT NULL | 생성일시 |
 | updatedAt | datetime | NOT NULL | 수정일시 |
 
