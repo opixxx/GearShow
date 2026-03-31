@@ -1,1 +1,21 @@
-spring.application.name=GearShow
+spring:
+  application:
+    name: GearShow
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/gearshow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    username: gearshow
+    password: gearshow
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+    open-in-view: false
+
+server:
+  port: 8080
