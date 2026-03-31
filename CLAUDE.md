@@ -18,8 +18,9 @@
 
 ### 참고 문서
 - 상세 비즈니스 규칙 : `/docs/biz-logic.md`
-- ERD : `/docs/schema.md`
-- API 명세 : `/docs/api-spec.md`
+- ERD : `/docs/diagram/schema.md`
+- API 명세 : `/docs/spec/api-spec.md`
+- 코딩 컨벤션 : `/docs/spec/coding-convention.md`
 - 아키텍처 : `/docs/architecture.md`
 
 ## Teck Stack
@@ -62,12 +63,13 @@
 ## Strict Rules
 
 ---
-- **Pure Domain**: `domain/` 패키지는 Spring, JPA, Lombok 의존 금지
+- **Pure Domain**: `domain/` 패키지는 Spring, JPA 의존 금지 (단, Lombok `@Getter`, `@Builder`만 예외 허용)
 - **Constructor Injection**: `@Autowired` 필드 주입 금지, `@RequiredArgsConstructor` 사용
 - **DTO 필수**: Entity를 Controller에서 직접 반환 금지, `record` 타입 DTO 사용
 - **단일 책임**: 메서드는 한 가지 일만, 최대 20줄
 
 ## Object-Oriented Design Principles
+
 ---
 ### SOLID 원칙
 | **원칙** | **설명** | **위반 예시** |
@@ -127,15 +129,17 @@ ErrorCode (enum)
 ```
 
 ### ErrorCode 작성 예시
+> ErrorCode 메시지는 영문으로 작성한다. 프론트에서 에러 코드 기반으로 한글 메시지를 매핑한다.
+
 ```java
 @Getter
-@RequiredArgsConstructor 
-public enum ErrorCode { 
-	// USER 
-	DUPLICATE_EMAIL(400, "이미 가입한 이메일입니다."),
-	NOT_FOUND_USER(404, "조회된 유저가 없습니다.");
-    
-	private final int status; 
+@RequiredArgsConstructor
+public enum ErrorCode {
+	// USER
+	DUPLICATE_EMAIL(400, "Email already in use"),
+	NOT_FOUND_USER(404, "User not found");
+
+	private final int status;
 	private final String message;
 }
 ```
@@ -182,7 +186,7 @@ public class NotFoundUserException extends CustomException {
 
 ---
 **OOP & Clean Code**
-- `domain/` 패키지는 Spring, JPA, Lombok 의존 금지
+- `domain/` 패키지는 Spring, JPA 의존 금지 (Lombok `@Getter`, `@Builder`만 예외 허용)
 - `@Autowired` 필드 주입 금지, `@RequiredArgsConstructor` 사용
 - Entity를 Controller에서 직접 반환 금지, `record` 타입 DTO 사용
 - 메서드는 한 가지 일만, 최대 20줄
