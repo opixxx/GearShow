@@ -82,6 +82,23 @@ public class CatalogStepDefinitions {
         context.setLastResponse(apiClient.get("/api/v1/catalogs/" + id));
     }
 
+    @When("카탈로그 아이템 목록을 조회한다")
+    public void 카탈로그_목록_조회() {
+        context.setLastResponse(apiClient.get("/api/v1/catalogs"));
+    }
+
+    @When("등록된 카탈로그 아이템의 브랜드를 {string}로 수정한다")
+    public void 카탈로그_브랜드_수정(String newBrand) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long catalogItemId = context.get("catalogItemId");
+        context.setLastResponse(apiClient.patch(
+                "/api/v1/catalogs/" + catalogItemId,
+                Map.of("brand", newBrand)));
+        apiClient.clearAuth();
+    }
+
     @When("인증 없이 축구화 카탈로그 아이템을 등록한다")
     public void 인증_없이_카탈로그_등록() {
         apiClient.clearAuth();

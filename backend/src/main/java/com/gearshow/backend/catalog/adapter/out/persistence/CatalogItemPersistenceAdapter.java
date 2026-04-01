@@ -4,8 +4,10 @@ import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
 import com.gearshow.backend.catalog.domain.model.CatalogItem;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -34,5 +36,15 @@ public class CatalogItemPersistenceAdapter implements CatalogItemPort {
     @Override
     public boolean existsByCategoryAndModelCode(Category category, String modelCode) {
         return catalogItemJpaRepository.existsByCategoryAndModelCode(category, modelCode);
+    }
+
+    @Override
+    public List<CatalogItem> findAllWithCursor(Long cursorId, int size,
+                                               Category category, String brand, String keyword) {
+        return catalogItemJpaRepository.findAllWithCursor(
+                        cursorId, category, brand, keyword, PageRequest.of(0, size + 1))
+                .stream()
+                .map(catalogItemMapper::toDomain)
+                .toList();
     }
 }

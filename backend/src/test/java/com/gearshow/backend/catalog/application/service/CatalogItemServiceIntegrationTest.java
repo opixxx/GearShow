@@ -1,10 +1,11 @@
 package com.gearshow.backend.catalog.application.service;
 
-import com.gearshow.backend.catalog.application.dto.CatalogItemDetailResult;
-import com.gearshow.backend.catalog.application.dto.CreateCatalogItemCommand;
-import com.gearshow.backend.catalog.application.dto.CreateCatalogItemResult;
+import com.gearshow.backend.catalog.application.dto.*;
 import com.gearshow.backend.catalog.application.port.in.CreateCatalogItemUseCase;
 import com.gearshow.backend.catalog.application.port.in.GetCatalogItemUseCase;
+import com.gearshow.backend.catalog.application.port.in.ListCatalogItemsUseCase;
+import com.gearshow.backend.catalog.application.port.in.UpdateCatalogItemUseCase;
+import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.catalog.domain.exception.DuplicateModelCodeException;
 import com.gearshow.backend.catalog.domain.exception.NotFoundCatalogItemException;
 import com.gearshow.backend.catalog.domain.vo.Category;
@@ -33,6 +34,12 @@ class CatalogItemServiceIntegrationTest {
 
     @Autowired
     private GetCatalogItemUseCase getCatalogItemUseCase;
+
+    @Autowired
+    private ListCatalogItemsUseCase listCatalogItemsUseCase;
+
+    @Autowired
+    private UpdateCatalogItemUseCase updateCatalogItemUseCase;
 
     private CreateCatalogItemCommand createBootsCommand(String modelCode) {
         return new CreateCatalogItemCommand(
@@ -115,6 +122,73 @@ class CatalogItemServiceIntegrationTest {
         void getCatalogItem_notFound_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> getCatalogItemUseCase.getCatalogItem(999L))
+                    .isInstanceOf(NotFoundCatalogItemException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("카탈로그 아이템 목록 조회")
+    class ListItems {
+
+        @Test
+        @DisplayName("커서 페이징으로 목록을 조회한다")
+        void list_returnsPaginatedResult() {
+            // Given
+            createCatalogItemUseCase.create(createBootsCommand("LIST-001"));
+            createCatalogItemUseCase.create(createBootsCommand("LIST-002"));
+
+            // When
+            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
+                    null, 20, null, null, null);
+
+            // Then
+            assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);
+            assertThat(result.hasNext()).isFalse();
+        }
+
+        @Test
+        @DisplayName("카테고리로 필터링하여 조회한다")
+        void list_filterByCategory() {
+            // Given
+            createCatalogItemUseCase.create(createBootsCommand("FILTER-001"));
+
+            // When
+            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
+                    null, 20, Category.BOOTS, null, null);
+
+            // Then
+            assertThat(result.data()).isNotEmpty();
+            assertThat(result.data()).allMatch(item -> item.category() == Category.BOOTS);
+        }
+    }
+
+    @Nested
+    @DisplayName("카탈로그 아이템 수정")
+    class Update {
+
+        @Test
+        @DisplayName("카탈로그 아이템의 브랜드를 수정한다")
+        void update_changesBrand() {
+            // Given
+            CreateCatalogItemResult created = createCatalogItemUseCase.create(createBootsCommand("UPDATE-001"));
+            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null, null);
+
+            // When
+            CatalogItemDetailResult result = updateCatalogItemUseCase.update(created.catalogItemId(), command);
+
+            // Then
+            assertThat(result.brand()).isEqualTo("Adidas");
+            assertThat(result.itemName()).isEqualTo("Mercurial Superfly 10");
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 카탈로그 아이템을 수정하면 예외가 발생한다")
+        void update_notFound_throwsException() {
+            // Given
+            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null, null);
+
+            // When & Then
+            assertThatThrownBy(() -> updateCatalogItemUseCase.update(999L, command))
                     .isInstanceOf(NotFoundCatalogItemException.class);
         }
     }
