@@ -141,5 +141,14 @@ sonar {
 		property 'sonar.organization', 'opixxx'
 		property 'sonar.host.url', 'https://sonarcloud.io'
 		property 'sonar.coverage.jacoco.xmlReportPaths', "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+
+		// JaCoCo 제외 대상과 동일하게 SonarCloud 커버리지 측정 제외
+		property 'sonar.coverage.exclusions', [
+			'**/catalog/**',
+			'**/showcase/**',
+			'**/oauth/**',
+			'**/*JpaEntity.java',
+			'**/GearShowApplication.java'
+		].join(',')
 	}
 }
