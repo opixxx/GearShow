@@ -39,8 +39,18 @@ public class AuthStepDefinitions {
 
         // 발급받은 토큰을 컨텍스트에 저장 (후속 Step에서 사용)
         Map<String, Object> data = extractData(response);
-        context.put("accessToken", data.get("accessToken").toString());
+        String accessToken = data.get("accessToken").toString();
+        context.put("accessToken", accessToken);
         context.put("refreshToken", data.get("refreshToken").toString());
+
+        // userId도 저장 (프로필 조회 등 후속 Step에서 사용)
+        apiClient.authenticate(accessToken);
+        TestResponse<Map<String, Object>> meResponse = apiClient.get("/api/v1/users/me");
+        apiClient.clearAuth();
+        if (meResponse.statusCode() == 200) {
+            Map<String, Object> meData = extractData(meResponse);
+            context.put("userId", ((Number) meData.get("userId")).longValue());
+        }
     }
 
     // ===== When =====

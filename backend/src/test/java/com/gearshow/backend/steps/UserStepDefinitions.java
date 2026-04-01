@@ -2,7 +2,6 @@ package com.gearshow.backend.steps;
 
 import com.gearshow.backend.support.ScenarioContext;
 import com.gearshow.backend.support.TestApiClient;
-import com.gearshow.backend.support.TestResponse;
 import io.cucumber.java.en.When;
 
 import java.util.Map;
@@ -32,16 +31,8 @@ public class UserStepDefinitions {
 
     @When("사용자 ID로 공개 프로필을 조회한다")
     public void 공개_프로필_조회() {
-        // Given 단계에서 저장된 응답의 userId 사용
-        String accessToken = context.get("accessToken");
-        apiClient.authenticate(accessToken);
-        TestResponse<Map<String, Object>> meResponse = apiClient.get("/api/v1/users/me");
-        apiClient.clearAuth();
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) meResponse.body().get("data");
-        Integer userId = (Integer) data.get("userId");
-
+        // Given 단계에서 context에 저장된 userId 사용 (/users/me 호출 없이 독립 테스트)
+        Long userId = context.get("userId");
         context.setLastResponse(apiClient.get("/api/v1/users/" + userId));
     }
 
