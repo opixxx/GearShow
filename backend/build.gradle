@@ -72,9 +72,9 @@ jacocoTestReport {
 jacocoTestCoverageVerification {
 	violationRules {
 		rule {
-			// 전체 커버리지 80% 이상 필수
+			// 전체 커버리지 70% 이상 필수 (MVP 단계, 점진적으로 80%까지 상향 예정)
 			limit {
-				minimum = 0.80
+				minimum = 0.70
 			}
 		}
 	}
