@@ -2,6 +2,8 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
+	id 'org.sonarqube' version '6.0.1.5171'
 }
 
 group = 'com.gearshow'
@@ -56,4 +58,38 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 	systemProperty 'cucumber.junit-platform.naming-strategy', 'long'
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+}
+
+jacocoTestCoverageVerification {
+	violationRules {
+		rule {
+			// 전체 커버리지 65% 이상 필수 (CI 검증용, 실 개발 시 70%로 상향 예정)
+			limit {
+				minimum = 0.65
+			}
+		}
+	}
+}
+
+// build 시 커버리지 검증 포함
+tasks.named('check') {
+	dependsOn jacocoTestCoverageVerification
+}
+
+sonar {
+	properties {
+		property 'sonar.projectKey', 'opixxx_GearShow'
+		property 'sonar.organization', 'opixxx'
+		property 'sonar.host.url', 'https://sonarcloud.io'
+		property 'sonar.coverage.jacoco.xmlReportPaths', "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+	}
 }
