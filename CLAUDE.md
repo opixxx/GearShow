@@ -73,6 +73,7 @@
 - **Pure Domain**: `domain/` 패키지는 Spring, JPA 의존 금지 (단, Lombok `@Getter`, `@Builder`만 예외 허용)
 - **Constructor Injection**: `@Autowired` 필드 주입 금지, `@RequiredArgsConstructor` 사용
 - **DTO 필수**: Entity를 Controller에서 직접 반환 금지, `record` 타입 DTO 사용
+- **입력 검증 필수**: Request DTO에 Bean Validation(`@NotBlank`, `@Size`, `@URL` 등) 적용, Controller에서 `@Valid` 필수, 검증 메시지는 한글
 - **단일 책임**: 메서드는 한 가지 일만, 최대 20줄
 
 ## Object-Oriented Design Principles

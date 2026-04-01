@@ -24,4 +24,12 @@ public interface UserPort {
      * @return 사용자 Optional
      */
     Optional<User> findById(Long id);
+
+    /**
+     * 닉네임 중복 여부를 확인한다.
+     *
+     * @param nickname 닉네임
+     * @return 중복 여부
+     */
+    boolean existsByNickname(String nickname);
 }

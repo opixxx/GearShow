@@ -30,4 +30,9 @@ public class UserPersistenceAdapter implements UserPort {
         return userJpaRepository.findById(id)
                 .map(userMapper::toDomain);
     }
+
+    @Override
+    public boolean existsByNickname(String nickname) {
+        return userJpaRepository.existsByNickname(nickname);
+    }
 }

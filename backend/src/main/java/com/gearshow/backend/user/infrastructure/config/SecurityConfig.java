@@ -38,6 +38,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/catalogs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/showcases/**").permitAll()
+                        // /users/me는 인증 필수 (/{userId}보다 먼저 매칭되도록)
+                        .requestMatchers("/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/{userId}").permitAll()
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()

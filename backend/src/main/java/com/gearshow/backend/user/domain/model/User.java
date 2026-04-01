@@ -119,6 +119,32 @@ public class User {
                 .build();
     }
 
+    /**
+     * 프로필 정보를 수정한다.
+     * null이 아닌 필드만 변경된다.
+     *
+     * @param nickname        변경할 닉네임 (null이면 유지)
+     * @param profileImageUrl 변경할 프로필 이미지 URL (null이면 유지)
+     * @return 수정된 사용자
+     */
+    public User updateProfile(String nickname, String profileImageUrl) {
+        String newNickname = (nickname != null) ? nickname : this.nickname;
+        if (nickname != null) {
+            validateNickname(nickname);
+        }
+
+        return User.builder()
+                .id(this.id)
+                .nickname(newNickname)
+                .profileImageUrl(profileImageUrl != null ? profileImageUrl : this.profileImageUrl)
+                .phoneNumber(this.phoneNumber)
+                .phoneVerified(this.phoneVerified)
+                .status(this.status)
+                .createdAt(this.createdAt)
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
+
     private void validateStatusTransition(UserStatus target) {
         boolean valid = switch (this.status) {
             case ACTIVE -> target == UserStatus.SUSPENDED || target == UserStatus.WITHDRAWN;
