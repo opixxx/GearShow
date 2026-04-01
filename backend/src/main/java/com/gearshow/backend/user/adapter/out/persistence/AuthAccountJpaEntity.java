@@ -14,7 +14,12 @@ import java.time.LocalDateTime;
  * 소셜 인증 계정 JPA 엔티티.
  */
 @Entity
-@Table(name = "auth_account")
+@Table(name = "auth_account",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_auth_account_provider",
+                columnNames = {"provider_type", "provider_user_key"}
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AuthAccountJpaEntity {

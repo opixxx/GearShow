@@ -77,7 +77,7 @@ public class KakaoOAuthClientAdapter implements OAuthClient {
             }
             return (String) responseBody.get("access_token");
         } catch (RestClientException e) {
-            log.error("카카오 토큰 발급 실패: code={}", authorizationCode, e);
+            log.error("카카오 토큰 발급 실패", e);
             throw new InvalidAuthCodeException();
         }
     }

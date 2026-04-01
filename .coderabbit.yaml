@@ -9,11 +9,10 @@ knowledge_base:
   learnings:
     scope: auto
 
-tools:
-  ast-grep:
-    essential_rules: true
-
 reviews:
+  tools:
+    ast-grep:
+      essential_rules: true
   auto_review:
     enabled: true
     drafts: false
