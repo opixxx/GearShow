@@ -2,6 +2,7 @@ package com.gearshow.backend.user.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.user.adapter.in.web.dto.*;
+import jakarta.validation.Valid;
 import com.gearshow.backend.user.application.dto.MyProfileResult;
 import com.gearshow.backend.user.application.dto.UpdateProfileResult;
 import com.gearshow.backend.user.application.dto.UserProfileResult;
@@ -69,7 +70,7 @@ public class UserController {
     @PatchMapping("/me")
     public ResponseEntity<ApiResponse<UpdateProfileResponse>> updateProfile(
             @AuthenticationPrincipal Long userId,
-            @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateProfileRequest request) {
 
         UpdateProfileResult result = updateProfileUseCase.updateProfile(
                 userId, request.toCommand());
