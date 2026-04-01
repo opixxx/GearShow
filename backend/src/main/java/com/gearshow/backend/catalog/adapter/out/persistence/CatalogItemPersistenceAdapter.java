@@ -2,6 +2,7 @@ package com.gearshow.backend.catalog.adapter.out.persistence;
 
 import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
 import com.gearshow.backend.catalog.domain.model.CatalogItem;
+import com.gearshow.backend.catalog.domain.vo.CatalogStatus;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -42,7 +43,7 @@ public class CatalogItemPersistenceAdapter implements CatalogItemPort {
     public List<CatalogItem> findAllWithCursor(Long cursorId, int size,
                                                Category category, String brand, String keyword) {
         return catalogItemJpaRepository.findAllWithCursor(
-                        cursorId, category, brand, keyword, PageRequest.of(0, size + 1))
+                        CatalogStatus.ACTIVE, cursorId, category, brand, keyword, PageRequest.of(0, size + 1))
                 .stream()
                 .map(catalogItemMapper::toDomain)
                 .toList();

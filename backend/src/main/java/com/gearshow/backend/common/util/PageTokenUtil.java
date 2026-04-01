@@ -38,9 +38,14 @@ public class PageTokenUtil {
      * @return 디코딩된 값 쌍
      */
     public static <T, R> Pair<T, R> decode(String pageToken, Class<T> firstType, Class<R> secondType) {
-        String decoded = new String(Base64.getUrlDecoder().decode(pageToken), StandardCharsets.UTF_8);
-        String[] parts = decoded.split("\\|", 2);
+        String decoded;
+        try {
+            decoded = new String(Base64.getUrlDecoder().decode(pageToken), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("유효하지 않은 pageToken 형식입니다: Base64 디코딩 실패", e);
+        }
 
+        String[] parts = decoded.split("\\|", 2);
         if (parts.length != 2) {
             throw new IllegalArgumentException("유효하지 않은 pageToken입니다");
         }

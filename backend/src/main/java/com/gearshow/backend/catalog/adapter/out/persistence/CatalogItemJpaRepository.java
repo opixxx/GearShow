@@ -1,5 +1,6 @@
 package com.gearshow.backend.catalog.adapter.out.persistence;
 
+import com.gearshow.backend.catalog.domain.vo.CatalogStatus;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -19,11 +20,11 @@ public interface CatalogItemJpaRepository extends JpaRepository<CatalogItemJpaEn
 
     /**
      * 커서 기반으로 카탈로그 아이템 목록을 조회한다.
-     * ACTIVE 상태만 조회하며, 필터 조건이 null이면 무시한다.
+     * 필터 조건이 null이면 무시한다.
      */
     @Query("""
             SELECT c FROM CatalogItemJpaEntity c
-            WHERE c.status = 'ACTIVE'
+            WHERE c.status = :status
               AND (:cursorId IS NULL OR c.id < :cursorId)
               AND (:category IS NULL OR c.category = :category)
               AND (:brand IS NULL OR c.brand = :brand)
@@ -32,6 +33,7 @@ public interface CatalogItemJpaRepository extends JpaRepository<CatalogItemJpaEn
             ORDER BY c.id DESC
             """)
     List<CatalogItemJpaEntity> findAllWithCursor(
+            @Param("status") CatalogStatus status,
             @Param("cursorId") Long cursorId,
             @Param("category") Category category,
             @Param("brand") String brand,

@@ -111,7 +111,7 @@ public class CatalogController {
     @PatchMapping("/{catalogItemId}")
     public ResponseEntity<ApiResponse<CatalogItemDetailResponse>> update(
             @PathVariable Long catalogItemId,
-            @RequestBody UpdateCatalogItemRequest request) {
+            @Valid @RequestBody UpdateCatalogItemRequest request) {
 
         CatalogItemDetailResult result = updateCatalogItemUseCase.update(
                 catalogItemId, request.toCommand());
