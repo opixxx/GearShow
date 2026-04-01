@@ -77,43 +77,38 @@ jacocoTestReport {
 	// 아직 UseCase가 구현되지 않은 도메인은 커버리지 측정에서 제외
 	afterEvaluate {
 		classDirectories.setFrom(files(classDirectories.files.collect {
-			fileTree(dir: it, excludes: [
-				// Catalog 도메인 (UseCase 미구현)
-				'**/catalog/adapter/**',
-				// Showcase 도메인 (UseCase 미구현)
-				'**/showcase/adapter/**',
-				// Apple OAuth (API 키 미설정)
-				'**/oauth/apple/**',
-				// JPA Entity, Mapper (Adapter 통합 테스트에서 간접 커버)
-				'**/*JpaEntity.*',
-				// Spring Boot 메인 클래스
-				'**/GearShowApplication.*'
-			])
+			fileTree(dir: it, excludes: jacocoExcludes)
 		}))
 	}
 }
+
+// JaCoCo 제외 대상 (UseCase 구현 시 해당 항목 제거)
+ext.jacocoExcludes = [
+	// Catalog 도메인 전체 (UseCase 미구현)
+	'**/catalog/**',
+	// Showcase 도메인 전체 (UseCase 미구현)
+	'**/showcase/**',
+	// OAuth Adapter (테스트에서 Stub 사용)
+	'**/oauth/**',
+	// JPA Entity (Adapter 통합 테스트에서 간접 커버)
+	'**/*JpaEntity.*',
+	// Spring Boot 메인 클래스
+	'**/GearShowApplication.*'
+]
 
 jacocoTestCoverageVerification {
 	violationRules {
 		rule {
 			// 전체 커버리지 70% 이상 필수
-			// 제외 대상: 미구현 도메인 Adapter, Apple OAuth, JPA Entity, Main 클래스
 			limit {
 				minimum = 0.70
 			}
 		}
 	}
 
-	// jacocoTestReport와 동일한 제외 대상 적용
 	afterEvaluate {
 		classDirectories.setFrom(files(classDirectories.files.collect {
-			fileTree(dir: it, excludes: [
-				'**/catalog/adapter/**',
-				'**/showcase/adapter/**',
-				'**/oauth/apple/**',
-				'**/*JpaEntity.*',
-				'**/GearShowApplication.*'
-			])
+			fileTree(dir: it, excludes: jacocoExcludes)
 		}))
 	}
 }

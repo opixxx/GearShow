@@ -1,6 +1,8 @@
 package com.gearshow.backend.user.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
@@ -22,5 +24,7 @@ public interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenJpa
      *
      * @param userId 사용자 ID
      */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("DELETE FROM RefreshTokenJpaEntity r WHERE r.userId = :userId")
     void deleteByUserId(Long userId);
 }
