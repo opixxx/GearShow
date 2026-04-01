@@ -1,0 +1,38 @@
+package com.gearshow.backend.catalog.adapter.out.persistence;
+
+import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
+import com.gearshow.backend.catalog.domain.model.CatalogItem;
+import com.gearshow.backend.catalog.domain.vo.Category;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+/**
+ * 카탈로그 아이템 Persistence Adapter.
+ */
+@Repository
+@RequiredArgsConstructor
+public class CatalogItemPersistenceAdapter implements CatalogItemPort {
+
+    private final CatalogItemJpaRepository catalogItemJpaRepository;
+    private final CatalogItemMapper catalogItemMapper;
+
+    @Override
+    public CatalogItem save(CatalogItem catalogItem) {
+        CatalogItemJpaEntity entity = catalogItemMapper.toJpaEntity(catalogItem);
+        CatalogItemJpaEntity saved = catalogItemJpaRepository.save(entity);
+        return catalogItemMapper.toDomain(saved);
+    }
+
+    @Override
+    public Optional<CatalogItem> findById(Long id) {
+        return catalogItemJpaRepository.findById(id)
+                .map(catalogItemMapper::toDomain);
+    }
+
+    @Override
+    public boolean existsByCategoryAndModelCode(Category category, String modelCode) {
+        return catalogItemJpaRepository.existsByCategoryAndModelCode(category, modelCode);
+    }
+}

@@ -1,0 +1,95 @@
+package com.gearshow.backend.steps;
+
+import com.gearshow.backend.support.ScenarioContext;
+import com.gearshow.backend.support.TestApiClient;
+import com.gearshow.backend.support.TestResponse;
+import io.cucumber.java.en.When;
+
+import java.util.Map;
+
+/**
+ * 카탈로그 관련 Cucumber Step Definitions.
+ */
+public class CatalogStepDefinitions {
+
+    private final TestApiClient apiClient;
+    private final ScenarioContext context;
+
+    public CatalogStepDefinitions(TestApiClient apiClient, ScenarioContext context) {
+        this.apiClient = apiClient;
+        this.context = context;
+    }
+
+    @When("축구화 카탈로그 아이템을 등록한다")
+    public void 축구화_카탈로그_등록() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Map<String, Object> request = Map.of(
+                "category", "BOOTS",
+                "brand", "Nike",
+                "itemName", "Mercurial Superfly 10 Elite",
+                "modelCode", "DJ2839-" + System.currentTimeMillis(),
+                "bootsSpec", Map.of(
+                        "studType", "FG",
+                        "siloName", "Mercurial",
+                        "releaseYear", "2025",
+                        "surfaceType", "천연잔디"
+                )
+        );
+
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/catalogs", request);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        // 등록된 catalogItemId 저장
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("catalogItemId", ((Number) data.get("catalogItemId")).longValue());
+        }
+    }
+
+    @When("유니폼 카탈로그 아이템을 등록한다")
+    public void 유니폼_카탈로그_등록() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Map<String, Object> request = Map.of(
+                "category", "UNIFORM",
+                "brand", "Nike",
+                "itemName", "Liverpool 24-25 Home Kit",
+                "uniformSpec", Map.of(
+                        "clubName", "Liverpool",
+                        "season", "2024-25",
+                        "league", "EPL",
+                        "manufacturer", "Nike"
+                )
+        );
+
+        context.setLastResponse(apiClient.post("/api/v1/catalogs", request));
+        apiClient.clearAuth();
+    }
+
+    @When("등록된 카탈로그 아이템 상세를 조회한다")
+    public void 카탈로그_상세_조회() {
+        Long catalogItemId = context.get("catalogItemId");
+        context.setLastResponse(apiClient.get("/api/v1/catalogs/" + catalogItemId));
+    }
+
+    @When("존재하지 않는 카탈로그 아이템 ID {int}로 조회한다")
+    public void 존재하지_않는_카탈로그_조회(int id) {
+        context.setLastResponse(apiClient.get("/api/v1/catalogs/" + id));
+    }
+
+    @When("인증 없이 축구화 카탈로그 아이템을 등록한다")
+    public void 인증_없이_카탈로그_등록() {
+        apiClient.clearAuth();
+        Map<String, Object> request = Map.of(
+                "category", "BOOTS",
+                "brand", "Nike",
+                "itemName", "Test Item"
+        );
+        context.setLastResponse(apiClient.post("/api/v1/catalogs", request));
+    }
+}
