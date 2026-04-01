@@ -1,6 +1,7 @@
 package com.gearshow.backend.common.exception;
 
 import com.gearshow.backend.common.dto.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -37,6 +38,23 @@ public class GlobalExceptionHandler {
                 .orElse("잘못된 입력입니다");
 
         log.warn("유효성 검증 실패: message={}", message);
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.of(400, message));
+    }
+
+    /**
+     * @Validated 제약 위반 예외를 처리한다 (쿼리 파라미터 검증 등).
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
+            ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+                .findFirst()
+                .map(v -> v.getMessage())
+                .orElse("잘못된 입력입니다");
+
+        log.warn("제약 조건 위반: message={}", message);
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.of(400, message));

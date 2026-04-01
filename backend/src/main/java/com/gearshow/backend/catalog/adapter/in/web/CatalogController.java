@@ -14,9 +14,12 @@ import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.common.dto.PageInfo;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -27,6 +30,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/catalogs")
 @RequiredArgsConstructor
+@Validated
 public class CatalogController {
 
     private final CreateCatalogItemUseCase createCatalogItemUseCase;
@@ -51,7 +55,10 @@ public class CatalogController {
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String pageToken,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다")
+            @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다")
+            int size) {
 
         PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
                 pageToken, size, category, brand, keyword);
