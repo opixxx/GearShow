@@ -31,6 +31,12 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// JWT
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
@@ -41,6 +47,7 @@ dependencies {
 
 	// Test
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
 	// Testcontainers
@@ -67,16 +74,43 @@ jacocoTestReport {
 		xml.required = true
 		html.required = true
 	}
+
+	// 아직 UseCase가 구현되지 않은 도메인은 커버리지 측정에서 제외
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, excludes: jacocoExcludes)
+		}))
+	}
 }
+
+// JaCoCo 제외 대상 (UseCase 구현 시 해당 항목 제거)
+ext.jacocoExcludes = [
+	// Catalog 도메인 전체 (UseCase 미구현)
+	'**/catalog/**',
+	// Showcase 도메인 전체 (UseCase 미구현)
+	'**/showcase/**',
+	// OAuth Adapter (테스트에서 Stub 사용)
+	'**/oauth/**',
+	// JPA Entity (Adapter 통합 테스트에서 간접 커버)
+	'**/*JpaEntity.*',
+	// Spring Boot 메인 클래스
+	'**/GearShowApplication.*'
+]
 
 jacocoTestCoverageVerification {
 	violationRules {
 		rule {
-			// 전체 커버리지 65% 이상 필수 (CI 검증용, 실 개발 시 70%로 상향 예정)
+			// 전체 커버리지 70% 이상 필수
 			limit {
-				minimum = 0.65
+				minimum = 0.70
 			}
 		}
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, excludes: jacocoExcludes)
+		}))
 	}
 }
 
@@ -85,11 +119,36 @@ tasks.named('check') {
 	dependsOn jacocoTestCoverageVerification
 }
 
+// .env 파일에서 환경변수를 로드하여 bootRun에 전달
+bootRun {
+	def envFile = file('.env')
+	if (envFile.exists()) {
+		envFile.readLines().each { line ->
+			def trimmed = line.trim()
+			if (trimmed && !trimmed.startsWith('#')) {
+				def parts = trimmed.split('=', 2)
+				if (parts.length == 2) {
+					environment parts[0].trim(), parts[1].trim()
+				}
+			}
+		}
+	}
+}
+
 sonar {
 	properties {
 		property 'sonar.projectKey', 'opixxx_GearShow'
 		property 'sonar.organization', 'opixxx'
 		property 'sonar.host.url', 'https://sonarcloud.io'
 		property 'sonar.coverage.jacoco.xmlReportPaths', "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+
+		// JaCoCo 제외 대상과 동일하게 SonarCloud 커버리지 측정 제외
+		property 'sonar.coverage.exclusions', [
+			'**/catalog/**',
+			'**/showcase/**',
+			'**/oauth/**',
+			'**/*JpaEntity.java',
+			'**/GearShowApplication.java'
+		].join(',')
 	}
 }

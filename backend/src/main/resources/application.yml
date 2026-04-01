@@ -3,9 +3,9 @@ spring:
     name: GearShow
 
   datasource:
-    url: jdbc:mysql://localhost:3306/gearshow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-    username: gearshow
-    password: gearshow
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -13,9 +13,30 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
     open-in-view: false
 
 server:
   port: 8080
+
+# JWT 설정
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration-ms: 3600000      # 1시간
+  refresh-token-expiration-ms: 1209600000  # 14일
+
+# OAuth 설정
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+    client-secret: ${KAKAO_CLIENT_SECRET}
+    redirect-uri: ${KAKAO_REDIRECT_URI}
+    token-uri: https://kauth.kakao.com/oauth/token
+    user-info-uri: https://kapi.kakao.com/v2/user/me
+  apple:
+    client-id: ${APPLE_CLIENT_ID}
+    team-id: ${APPLE_TEAM_ID}
+    key-id: ${APPLE_KEY_ID}
+    private-key-path: ${APPLE_PRIVATE_KEY_PATH:}
+    token-uri: https://appleid.apple.com/auth/token
+    redirect-uri: ${APPLE_REDIRECT_URI:http://localhost:8080/api/v1/auth/login/apple}

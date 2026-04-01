@@ -1,0 +1,105 @@
+language: "ko-KR"
+tone_instructions: "한글로 리뷰를 작성한다. 피드백은 구체적이고 건설적으로 작성한다."
+early_access: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+
+reviews:
+  tools:
+    ast-grep:
+      essential_rules: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  profile: chill
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  review_status: true
+  poem: false
+
+  path_filters:
+    - "!docs/**"
+    - "!**/*.md"
+    - "!**/.env.example"
+    - "!.claude/**"
+    - "!.github/**"
+
+  path_instructions:
+    - path: "backend/src/main/java/**/domain/**"
+      instructions: |
+        도메인 계층 리뷰 규칙:
+        - Spring, JPA 어노테이션이 없는지 확인 (Lombok @Getter, @Builder만 허용)
+        - 정적 팩토리 메서드 + Builder 패턴을 사용하는지 확인
+        - public 생성자가 없는지 확인
+        - 모든 필드가 final인지 확인 (불변 객체)
+        - validate() 메서드에서 도메인 규칙을 검증하는지 확인
+        - RuntimeException, IllegalArgumentException 직접 사용 금지, CustomException 사용 확인
+        - 상태 전이 로직이 도메인 모델 내부에 있는지 확인
+
+    - path: "backend/src/main/java/**/application/**"
+      instructions: |
+        애플리케이션 계층 리뷰 규칙:
+        - @Transactional이 Service에만 있는지 확인
+        - 읽기 전용 조회는 @Transactional(readOnly = true) 사용하는지 확인
+        - Port 인터페이스를 통해 외부 의존성에 접근하는지 확인 (Adapter 직접 참조 금지)
+        - @RequiredArgsConstructor 사용하는지 확인 (@Autowired 금지)
+        - Command/Result DTO가 record 타입인지 확인
+        - 메서드가 20줄 이하인지 확인
+        - 트랜잭션 범위가 불필요하게 넓지 않은지 확인 (외부 API 호출이 트랜잭션 안에 있으면 경고)
+
+    - path: "backend/src/main/java/**/adapter/in/web/**"
+      instructions: |
+        Controller 리뷰 규칙:
+        - 비즈니스 로직이 Controller에 없는지 확인 (UseCase에 위임)
+        - Entity를 직접 반환하지 않는지 확인 (record DTO 사용)
+        - @Valid로 입력 검증을 하는지 확인
+        - Bean Validation 메시지가 한글인지 확인
+        - ApiResponse로 응답을 감싸는지 확인
+
+    - path: "backend/src/main/java/**/adapter/out/persistence/**"
+      instructions: |
+        Persistence Adapter 리뷰 규칙:
+        - JPA Entity와 Domain Model이 분리되어 있는지 확인
+        - Mapper를 통해 변환하는지 확인
+        - 다른 Aggregate 간 @ManyToOne, @OneToMany 관계 매핑이 없는지 확인 (ID 참조만)
+        - @NoArgsConstructor(access = PROTECTED) 사용하는지 확인
+
+        성능 규칙:
+        - N+1 문제: 연관 엔티티를 반복 조회하는 패턴이 없는지 확인. 필요 시 Fetch Join 또는 @BatchSize 사용 권고
+        - 불필요한 SELECT: findAll() 사용 시 페이징 없이 전체 조회하지 않는지 확인
+        - 인덱스: WHERE 절에 자주 사용되는 컬럼에 @Column(unique) 또는 @Table(indexes) 고려 권고
+        - JPQL DELETE/UPDATE: 벌크 연산 시 @Modifying(flushAutomatically = true, clearAutomatically = true) 사용하는지 확인
+        - 대량 데이터 조회 시 커서 기반 페이징(Cursor Pagination) 적용 여부 확인
+
+    - path: "backend/src/main/java/**/adapter/out/**"
+      instructions: |
+        외부 시스템 Adapter 리뷰 규칙:
+        - 외부 API 호출 시 타임아웃 설정이 있는지 확인
+        - 외부 API 실패 시 적절한 예외 처리와 로깅이 있는지 확인
+        - 민감 정보(인가 코드, 토큰 등)가 로그에 노출되지 않는지 확인
+        - 외부 API 응답에 대한 null 체크가 있는지 확인
+
+    - path: "backend/src/main/java/**/infrastructure/**"
+      instructions: |
+        인프라 계층 리뷰 규칙:
+        - 설정 클래스에 비즈니스 로직이 없는지 확인
+        - 민감 정보가 하드코딩되지 않았는지 확인 (환경변수 사용)
+        - @Transactional이 없는지 확인 (Application 계층에서만 사용)
+
+    - path: "backend/src/test/**"
+      instructions: |
+        테스트 리뷰 규칙:
+        - BDD 스타일 (Given-When-Then 주석) 사용하는지 확인
+        - Happy Path + Unhappy Path 각 1개 이상 있는지 확인
+        - @DisplayName이 한글로 테스트 목적을 명확히 설명하는지 확인
+        - 시간 의존 로직이 없는지 확인
+        - 테스트 간 상태 공유가 없는지 확인
+        - 신규 Adapter에 통합 테스트가 있는지 확인

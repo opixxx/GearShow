@@ -23,6 +23,12 @@
 - API 명세 : `/docs/spec/api-spec.md`
 - 코딩 컨벤션 : `/docs/spec/coding-convention.md`
 - 아키텍처 : `/docs/spec/architecture-pattern.md`
+- 테스트 전략 : `/docs/spec/test-strategy.md`
+- PRD : `/docs/PRD.md`
+
+### Skill
+- PR 생성 : `/pr-guide` 명령어로 실행 (테스트 → 커버리지 → PR 생성 자동 수행)
+- 코드리뷰 : `/code-review` 또는 `/code-review {PR번호}` (아키텍처, 보안, 테스트, 성능 검토)
 
 ## Teck Stack
 
