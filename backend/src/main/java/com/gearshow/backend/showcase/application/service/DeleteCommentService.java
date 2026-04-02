@@ -20,8 +20,9 @@ public class DeleteCommentService implements DeleteCommentUseCase {
 
     @Override
     @Transactional
-    public void delete(Long commentId, Long authorId) {
+    public void delete(Long showcaseId, Long commentId, Long authorId) {
         ShowcaseComment comment = findComment(commentId);
+        validateBelongsToShowcase(comment, showcaseId);
         validateAuthor(comment, authorId);
 
         ShowcaseComment deleted = comment.delete();
@@ -31,6 +32,15 @@ public class DeleteCommentService implements DeleteCommentUseCase {
     private ShowcaseComment findComment(Long commentId) {
         return showcaseCommentPort.findById(commentId)
                 .orElseThrow(NotFoundShowcaseCommentException::new);
+    }
+
+    /**
+     * 댓글이 해당 쇼케이스에 소속되어 있는지 검증한다.
+     */
+    private void validateBelongsToShowcase(ShowcaseComment comment, Long showcaseId) {
+        if (!comment.getShowcaseId().equals(showcaseId)) {
+            throw new NotFoundShowcaseCommentException();
+        }
     }
 
     private void validateAuthor(ShowcaseComment comment, Long authorId) {

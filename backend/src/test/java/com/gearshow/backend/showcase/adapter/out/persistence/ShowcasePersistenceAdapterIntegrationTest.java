@@ -88,10 +88,10 @@ class ShowcasePersistenceAdapterIntegrationTest {
         @Test
         @DisplayName("커서 기반으로 다음 페이지를 조회한다")
         void findAllWithCursor_returnsNextPage() {
-            // Given
-            Instant baseTime = Instant.now();
-            Showcase first = adapter.save(createShowcaseWithTime("쇼케이스1", baseTime.minusSeconds(2)));
-            Showcase second = adapter.save(createShowcaseWithTime("쇼케이스2", baseTime.minusSeconds(1)));
+            // Given - 고정 시각으로 테스트 결정성 보장
+            Instant baseTime = Instant.parse("2026-01-01T12:00:00Z");
+            adapter.save(createShowcaseWithTime("쇼케이스1", baseTime.minusSeconds(2)));
+            adapter.save(createShowcaseWithTime("쇼케이스2", baseTime.minusSeconds(1)));
             Showcase third = adapter.save(createShowcaseWithTime("쇼케이스3", baseTime));
 
             // When - 가장 최신(third) 이후의 데이터를 조회
@@ -125,6 +125,8 @@ class ShowcasePersistenceAdapterIntegrationTest {
 
     // ===== Helper =====
 
+    private static final Instant FIXED_TIME = Instant.parse("2026-01-01T12:00:00Z");
+
     private Showcase createShowcase(String title) {
         return Showcase.builder()
                 .ownerId(1L)
@@ -134,8 +136,8 @@ class ShowcasePersistenceAdapterIntegrationTest {
                 .wearCount(0)
                 .forSale(false)
                 .status(ShowcaseStatus.ACTIVE)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(FIXED_TIME)
+                .updatedAt(FIXED_TIME)
                 .build();
     }
 
@@ -162,8 +164,8 @@ class ShowcasePersistenceAdapterIntegrationTest {
                 .wearCount(0)
                 .forSale(false)
                 .status(ShowcaseStatus.ACTIVE)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
+                .createdAt(FIXED_TIME)
+                .updatedAt(FIXED_TIME)
                 .build();
     }
 }

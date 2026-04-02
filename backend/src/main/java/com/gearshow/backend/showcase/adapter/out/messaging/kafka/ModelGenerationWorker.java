@@ -69,18 +69,25 @@ public class ModelGenerationWorker {
      * 3D 모델을 생성하고 결과를 DB에 반영한다.
      */
     private void generateAndUpdateResult(Showcase3dModel model, Long showcaseId) {
-        GenerationResult result = modelGenerationClient.generate(model.getId(), showcaseId);
+        try {
+            GenerationResult result = modelGenerationClient.generate(model.getId(), showcaseId);
 
-        if (result.success()) {
-            Showcase3dModel completed = model.complete(
-                    result.modelFileUrl(), result.previewImageUrl());
-            showcase3dModelPort.save(completed);
-            log.info("3D 모델 생성 완료 - showcase3dModelId: {}", model.getId());
-        } else {
-            Showcase3dModel failed = model.fail(result.failureReason());
+            if (result.success()) {
+                Showcase3dModel completed = model.complete(
+                        result.modelFileUrl(), result.previewImageUrl());
+                showcase3dModelPort.save(completed);
+                log.info("3D 모델 생성 완료 - showcase3dModelId: {}", model.getId());
+            } else {
+                Showcase3dModel failed = model.fail(result.failureReason());
+                showcase3dModelPort.save(failed);
+                log.warn("3D 모델 생성 실패 - showcase3dModelId: {}, 사유: {}",
+                        model.getId(), result.failureReason());
+            }
+        } catch (Exception e) {
+            // 외부 호출 예외 시 FAILED로 전환하여 GENERATING 상태 고착 방지
+            Showcase3dModel failed = model.fail("3D 모델 생성 중 예외 발생: " + e.getMessage());
             showcase3dModelPort.save(failed);
-            log.warn("3D 모델 생성 실패 - showcase3dModelId: {}, 사유: {}",
-                    model.getId(), result.failureReason());
+            log.error("3D 모델 생성 중 예외 발생 - showcase3dModelId: {}", model.getId(), e);
         }
     }
 }

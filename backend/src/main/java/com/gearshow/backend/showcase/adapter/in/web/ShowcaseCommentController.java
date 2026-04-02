@@ -81,7 +81,7 @@ public class ShowcaseCommentController {
             @Valid @RequestBody UpdateCommentRequest request) {
 
         Long authorId = (Long) authentication.getPrincipal();
-        updateCommentUseCase.update(commentId, authorId, request.content());
+        updateCommentUseCase.update(showcaseId, commentId, authorId, request.content());
 
         return ResponseEntity.ok(
                 ApiResponse.of(200, "댓글 수정 성공",
@@ -98,7 +98,7 @@ public class ShowcaseCommentController {
             @PathVariable Long commentId) {
 
         Long authorId = (Long) authentication.getPrincipal();
-        deleteCommentUseCase.delete(commentId, authorId);
+        deleteCommentUseCase.delete(showcaseId, commentId, authorId);
 
         return ResponseEntity.ok(
                 ApiResponse.of(200, "댓글 삭제 성공"));

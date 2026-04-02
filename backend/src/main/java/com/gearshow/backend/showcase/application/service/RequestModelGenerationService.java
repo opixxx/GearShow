@@ -41,42 +41,58 @@ public class RequestModelGenerationService implements RequestModelGenerationUseC
     private final ImageStoragePort imageStoragePort;
 
     @Override
-    @Transactional
     public ModelGenerationResult requestOnCreate(Long showcaseId, List<MultipartFile> modelSourceImages) {
+        // 1. 검증
         validateSourceImageCount(modelSourceImages);
 
-        // S3 업로드 후 URL 획득
+        // 2. S3 업로드 (트랜잭션 밖)
         List<String> imageUrls = imageStoragePort.uploadAll(
                 "showcases/" + showcaseId + "/model-sources", modelSourceImages);
 
-        Showcase3dModel model = createAndSaveModel(showcaseId);
-        saveSourceImages(model.getId(), imageUrls);
+        // 3. DB 저장 (트랜잭션)
+        Showcase3dModel model = saveModelAndSourceImages(showcaseId, imageUrls);
+
+        // 4. Kafka 발행 (트랜잭션 밖)
         modelGenerationPort.requestGeneration(model.getId(), showcaseId);
 
         return new ModelGenerationResult(model.getId(), model.getModelStatus());
     }
 
     @Override
-    @Transactional
     public ModelGenerationResult requestRetry(Long showcaseId, Long ownerId,
                                                List<MultipartFile> modelSourceImages) {
+        // 1. 검증
         validateOwner(showcaseId, ownerId);
         validateSourceImageCount(modelSourceImages);
         validateNotAlreadyGenerating(showcaseId);
 
-        // S3 업로드 후 URL 획득
+        // 2. S3 업로드 (트랜잭션 밖)
         List<String> imageUrls = imageStoragePort.uploadAll(
                 "showcases/" + showcaseId + "/model-sources", modelSourceImages);
 
-        // 기존 모델이 있으면 재요청, 없으면 새로 생성
-        Showcase3dModel model = showcase3dModelPort.findByShowcaseId(showcaseId)
-                .map(this::resetToRequested)
-                .orElseGet(() -> createAndSaveModel(showcaseId));
+        // 3. DB 저장 (트랜잭션)
+        Showcase3dModel model = resetOrCreateModelAndSaveSourceImages(showcaseId, imageUrls);
 
-        saveSourceImages(model.getId(), imageUrls);
+        // 4. Kafka 발행 (트랜잭션 밖)
         modelGenerationPort.requestGeneration(model.getId(), showcaseId);
 
         return new ModelGenerationResult(model.getId(), model.getModelStatus());
+    }
+
+    @Transactional
+    protected Showcase3dModel saveModelAndSourceImages(Long showcaseId, List<String> imageUrls) {
+        Showcase3dModel model = createAndSaveModel(showcaseId);
+        saveSourceImages(model.getId(), imageUrls);
+        return model;
+    }
+
+    @Transactional
+    protected Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
+        Showcase3dModel model = showcase3dModelPort.findByShowcaseId(showcaseId)
+                .map(this::resetToRequested)
+                .orElseGet(() -> createAndSaveModel(showcaseId));
+        saveSourceImages(model.getId(), imageUrls);
+        return model;
     }
 
     private Showcase3dModel createAndSaveModel(Long showcaseId) {

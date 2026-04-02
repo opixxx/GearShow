@@ -9,8 +9,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-
 /**
  * 댓글 수정 유스케이스 구현체.
  */
@@ -22,26 +20,27 @@ public class UpdateCommentService implements UpdateCommentUseCase {
 
     @Override
     @Transactional
-    public void update(Long commentId, Long authorId, String content) {
+    public void update(Long showcaseId, Long commentId, Long authorId, String content) {
         ShowcaseComment comment = findComment(commentId);
+        validateBelongsToShowcase(comment, showcaseId);
         validateAuthor(comment, authorId);
 
-        ShowcaseComment updated = ShowcaseComment.builder()
-                .id(comment.getId())
-                .showcaseId(comment.getShowcaseId())
-                .authorId(comment.getAuthorId())
-                .content(content)
-                .status(comment.getStatus())
-                .createdAt(comment.getCreatedAt())
-                .updatedAt(Instant.now())
-                .build();
-
+        ShowcaseComment updated = comment.edit(content);
         showcaseCommentPort.save(updated);
     }
 
     private ShowcaseComment findComment(Long commentId) {
         return showcaseCommentPort.findById(commentId)
                 .orElseThrow(NotFoundShowcaseCommentException::new);
+    }
+
+    /**
+     * 댓글이 해당 쇼케이스에 소속되어 있는지 검증한다.
+     */
+    private void validateBelongsToShowcase(ShowcaseComment comment, Long showcaseId) {
+        if (!comment.getShowcaseId().equals(showcaseId)) {
+            throw new NotFoundShowcaseCommentException();
+        }
     }
 
     private void validateAuthor(ShowcaseComment comment, Long authorId) {

@@ -34,20 +34,19 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     private final RequestModelGenerationUseCase requestModelGenerationUseCase;
 
     @Override
-    @Transactional
     public CreateShowcaseResult create(CreateShowcaseCommand command,
                                         List<MultipartFile> images,
                                         List<MultipartFile> modelSourceImages) {
+        // 1. 검증 (트랜잭션 불필요)
         validateImages(images, command.primaryImageIndex());
 
-        Showcase showcase = createShowcase(command);
-        Showcase saved = showcasePort.save(showcase);
-
-        // S3 업로드 후 이미지 저장
+        // 2. S3 업로드 (트랜잭션 밖 — 외부 호출이므로 DB 커넥션 점유 방지)
         List<String> imageUrls = imageStoragePort.uploadAll("showcases", images);
-        saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
 
-        // 3D 모델 소스 이미지가 있으면 비동기 생성 요청
+        // 3. DB 저장 (트랜잭션)
+        Showcase saved = saveShowcaseAndImages(command, imageUrls);
+
+        // 4. 3D 모델 생성 요청 (트랜잭션 밖)
         ModelStatus modelStatus = null;
         if (command.hasModelSourceImages() && !modelSourceImages.isEmpty()) {
             ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
@@ -58,12 +57,22 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
         return new CreateShowcaseResult(saved.getId(), modelStatus);
     }
 
+    /**
+     * 쇼케이스와 이미지를 DB에 저장한다.
+     */
+    @Transactional
+    protected Showcase saveShowcaseAndImages(CreateShowcaseCommand command, List<String> imageUrls) {
+        Showcase showcase = createShowcase(command);
+        Showcase saved = showcasePort.save(showcase);
+        saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
+        return saved;
+    }
+
     private Showcase createShowcase(CreateShowcaseCommand command) {
         Showcase showcase = Showcase.create(
                 command.ownerId(), command.catalogItemId(),
                 command.title(), command.conditionGrade());
 
-        // description, userSize, wearCount, isForSale는 Builder로 설정
         return Showcase.builder()
                 .id(null)
                 .ownerId(command.ownerId())

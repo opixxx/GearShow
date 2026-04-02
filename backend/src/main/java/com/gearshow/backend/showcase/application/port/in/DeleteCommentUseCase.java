@@ -8,8 +8,9 @@ public interface DeleteCommentUseCase {
     /**
      * 댓글을 삭제한다 (소프트 삭제).
      *
-     * @param commentId 댓글 ID
-     * @param authorId  요청자 ID (작성자 검증용)
+     * @param showcaseId 쇼케이스 ID (소속 검증용)
+     * @param commentId  댓글 ID
+     * @param authorId   요청자 ID (작성자 검증용)
      */
-    void delete(Long commentId, Long authorId);
+    void delete(Long showcaseId, Long commentId, Long authorId);
 }

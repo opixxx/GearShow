@@ -2,6 +2,8 @@ package com.gearshow.backend.showcase.adapter.in.web.dto;
 
 import com.gearshow.backend.showcase.application.dto.UpdateShowcaseCommand;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -17,6 +19,7 @@ public record UpdateShowcaseRequest(
 
         ConditionGrade conditionGrade,
 
+        @PositiveOrZero(message = "착용 횟수는 0 이상이어야 합니다.")
         Integer wearCount,
 
         Boolean isForSale

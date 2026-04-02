@@ -115,7 +115,7 @@ class CommentServiceIntegrationTest {
             Long commentId = createCommentUseCase.create(showcaseId, 1L, "원본 댓글");
 
             // When
-            updateCommentUseCase.update(commentId, 1L, "수정된 댓글");
+            updateCommentUseCase.update(showcaseId, commentId, 1L, "수정된 댓글");
 
             // Then - 수정 확인은 목록 조회로
             PageInfo<CommentResult> result = listCommentsUseCase.list(showcaseId, null, 20);
@@ -129,7 +129,7 @@ class CommentServiceIntegrationTest {
             Long commentId = createCommentUseCase.create(showcaseId, 1L, "원본");
 
             // When & Then
-            assertThatThrownBy(() -> updateCommentUseCase.update(commentId, 999L, "수정"))
+            assertThatThrownBy(() -> updateCommentUseCase.update(showcaseId, commentId, 999L, "수정"))
                     .isInstanceOf(NotAuthorCommentException.class);
         }
 
@@ -137,7 +137,7 @@ class CommentServiceIntegrationTest {
         @DisplayName("존재하지 않는 댓글을 수정하면 예외가 발생한다")
         void update_notFound_throwsException() {
             // Given & When & Then
-            assertThatThrownBy(() -> updateCommentUseCase.update(999L, 1L, "수정"))
+            assertThatThrownBy(() -> updateCommentUseCase.update(showcaseId, 999L, 1L, "수정"))
                     .isInstanceOf(NotFoundShowcaseCommentException.class);
         }
     }
@@ -153,7 +153,7 @@ class CommentServiceIntegrationTest {
             Long commentId = createCommentUseCase.create(showcaseId, 1L, "삭제할 댓글");
 
             // When
-            deleteCommentUseCase.delete(commentId, 1L);
+            deleteCommentUseCase.delete(showcaseId, commentId, 1L);
 
             // Then - 삭제 후 목록에서 사라짐 (소프트 삭제지만 ACTIVE만 조회)
             PageInfo<CommentResult> result = listCommentsUseCase.list(showcaseId, null, 20);
@@ -167,7 +167,7 @@ class CommentServiceIntegrationTest {
             Long commentId = createCommentUseCase.create(showcaseId, 1L, "삭제할 댓글");
 
             // When & Then
-            assertThatThrownBy(() -> deleteCommentUseCase.delete(commentId, 999L))
+            assertThatThrownBy(() -> deleteCommentUseCase.delete(showcaseId, commentId, 999L))
                     .isInstanceOf(NotAuthorCommentException.class);
         }
     }
