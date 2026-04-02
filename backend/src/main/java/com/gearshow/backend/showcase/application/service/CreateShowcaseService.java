@@ -37,24 +37,27 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     public CreateShowcaseResult create(CreateShowcaseCommand command,
                                         List<UploadFile> images,
                                         List<UploadFile> modelSourceImages) {
-        // 1. 검증 (트랜잭션 불필요)
         validateImages(images, command.primaryImageIndex());
 
-        // 2. S3 업로드 (트랜잭션 밖 — 외부 호출이므로 DB 커넥션 점유 방지)
         List<String> imageUrls = imageStoragePort.uploadAll("showcases", images);
-
-        // 3. DB 저장 (트랜잭션)
         Showcase saved = saveShowcaseAndImages(command, imageUrls);
-
-        // 4. 3D 모델 생성 요청 (트랜잭션 밖)
-        ModelStatus modelStatus = null;
-        if (command.hasModelSourceImages() && !modelSourceImages.isEmpty()) {
-            ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
-                    saved.getId(), modelSourceImages);
-            modelStatus = genResult.modelStatus();
-        }
+        ModelStatus modelStatus = requestModelIfNeeded(saved.getId(), command, modelSourceImages);
 
         return new CreateShowcaseResult(saved.getId(), modelStatus);
+    }
+
+    /**
+     * 3D 모델 소스 이미지가 있으면 생성을 비동기 요청한다.
+     */
+    private ModelStatus requestModelIfNeeded(Long showcaseId,
+                                              CreateShowcaseCommand command,
+                                              List<UploadFile> modelSourceImages) {
+        if (!command.hasModelSourceImages() || modelSourceImages.isEmpty()) {
+            return null;
+        }
+        ModelGenerationResult result = requestModelGenerationUseCase.requestOnCreate(
+                showcaseId, modelSourceImages);
+        return result.modelStatus();
     }
 
     /**

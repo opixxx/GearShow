@@ -62,7 +62,7 @@ public interface ShowcaseCommentJpaRepository extends JpaRepository<ShowcaseComm
     /**
      * 쇼케이스에 속한 모든 ACTIVE 댓글을 DELETED 상태로 일괄 변경한다.
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ShowcaseCommentJpaEntity c SET c.status = 'DELETED', c.updatedAt = CURRENT_TIMESTAMP" +
             " WHERE c.showcaseId = :showcaseId AND c.status = 'ACTIVE'")
     void softDeleteAllByShowcaseId(@Param("showcaseId") Long showcaseId);

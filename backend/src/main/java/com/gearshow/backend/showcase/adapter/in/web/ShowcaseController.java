@@ -5,10 +5,10 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseRequest;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseDetailResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateShowcaseRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseListResult;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.in.CreateShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.in.DeleteShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
@@ -28,7 +28,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -101,7 +100,8 @@ public class ShowcaseController {
 
         CreateShowcaseResult result = createShowcaseUseCase.create(
                 request.toCommand(ownerId, !safeModelSourceImages.isEmpty()),
-                toUploadFiles(images), toUploadFiles(safeModelSourceImages));
+                UploadFileMapper.toUploadFiles(images),
+                UploadFileMapper.toUploadFiles(safeModelSourceImages));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(201, "쇼케이스 등록 성공",
@@ -142,24 +142,4 @@ public class ShowcaseController {
                 ApiResponse.of(200, "쇼케이스 삭제 성공"));
     }
 
-    /**
-     * MultipartFile 목록을 UploadFile 목록으로 변환한다.
-     */
-    private List<UploadFile> toUploadFiles(List<MultipartFile> files) {
-        return files.stream()
-                .map(this::toUploadFile)
-                .toList();
-    }
-
-    private UploadFile toUploadFile(MultipartFile file) {
-        try {
-            return new UploadFile(
-                    file.getInputStream(),
-                    file.getContentType(),
-                    file.getSize(),
-                    file.getOriginalFilename());
-        } catch (IOException e) {
-            throw new IllegalStateException("파일 스트림 읽기에 실패했습니다", e);
-        }
-    }
 }

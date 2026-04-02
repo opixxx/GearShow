@@ -52,7 +52,8 @@ public enum ErrorCode {
     SHOWCASE_COMMENT_INVALID(400, "유효하지 않은 댓글입니다"),
 
     // STORAGE
-    STORAGE_UPLOAD_FAILED(500, "이미지 업로드에 실패했습니다");
+    STORAGE_UPLOAD_FAILED(500, "이미지 업로드에 실패했습니다"),
+    STORAGE_FILE_READ_FAILED(500, "파일 스트림 읽기에 실패했습니다");
 
     private final int status;
     private final String message;

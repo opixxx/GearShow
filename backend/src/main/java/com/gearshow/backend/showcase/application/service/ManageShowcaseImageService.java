@@ -78,12 +78,28 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     @Transactional
     public void reorderImages(Long showcaseId, Long ownerId, List<ImageOrder> imageOrders) {
         validateOwnership(showcaseId, ownerId);
-        validateSinglePrimaryImage(imageOrders);
-        validateUniqueSortOrder(imageOrders);
+        validateReorderInput(imageOrders);
 
         List<ShowcaseImage> existing = showcaseImagePort.findByShowcaseId(showcaseId);
         validateImageSetMatch(existing, imageOrders);
 
+        List<ShowcaseImage> updated = buildReorderedImages(existing, imageOrders);
+        showcaseImagePort.saveAll(updated);
+    }
+
+    /**
+     * 재정렬 입력값의 비즈니스 규칙을 검증한다.
+     */
+    private void validateReorderInput(List<ImageOrder> imageOrders) {
+        validateSinglePrimaryImage(imageOrders);
+        validateUniqueSortOrder(imageOrders);
+    }
+
+    /**
+     * 기존 이미지에 새 정렬 순서를 적용한 이미지 목록을 생성한다.
+     */
+    private List<ShowcaseImage> buildReorderedImages(List<ShowcaseImage> existing,
+                                                      List<ImageOrder> imageOrders) {
         Map<Long, ShowcaseImage> existingMap = existing.stream()
                 .collect(Collectors.toMap(ShowcaseImage::getId, img -> img));
 
@@ -99,8 +115,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
                     .createdAt(img.getCreatedAt())
                     .build());
         }
-
-        showcaseImagePort.saveAll(updated);
+        return updated;
     }
 
     private void validateOwnership(Long showcaseId, Long ownerId) {
@@ -164,6 +179,11 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
         Set<Long> requestIds = imageOrders.stream()
                 .map(ImageOrder::showcaseImageId)
                 .collect(Collectors.toSet());
+
+        // 요청 ID 중복 검증 (Set 크기와 원본 리스트 크기 비교)
+        if (requestIds.size() != imageOrders.size()) {
+            throw new ImageReorderMismatchException();
+        }
 
         if (!existingIds.equals(requestIds)) {
             throw new ImageReorderMismatchException();
