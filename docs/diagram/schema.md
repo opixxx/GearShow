@@ -28,8 +28,8 @@ erDiagram
         string phoneNumber
         boolean isPhoneVerified
         enum userStatus
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     AUTH_ACCOUNT {
@@ -38,8 +38,8 @@ erDiagram
         enum providerType
         string providerUserKey
         enum authStatus
-        datetime createdAt
-        datetime lastLoginAt
+        timestamp createdAt
+        timestamp lastLoginAt
     }
 
     CATALOG_ITEM {
@@ -50,8 +50,8 @@ erDiagram
         string modelCode
         string officialImageUrl
         enum catalogStatus
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     BOOTS_SPEC {
@@ -62,8 +62,8 @@ erDiagram
         string releaseYear
         string surfaceType
         json extraSpecJson
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     UNIFORM_SPEC {
@@ -74,8 +74,8 @@ erDiagram
         string league
         string manufacturer
         json extraSpecJson
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     SHOWCASE {
@@ -89,8 +89,8 @@ erDiagram
         int wearCount
         boolean isForSale
         enum showcaseStatus
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     SHOWCASE_IMAGE {
@@ -99,7 +99,7 @@ erDiagram
         string imageUrl
         int sortOrder
         boolean isPrimary
-        datetime createdAt
+        timestamp createdAt
     }
 
     SHOWCASE_3D_MODEL {
@@ -109,10 +109,10 @@ erDiagram
         string previewImageUrl
         enum modelStatus
         string generationProvider
-        datetime requestedAt
-        datetime generatedAt
+        timestamp requestedAt
+        timestamp generatedAt
         string failureReason
-        datetime createdAt
+        timestamp createdAt
     }
 
     MODEL_SOURCE_IMAGE {
@@ -121,7 +121,7 @@ erDiagram
         string imageUrl
         enum angleType
         int sortOrder
-        datetime createdAt
+        timestamp createdAt
     }
 
     SHOWCASE_COMMENT {
@@ -130,8 +130,8 @@ erDiagram
         bigint authorId "논리 참조 → USER"
         text content
         enum commentStatus
-        datetime createdAt
-        datetime updatedAt
+        timestamp createdAt
+        timestamp updatedAt
     }
 
     CHAT_ROOM {
@@ -140,8 +140,8 @@ erDiagram
         bigint sellerId "논리 참조 → USER"
         bigint buyerId "논리 참조 → USER"
         enum chatRoomStatus
-        datetime createdAt
-        datetime lastMessageAt
+        timestamp createdAt
+        timestamp lastMessageAt
     }
 
     CHAT_MESSAGE {
@@ -151,7 +151,7 @@ erDiagram
         enum messageType
         text content
         boolean isRead
-        datetime sentAt
+        timestamp sentAt
     }
 
     TRANSACTION {
@@ -164,9 +164,9 @@ erDiagram
         decimal askingPriceSnapshot
         decimal agreedPrice
         enum transactionStatus
-        datetime createdAt
-        datetime completedAt
-        datetime cancelledAt
+        timestamp createdAt
+        timestamp completedAt
+        timestamp cancelledAt
     }
 
     PAYMENT {
@@ -176,10 +176,10 @@ erDiagram
         enum paymentMethod
         enum paymentStatus
         decimal amount
-        datetime paidAt
-        datetime cancelledAt
+        timestamp paidAt
+        timestamp cancelledAt
         string failureReason
-        datetime createdAt
+        timestamp createdAt
     }
 
     USER ||--|{ AUTH_ACCOUNT : has
@@ -215,8 +215,8 @@ erDiagram
 | phoneNumber | string | | 전화번호 |
 | isPhoneVerified | boolean | NOT NULL, DEFAULT false | 전화번호 인증 여부 |
 | userStatus | enum | NOT NULL | 사용자 상태 (ACTIVE, SUSPENDED, WITHDRAWN 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### AUTH_ACCOUNT (인증 계정)
 
@@ -229,8 +229,8 @@ erDiagram
 | providerType | enum | NOT NULL | 인증 제공자 (KAKAO, GOOGLE, APPLE 등) |
 | providerUserKey | string | NOT NULL | 제공자 측 사용자 고유 키 |
 | authStatus | enum | NOT NULL | 인증 상태 (LINKED, UNLINKED 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| lastLoginAt | datetime | | 마지막 로그인 일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| lastLoginAt | timestamp | | 마지막 로그인 일시 |
 
 ### CATALOG_ITEM (카탈로그 아이템)
 
@@ -243,8 +243,8 @@ erDiagram
 | modelCode | string | | 모델 코드 |
 | officialImageUrl | string | | 공식 이미지 URL |
 | catalogStatus | enum | NOT NULL | 카탈로그 상태 (ACTIVE, INACTIVE 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### BOOTS_SPEC (축구화 스펙)
 
@@ -259,8 +259,8 @@ erDiagram
 | releaseYear | string | | 출시 연도 |
 | surfaceType | string | | 적합 표면 (천연잔디, 인조잔디 등) |
 | extraSpecJson | json | | 추가 스펙 (무게, 갑피 소재 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### UNIFORM_SPEC (유니폼 스펙)
 
@@ -275,8 +275,8 @@ erDiagram
 | league | string | | 리그 (EPL, LaLiga 등) |
 | manufacturer | string | | 제조사 |
 | extraSpecJson | json | | 추가 스펙 (소재, 핏 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### SHOWCASE (쇼케이스)
 
@@ -292,8 +292,8 @@ erDiagram
 | wearCount | int | DEFAULT 0 | 착용 횟수 |
 | isForSale | boolean | NOT NULL, DEFAULT false | 판매 여부 |
 | showcaseStatus | enum | NOT NULL | 쇼케이스 상태 (ACTIVE, HIDDEN, SOLD, DELETED) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### SHOWCASE_IMAGE (쇼케이스 이미지)
 
@@ -306,7 +306,7 @@ erDiagram
 | imageUrl | string | NOT NULL | 이미지 URL |
 | sortOrder | int | NOT NULL | 정렬 순서 |
 | isPrimary | boolean | NOT NULL, DEFAULT false | 대표 이미지 여부 |
-| createdAt | datetime | NOT NULL | 생성일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
 
 ### SHOWCASE_3D_MODEL (쇼케이스 3D 모델)
 
@@ -320,10 +320,10 @@ erDiagram
 | previewImageUrl | string | | 미리보기 이미지 URL |
 | modelStatus | enum | NOT NULL | 모델 상태 (REQUESTED, GENERATING, COMPLETED, FAILED 등) |
 | generationProvider | string | | 생성 제공자 (tripo 등) |
-| requestedAt | datetime | | 요청 일시 |
-| generatedAt | datetime | | 생성 완료 일시 |
+| requestedAt | timestamp | | 요청 일시 |
+| generatedAt | timestamp | | 생성 완료 일시 |
 | failureReason | string | | 실패 사유 |
-| createdAt | datetime | NOT NULL | 생성일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
 
 ### MODEL_SOURCE_IMAGE (3D 모델 소스 이미지)
 
@@ -336,7 +336,7 @@ erDiagram
 | imageUrl | string | NOT NULL | 이미지 URL |
 | angleType | enum | NOT NULL | 촬영 각도 (FRONT, BACK, LEFT, RIGHT 등) |
 | sortOrder | int | NOT NULL | 정렬 순서 |
-| createdAt | datetime | NOT NULL | 생성일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
 
 ### SHOWCASE_COMMENT (쇼케이스 댓글)
 
@@ -349,8 +349,8 @@ erDiagram
 | authorId | bigint | NOT NULL, 논리 참조 → USER | 작성자 ID |
 | content | text | NOT NULL | 댓글 내용 |
 | commentStatus | enum | NOT NULL | 댓글 상태 (ACTIVE, DELETED 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| updatedAt | datetime | NOT NULL | 수정일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| updatedAt | timestamp | NOT NULL | 수정일시 |
 
 ### CHAT_ROOM (채팅방)
 
@@ -361,8 +361,8 @@ erDiagram
 | sellerId | bigint | NOT NULL, 논리 참조 → USER | 판매자 ID |
 | buyerId | bigint | NOT NULL, 논리 참조 → USER | 구매자 ID |
 | chatRoomStatus | enum | NOT NULL | 채팅방 상태 (ACTIVE, CLOSED 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| lastMessageAt | datetime | | 마지막 메시지 일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| lastMessageAt | timestamp | | 마지막 메시지 일시 |
 
 ### CHAT_MESSAGE (채팅 메시지)
 
@@ -376,7 +376,7 @@ erDiagram
 | messageType | enum | NOT NULL | 메시지 타입 (TEXT, IMAGE, SYSTEM 등) |
 | content | text | NOT NULL | 메시지 내용 |
 | isRead | boolean | NOT NULL, DEFAULT false | 읽음 여부 |
-| sentAt | datetime | NOT NULL | 발신 일시 |
+| sentAt | timestamp | NOT NULL | 발신 일시 |
 
 ### TRANSACTION (거래)
 
@@ -391,9 +391,9 @@ erDiagram
 | askingPriceSnapshot | decimal | | 요청 가격 스냅샷 |
 | agreedPrice | decimal | NOT NULL | 합의 가격 |
 | transactionStatus | enum | NOT NULL | 거래 상태 (PENDING, IN_PROGRESS, COMPLETED, CANCELLED 등) |
-| createdAt | datetime | NOT NULL | 생성일시 |
-| completedAt | datetime | | 완료 일시 |
-| cancelledAt | datetime | | 취소 일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
+| completedAt | timestamp | | 완료 일시 |
+| cancelledAt | timestamp | | 취소 일시 |
 
 ### PAYMENT (결제)
 
@@ -407,10 +407,10 @@ erDiagram
 | paymentMethod | enum | NOT NULL | 결제 수단 (CARD, BANK_TRANSFER 등) |
 | paymentStatus | enum | NOT NULL | 결제 상태 (PENDING, PAID, CANCELLED, FAILED 등) |
 | amount | decimal | NOT NULL | 결제 금액 |
-| paidAt | datetime | | 결제 완료 일시 |
-| cancelledAt | datetime | | 결제 취소 일시 |
+| paidAt | timestamp | | 결제 완료 일시 |
+| cancelledAt | timestamp | | 결제 취소 일시 |
 | failureReason | string | | 실패 사유 |
-| createdAt | datetime | NOT NULL | 생성일시 |
+| createdAt | timestamp | NOT NULL | 생성일시 |
 
 ---
 
