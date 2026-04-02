@@ -40,4 +40,11 @@ public interface ShowcaseCommentPort {
      * @return showcaseId → commentCount 매핑
      */
     Map<Long, Integer> countActiveByShowcaseIds(List<Long> showcaseIds);
+
+    /**
+     * 쇼케이스에 속한 모든 ACTIVE 댓글을 일괄 소프트 삭제한다.
+     *
+     * @param showcaseId 쇼케이스 ID
+     */
+    void softDeleteAllByShowcaseId(Long showcaseId);
 }

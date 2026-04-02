@@ -13,10 +13,10 @@ import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +35,8 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
 
     @Override
     public CreateShowcaseResult create(CreateShowcaseCommand command,
-                                        List<MultipartFile> images,
-                                        List<MultipartFile> modelSourceImages) {
+                                        List<UploadFile> images,
+                                        List<UploadFile> modelSourceImages) {
         // 1. 검증 (트랜잭션 불필요)
         validateImages(images, command.primaryImageIndex());
 
@@ -69,30 +69,17 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     }
 
     private Showcase createShowcase(CreateShowcaseCommand command) {
-        Showcase showcase = Showcase.create(
+        return Showcase.create(
                 command.ownerId(), command.catalogItemId(),
-                command.title(), command.conditionGrade());
-
-        return Showcase.builder()
-                .id(null)
-                .ownerId(command.ownerId())
-                .catalogItemId(command.catalogItemId())
-                .title(command.title())
-                .description(command.description())
-                .userSize(command.userSize())
-                .conditionGrade(command.conditionGrade())
-                .wearCount(command.wearCount())
-                .forSale(command.isForSale())
-                .status(showcase.getStatus())
-                .createdAt(showcase.getCreatedAt())
-                .updatedAt(showcase.getUpdatedAt())
-                .build();
+                command.title(), command.description(),
+                command.userSize(), command.conditionGrade(),
+                command.wearCount(), command.isForSale());
     }
 
     /**
      * 이미지 최소 1장, primaryImageIndex 범위 검증.
      */
-    private void validateImages(List<MultipartFile> images, int primaryImageIndex) {
+    private void validateImages(List<UploadFile> images, int primaryImageIndex) {
         if (images == null || images.isEmpty()) {
             throw new MinImageRequiredException();
         }

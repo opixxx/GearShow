@@ -20,11 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,10 +67,11 @@ class ShowcaseServiceIntegrationTest {
                 "270", ConditionGrade.A, 5, false, 0, false);
     }
 
-    private List<MultipartFile> createFakeImages(int count) {
+    private List<UploadFile> createFakeImages(int count) {
         return java.util.stream.IntStream.range(0, count)
-                .mapToObj(i -> (MultipartFile) new MockMultipartFile(
-                        "images", "test-" + i + ".jpg", "image/jpeg", "fake".getBytes()))
+                .mapToObj(i -> new UploadFile(
+                        new ByteArrayInputStream("fake".getBytes()),
+                        "image/jpeg", 4L, "test-" + i + ".jpg"))
                 .toList();
     }
 
@@ -90,7 +90,7 @@ class ShowcaseServiceIntegrationTest {
         void create_withImages_success() {
             // Given
             CreateShowcaseCommand command = createCommand(1L);
-            List<MultipartFile> images = createFakeImages(2);
+            List<UploadFile> images = createFakeImages(2);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -108,8 +108,8 @@ class ShowcaseServiceIntegrationTest {
             CreateShowcaseCommand command = new CreateShowcaseCommand(
                     1L, 1L, "테스트", null, null,
                     ConditionGrade.A, 0, false, 0, true);
-            List<MultipartFile> images = createFakeImages(1);
-            List<MultipartFile> modelSourceImages = createFakeImages(4);
+            List<UploadFile> images = createFakeImages(1);
+            List<UploadFile> modelSourceImages = createFakeImages(4);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -190,7 +190,7 @@ class ShowcaseServiceIntegrationTest {
     class Delete {
 
         @Test
-        @DisplayName("소유자가 쇼케이스를 삭제한다")
+        @DisplayName("소유자가 쇼케이스를 삭제하면 공개 조회 시 NotFound 예외가 발생한다")
         void delete_byOwner_success() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
@@ -198,9 +198,9 @@ class ShowcaseServiceIntegrationTest {
             // When
             deleteShowcaseUseCase.delete(showcaseId, 1L);
 
-            // Then
-            ShowcaseDetailResult result = getShowcaseUseCase.getShowcase(showcaseId);
-            assertThat(result.showcaseStatus()).isEqualTo(ShowcaseStatus.DELETED);
+            // Then - DELETED 상태는 공개 상세 조회에서 차단됨
+            assertThatThrownBy(() -> getShowcaseUseCase.getShowcase(showcaseId))
+                    .isInstanceOf(NotFoundShowcaseException.class);
         }
 
         @Test

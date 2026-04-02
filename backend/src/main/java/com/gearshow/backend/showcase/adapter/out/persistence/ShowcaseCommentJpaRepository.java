@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.out.persistence;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -57,4 +58,12 @@ public interface ShowcaseCommentJpaRepository extends JpaRepository<ShowcaseComm
             " WHERE c.showcaseId IN :showcaseIds AND c.status = 'ACTIVE'" +
             " GROUP BY c.showcaseId")
     List<Object[]> countActiveByShowcaseIds(@Param("showcaseIds") List<Long> showcaseIds);
+
+    /**
+     * 쇼케이스에 속한 모든 ACTIVE 댓글을 DELETED 상태로 일괄 변경한다.
+     */
+    @Modifying
+    @Query("UPDATE ShowcaseCommentJpaEntity c SET c.status = 'DELETED', c.updatedAt = CURRENT_TIMESTAMP" +
+            " WHERE c.showcaseId = :showcaseId AND c.status = 'ACTIVE'")
+    void softDeleteAllByShowcaseId(@Param("showcaseId") Long showcaseId);
 }

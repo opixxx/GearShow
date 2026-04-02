@@ -1,12 +1,12 @@
 package com.gearshow.backend.support;
 
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
-import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.util.ArrayList;
@@ -40,14 +40,14 @@ public class TestInfraConfig {
     public ImageStoragePort testImageStoragePort() {
         return new ImageStoragePort() {
             @Override
-            public String upload(String directory, MultipartFile file) {
+            public String upload(String directory, UploadFile file) {
                 return "https://test-cdn.gearshow.com/" + directory + "/" + UUID.randomUUID() + ".jpg";
             }
 
             @Override
-            public List<String> uploadAll(String directory, List<MultipartFile> files) {
+            public List<String> uploadAll(String directory, List<UploadFile> files) {
                 List<String> urls = new ArrayList<>();
-                for (MultipartFile file : files) {
+                for (UploadFile file : files) {
                     urls.add(upload(directory, file));
                 }
                 return urls;

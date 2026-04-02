@@ -1,6 +1,6 @@
 package com.gearshow.backend.showcase.application.port.in;
 
-import org.springframework.web.multipart.MultipartFile;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 
 import java.util.List;
 
@@ -17,7 +17,7 @@ public interface ManageShowcaseImageUseCase {
      * @param images     추가할 이미지 파일 목록
      * @return 추가된 이미지 ID 목록
      */
-    List<Long> addImages(Long showcaseId, Long ownerId, List<MultipartFile> images);
+    List<Long> addImages(Long showcaseId, Long ownerId, List<UploadFile> images);
 
     /**
      * 이미지를 삭제한다.

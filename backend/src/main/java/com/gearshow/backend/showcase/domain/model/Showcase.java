@@ -51,16 +51,22 @@ public class Showcase {
 
     /**
      * 새로운 쇼케이스를 생성한다.
-     * 최초 상태는 ACTIVE이며, 판매 여부는 false이다.
+     * 최초 상태는 ACTIVE이다.
      *
      * @param ownerId        소유자 ID
      * @param catalogItemId  카탈로그 아이템 ID
      * @param title          제목
+     * @param description    설명
+     * @param userSize       사용자 사이즈
      * @param conditionGrade 상태 등급
+     * @param wearCount      착용 횟수
+     * @param forSale        판매 여부
      * @return 생성된 쇼케이스
      */
     public static Showcase create(Long ownerId, Long catalogItemId,
-                                  String title, ConditionGrade conditionGrade) {
+                                  String title, String description,
+                                  String userSize, ConditionGrade conditionGrade,
+                                  int wearCount, boolean forSale) {
         validate(ownerId, catalogItemId, title, conditionGrade);
 
         Instant now = Instant.now();
@@ -68,9 +74,11 @@ public class Showcase {
                 .ownerId(ownerId)
                 .catalogItemId(catalogItemId)
                 .title(title)
+                .description(description)
+                .userSize(userSize)
                 .conditionGrade(conditionGrade)
-                .wearCount(0)
-                .forSale(false)
+                .wearCount(wearCount)
+                .forSale(forSale)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)

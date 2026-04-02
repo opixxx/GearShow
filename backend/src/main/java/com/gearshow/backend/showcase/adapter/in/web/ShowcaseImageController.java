@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ReorderImagesRequest;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.in.ManageShowcaseImageUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -36,7 +38,7 @@ public class ShowcaseImageController {
 
         Long ownerId = (Long) authentication.getPrincipal();
         List<Long> addedIds = manageShowcaseImageUseCase.addImages(
-                showcaseId, ownerId, images);
+                showcaseId, ownerId, toUploadFiles(images));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(201, "이미지 추가 성공",
@@ -77,5 +79,26 @@ public class ShowcaseImageController {
 
         return ResponseEntity.ok(
                 ApiResponse.of(200, "이미지 정렬 순서 변경 성공"));
+    }
+
+    /**
+     * MultipartFile 목록을 UploadFile 목록으로 변환한다.
+     */
+    private List<UploadFile> toUploadFiles(List<MultipartFile> files) {
+        return files.stream()
+                .map(this::toUploadFile)
+                .toList();
+    }
+
+    private UploadFile toUploadFile(MultipartFile file) {
+        try {
+            return new UploadFile(
+                    file.getInputStream(),
+                    file.getContentType(),
+                    file.getSize(),
+                    file.getOriginalFilename());
+        } catch (IOException e) {
+            throw new IllegalStateException("파일 스트림 읽기에 실패했습니다", e);
+        }
     }
 }

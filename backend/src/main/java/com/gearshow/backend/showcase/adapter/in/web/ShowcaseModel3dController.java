@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.adapter.in.web;
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.in.GetModel3dUseCase;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -39,7 +41,7 @@ public class ShowcaseModel3dController {
         Long ownerId = (Long) authentication.getPrincipal();
 
         ModelGenerationResult result = requestModelGenerationUseCase.requestRetry(
-                showcaseId, ownerId, modelSourceImages);
+                showcaseId, ownerId, toUploadFiles(modelSourceImages));
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.of(202, "3D 모델 생성 요청 완료",
@@ -58,5 +60,26 @@ public class ShowcaseModel3dController {
 
         return ResponseEntity.ok(
                 ApiResponse.of(200, "3D 모델 조회 성공", result));
+    }
+
+    /**
+     * MultipartFile 목록을 UploadFile 목록으로 변환한다.
+     */
+    private List<UploadFile> toUploadFiles(List<MultipartFile> files) {
+        return files.stream()
+                .map(this::toUploadFile)
+                .toList();
+    }
+
+    private UploadFile toUploadFile(MultipartFile file) {
+        try {
+            return new UploadFile(
+                    file.getInputStream(),
+                    file.getContentType(),
+                    file.getSize(),
+                    file.getOriginalFilename());
+        } catch (IOException e) {
+            throw new IllegalStateException("파일 스트림 읽기에 실패했습니다", e);
+        }
     }
 }
