@@ -4,7 +4,7 @@ import com.gearshow.backend.showcase.domain.vo.AngleType;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 3D 모델 소스 이미지 도메인 엔티티.
@@ -20,12 +20,12 @@ public class ModelSourceImage {
     private final String imageUrl;
     private final AngleType angleType;
     private final int sortOrder;
-    private final LocalDateTime createdAt;
+    private final Instant createdAt;
 
     @Builder
     private ModelSourceImage(Long id, Long showcase3dModelId, String imageUrl,
                              AngleType angleType, int sortOrder,
-                             LocalDateTime createdAt) {
+                             Instant createdAt) {
         this.id = id;
         this.showcase3dModelId = showcase3dModelId;
         this.imageUrl = imageUrl;
@@ -50,7 +50,7 @@ public class ModelSourceImage {
                 .imageUrl(imageUrl)
                 .angleType(angleType)
                 .sortOrder(sortOrder)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
     }
 }

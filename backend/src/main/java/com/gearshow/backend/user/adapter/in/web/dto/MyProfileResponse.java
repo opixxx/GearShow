@@ -3,7 +3,7 @@ package com.gearshow.backend.user.adapter.in.web.dto;
 import com.gearshow.backend.user.application.dto.MyProfileResult;
 import com.gearshow.backend.user.domain.vo.UserStatus;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 내 프로필 조회 응답 DTO.
@@ -15,7 +15,7 @@ public record MyProfileResponse(
         String phoneNumber,
         boolean isPhoneVerified,
         UserStatus userStatus,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
 
     public static MyProfileResponse from(MyProfileResult result) {

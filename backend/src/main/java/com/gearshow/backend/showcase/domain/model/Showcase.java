@@ -7,7 +7,7 @@ import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 도메인 엔티티 (Aggregate Root).
@@ -27,14 +27,14 @@ public class Showcase {
     private final int wearCount;
     private final boolean forSale;
     private final ShowcaseStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private Showcase(Long id, Long ownerId, Long catalogItemId, String title,
                      String description, String userSize, ConditionGrade conditionGrade,
                      int wearCount, boolean forSale, ShowcaseStatus status,
-                     LocalDateTime createdAt, LocalDateTime updatedAt) {
+                     Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
         this.catalogItemId = catalogItemId;
@@ -63,7 +63,7 @@ public class Showcase {
                                   String title, ConditionGrade conditionGrade) {
         validate(ownerId, catalogItemId, title, conditionGrade);
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return Showcase.builder()
                 .ownerId(ownerId)
                 .catalogItemId(catalogItemId)
@@ -167,7 +167,7 @@ public class Showcase {
                 .forSale(this.forSale)
                 .status(this.status)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now());
+                .updatedAt(Instant.now());
     }
 
     private static void validate(Long ownerId, Long catalogItemId,

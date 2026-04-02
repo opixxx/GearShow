@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 유니폼 스펙 JPA 엔티티.
@@ -41,16 +41,16 @@ public class UniformSpecJpaEntity {
     private String extraSpecJson;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Builder
     private UniformSpecJpaEntity(Long id, Long catalogItemId, String clubName,
                                  String season, String league, String manufacturer,
-                                 String extraSpecJson, LocalDateTime createdAt,
-                                 LocalDateTime updatedAt) {
+                                 String extraSpecJson, Instant createdAt,
+                                 Instant updatedAt) {
         this.id = id;
         this.catalogItemId = catalogItemId;
         this.clubName = clubName;

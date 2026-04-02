@@ -17,7 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -104,7 +105,7 @@ public class LoginService implements LoginUseCase {
         // 기존 Refresh Token 삭제 후 새로 저장
         refreshTokenPort.deleteByUserId(userId);
         refreshTokenPort.save(userId, refreshToken,
-                LocalDateTime.now().plusDays(14));
+                Instant.now().plus(Duration.ofDays(14)));
 
         return new LoginResult(
                 accessToken,

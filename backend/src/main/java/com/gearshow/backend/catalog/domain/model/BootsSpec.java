@@ -4,7 +4,7 @@ import com.gearshow.backend.catalog.domain.vo.StudType;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 축구화 스펙 도메인 엔티티.
@@ -21,14 +21,14 @@ public class BootsSpec {
     private final String releaseYear;
     private final String surfaceType;
     private final String extraSpecJson;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private BootsSpec(Long id, Long catalogItemId, StudType studType,
                       String siloName, String releaseYear, String surfaceType,
-                      String extraSpecJson, LocalDateTime createdAt,
-                      LocalDateTime updatedAt) {
+                      String extraSpecJson, Instant createdAt,
+                      Instant updatedAt) {
         this.id = id;
         this.catalogItemId = catalogItemId;
         this.studType = studType;
@@ -48,7 +48,7 @@ public class BootsSpec {
      * @return 생성된 축구화 스펙
      */
     public static BootsSpec create(Long catalogItemId, StudType studType) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return BootsSpec.builder()
                 .catalogItemId(catalogItemId)
                 .studType(studType)

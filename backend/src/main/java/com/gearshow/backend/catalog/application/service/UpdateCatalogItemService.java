@@ -62,7 +62,7 @@ public class UpdateCatalogItemService implements UpdateCatalogItemUseCase {
                 .officialImageUrl(command.officialImageUrl() != null ? command.officialImageUrl() : item.getOfficialImageUrl())
                 .status(item.getStatus())
                 .createdAt(item.getCreatedAt())
-                .updatedAt(java.time.LocalDateTime.now())
+                .updatedAt(java.time.Instant.now())
                 .build();
     }
 }

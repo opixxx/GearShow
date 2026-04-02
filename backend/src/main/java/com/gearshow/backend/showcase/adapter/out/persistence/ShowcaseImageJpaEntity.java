@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 이미지 JPA 엔티티.
@@ -35,11 +35,11 @@ public class ShowcaseImageJpaEntity {
     private boolean primary;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Builder
     private ShowcaseImageJpaEntity(Long id, Long showcaseId, String imageUrl,
-                                   int sortOrder, boolean primary, LocalDateTime createdAt) {
+                                   int sortOrder, boolean primary, Instant createdAt) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.imageUrl = imageUrl;

@@ -8,7 +8,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.Duration;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,7 +34,7 @@ class RefreshTokenPersistenceAdapterIntegrationTest {
     void save_and_findUserIdByToken() {
         // Given
         String token = "test-refresh-token";
-        LocalDateTime expiresAt = LocalDateTime.now().plusDays(14);
+        Instant expiresAt = Instant.now().plus(Duration.ofDays(14));
 
         // When
         adapter.save(1L, token, expiresAt);
@@ -49,7 +50,7 @@ class RefreshTokenPersistenceAdapterIntegrationTest {
     void findUserIdByToken_expired_returnsEmpty() {
         // Given
         String token = "expired-token";
-        LocalDateTime expiresAt = LocalDateTime.now().minusDays(1);
+        Instant expiresAt = Instant.now().minus(Duration.ofDays(1));
 
         // When
         adapter.save(1L, token, expiresAt);
@@ -64,7 +65,7 @@ class RefreshTokenPersistenceAdapterIntegrationTest {
     void deleteByUserId_removesToken() {
         // Given
         String token = "token-to-delete";
-        adapter.save(1L, token, LocalDateTime.now().plusDays(14));
+        adapter.save(1L, token, Instant.now().plus(Duration.ofDays(14)));
 
         // When
         adapter.deleteByUserId(1L);

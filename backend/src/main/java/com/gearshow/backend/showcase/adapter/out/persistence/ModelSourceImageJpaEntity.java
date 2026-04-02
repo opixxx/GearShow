@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 3D 모델 소스 이미지 JPA 엔티티.
@@ -37,12 +37,12 @@ public class ModelSourceImageJpaEntity {
     private int sortOrder;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Builder
     private ModelSourceImageJpaEntity(Long id, Long showcase3dModelId, String imageUrl,
                                       AngleType angleType, int sortOrder,
-                                      LocalDateTime createdAt) {
+                                      Instant createdAt) {
         this.id = id;
         this.showcase3dModelId = showcase3dModelId;
         this.imageUrl = imageUrl;

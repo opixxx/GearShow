@@ -3,7 +3,7 @@ package com.gearshow.backend.user.application.dto;
 import com.gearshow.backend.user.domain.model.User;
 import com.gearshow.backend.user.domain.vo.UserStatus;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 내 프로필 조회 결과.
@@ -23,7 +23,7 @@ public record MyProfileResult(
         String phoneNumber,
         boolean phoneVerified,
         UserStatus userStatus,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
 
     /**

@@ -1,6 +1,6 @@
 package com.gearshow.backend.user.application.port.out;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -15,7 +15,7 @@ public interface RefreshTokenPort {
      * @param token     토큰 문자열
      * @param expiresAt 만료 시각
      */
-    void save(Long userId, String token, LocalDateTime expiresAt);
+    void save(Long userId, String token, Instant expiresAt);
 
     /**
      * 토큰 문자열로 사용자 ID를 조회한다.

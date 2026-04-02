@@ -5,7 +5,7 @@ import com.gearshow.backend.showcase.domain.vo.CommentStatus;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 댓글 도메인 엔티티.
@@ -20,13 +20,13 @@ public class ShowcaseComment {
     private final Long authorId;
     private final String content;
     private final CommentStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private ShowcaseComment(Long id, Long showcaseId, Long authorId,
                             String content, CommentStatus status,
-                            LocalDateTime createdAt, LocalDateTime updatedAt) {
+                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.authorId = authorId;
@@ -47,7 +47,7 @@ public class ShowcaseComment {
     public static ShowcaseComment create(Long showcaseId, Long authorId, String content) {
         validate(showcaseId, authorId, content);
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return ShowcaseComment.builder()
                 .showcaseId(showcaseId)
                 .authorId(authorId)
@@ -71,7 +71,7 @@ public class ShowcaseComment {
                 .content(this.content)
                 .status(CommentStatus.DELETED)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 

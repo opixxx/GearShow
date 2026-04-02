@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 카탈로그 아이템 JPA 엔티티.
@@ -45,15 +45,15 @@ public class CatalogItemJpaEntity {
     private CatalogStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Builder
     private CatalogItemJpaEntity(Long id, Category category, String brand, String itemName,
                                  String modelCode, String officialImageUrl, CatalogStatus status,
-                                 LocalDateTime createdAt, LocalDateTime updatedAt) {
+                                 Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.category = category;
         this.brand = brand;
