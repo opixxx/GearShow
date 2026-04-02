@@ -2,12 +2,17 @@ package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.*;
+import com.gearshow.backend.showcase.application.exception.DuplicateSortOrderException;
+import com.gearshow.backend.showcase.application.exception.ImageNotBelongToShowcaseException;
+import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchException;
+import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.*;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.exception.MinImageRequiredException;
 import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
+import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
@@ -300,6 +305,100 @@ class ShowcaseServiceIntegrationTest {
             assertThat(updated.images())
                     .isNotEmpty()
                     .anyMatch(img -> img.isPrimary() && img.sortOrder() == 1);
+        }
+
+        @Test
+        @DisplayName("다른 쇼케이스의 이미지를 삭제하면 예외가 발생한다")
+        void deleteImage_notBelongToShowcase_throwsException() {
+            // Given - 쇼케이스 2개 생성
+            Long showcaseIdA = createAndGetShowcaseId(1L);
+            Long showcaseIdB = createAndGetShowcaseId(1L);
+
+            // 쇼케이스 B에 이미지 추가 후 이미지 ID 획득
+            manageShowcaseImageUseCase.addImages(showcaseIdB, 1L, createFakeImages(1));
+            ShowcaseDetailResult detailB = getShowcaseUseCase.getShowcase(showcaseIdB);
+            Long imageBId = detailB.images().get(0).showcaseImageId();
+
+            // 쇼케이스 A에도 삭제 가능하도록 이미지 2개 보장
+            manageShowcaseImageUseCase.addImages(showcaseIdA, 1L, createFakeImages(1));
+
+            // When & Then - 쇼케이스 A 경로로 쇼케이스 B의 이미지 삭제 시도
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.deleteImage(
+                    showcaseIdA, imageBId, 1L))
+                    .isInstanceOf(ImageNotBelongToShowcaseException.class);
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 이미지를 삭제하면 예외가 발생한다")
+        void deleteImage_notFound_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+
+            // When & Then
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.deleteImage(
+                    showcaseId, 999999L, 1L))
+                    .isInstanceOf(NotFoundShowcaseImageException.class);
+        }
+
+        @Test
+        @DisplayName("재정렬 시 이미지 목록이 실제와 불일치하면 예외가 발생한다")
+        void reorderImages_mismatch_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+
+            // 존재하지 않는 이미지 ID로 재정렬 요청
+            List<ManageShowcaseImageUseCase.ImageOrder> orders = List.of(
+                    new ManageShowcaseImageUseCase.ImageOrder(999999L, 1, true));
+
+            // When & Then
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.reorderImages(
+                    showcaseId, 1L, orders))
+                    .isInstanceOf(ImageReorderMismatchException.class);
+        }
+
+        @Test
+        @DisplayName("재정렬 시 sortOrder가 중복되면 예외가 발생한다")
+        void reorderImages_duplicateSortOrder_throwsException() {
+            // Given - 이미지 2개 이상 필요
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
+            // 대표 이미지 1개 유지 + 같은 sortOrder(1)를 모든 이미지에 할당
+            List<ManageShowcaseImageUseCase.ImageOrder> orders = new java.util.ArrayList<>();
+            boolean firstPrimary = true;
+            for (var img : detail.images()) {
+                orders.add(new ManageShowcaseImageUseCase.ImageOrder(
+                        img.showcaseImageId(), 1, firstPrimary));
+                firstPrimary = false;
+            }
+
+            // When & Then
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.reorderImages(
+                    showcaseId, 1L, orders))
+                    .isInstanceOf(DuplicateSortOrderException.class);
+        }
+
+        @Test
+        @DisplayName("재정렬 시 대표 이미지가 2개이면 예외가 발생한다")
+        void reorderImages_multiplePrimary_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
+            // 모든 이미지를 대표 이미지로 설정
+            List<ManageShowcaseImageUseCase.ImageOrder> orders = detail.images().stream()
+                    .map(img -> new ManageShowcaseImageUseCase.ImageOrder(
+                            img.showcaseImageId(), img.sortOrder(), true))
+                    .toList();
+
+            // When & Then
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.reorderImages(
+                    showcaseId, 1L, orders))
+                    .isInstanceOf(InvalidShowcaseException.class);
         }
     }
 
