@@ -393,7 +393,7 @@ class ShowcaseServiceIntegrationTest {
                     1L, null, 20, null);
 
             // Then
-            assertThat(result.data()).allMatch(s -> true); // 소유자 필터링 확인
+            assertThat(result.data()).isNotEmpty();
         }
     }
 }

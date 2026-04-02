@@ -100,7 +100,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
                     null, null, null, null);
 
             // Then - third보다 이전 데이터만 반환
-            assertThat(result).allMatch(s -> !s.getId().equals(third.getId()));
+            assertThat(result)
+                    .isNotEmpty()
+                    .allMatch(s -> !s.getId().equals(third.getId()));
         }
 
         @Test
@@ -115,7 +117,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
                     100L, 10, null);
 
             // Then
-            assertThat(result).allMatch(s -> s.getOwnerId().equals(100L));
+            assertThat(result)
+                    .isNotEmpty()
+                    .allMatch(s -> s.getOwnerId().equals(100L));
         }
     }
 
