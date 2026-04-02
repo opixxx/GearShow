@@ -79,8 +79,8 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
                 .releaseYear(spec.releaseYear())
                 .surfaceType(spec.surfaceType())
                 .extraSpecJson(spec.extraSpecJson())
-                .createdAt(java.time.LocalDateTime.now())
-                .updatedAt(java.time.LocalDateTime.now())
+                .createdAt(java.time.Instant.now())
+                .updatedAt(java.time.Instant.now())
                 .build();
         bootsSpecPort.save(bootsSpec);
     }
@@ -93,8 +93,8 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
                 .league(spec.league())
                 .manufacturer(spec.manufacturer())
                 .extraSpecJson(spec.extraSpecJson())
-                .createdAt(java.time.LocalDateTime.now())
-                .updatedAt(java.time.LocalDateTime.now())
+                .createdAt(java.time.Instant.now())
+                .updatedAt(java.time.Instant.now())
                 .build();
         uniformSpecPort.save(uniformSpec);
     }

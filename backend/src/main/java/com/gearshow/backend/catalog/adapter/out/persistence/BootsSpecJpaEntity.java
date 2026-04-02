@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 축구화 스펙 JPA 엔티티.
@@ -43,16 +43,16 @@ public class BootsSpecJpaEntity {
     private String extraSpecJson;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Builder
     private BootsSpecJpaEntity(Long id, Long catalogItemId, StudType studType,
                                String siloName, String releaseYear, String surfaceType,
-                               String extraSpecJson, LocalDateTime createdAt,
-                               LocalDateTime updatedAt) {
+                               String extraSpecJson, Instant createdAt,
+                               Instant updatedAt) {
         this.id = id;
         this.catalogItemId = catalogItemId;
         this.studType = studType;

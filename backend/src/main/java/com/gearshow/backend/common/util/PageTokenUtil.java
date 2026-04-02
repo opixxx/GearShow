@@ -5,7 +5,7 @@ import lombok.NoArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Base64;
 
 /**
@@ -61,8 +61,8 @@ public class PageTokenUtil {
             return (T) Long.valueOf(data);
         } else if (clazz == Integer.class) {
             return (T) Integer.valueOf(data);
-        } else if (clazz == LocalDateTime.class) {
-            return (T) LocalDateTime.parse(data);
+        } else if (clazz == Instant.class) {
+            return (T) Instant.ofEpochMilli(Long.parseLong(data));
         }
 
         throw new IllegalArgumentException("지원하지 않는 타입입니다: " + clazz);

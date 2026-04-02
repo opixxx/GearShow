@@ -6,7 +6,7 @@ import com.gearshow.backend.user.domain.vo.ProviderType;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 소셜 인증 계정 도메인 엔티티.
@@ -21,13 +21,13 @@ public class AuthAccount {
     private final ProviderType providerType;
     private final String providerUserKey;
     private final AuthStatus authStatus;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime lastLoginAt;
+    private final Instant createdAt;
+    private final Instant lastLoginAt;
 
     @Builder
     private AuthAccount(Long id, Long userId, ProviderType providerType,
                         String providerUserKey, AuthStatus authStatus,
-                        LocalDateTime createdAt, LocalDateTime lastLoginAt) {
+                        Instant createdAt, Instant lastLoginAt) {
         this.id = id;
         this.userId = userId;
         this.providerType = providerType;
@@ -50,7 +50,7 @@ public class AuthAccount {
                                      String providerUserKey) {
         validate(userId, providerType, providerUserKey);
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return AuthAccount.builder()
                 .userId(userId)
                 .providerType(providerType)
@@ -74,7 +74,7 @@ public class AuthAccount {
                 .providerUserKey(this.providerUserKey)
                 .authStatus(this.authStatus)
                 .createdAt(this.createdAt)
-                .lastLoginAt(LocalDateTime.now())
+                .lastLoginAt(Instant.now())
                 .build();
     }
 

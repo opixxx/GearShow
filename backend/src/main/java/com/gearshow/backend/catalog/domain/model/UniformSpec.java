@@ -3,7 +3,7 @@ package com.gearshow.backend.catalog.domain.model;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 유니폼 스펙 도메인 엔티티.
@@ -20,14 +20,14 @@ public class UniformSpec {
     private final String league;
     private final String manufacturer;
     private final String extraSpecJson;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private UniformSpec(Long id, Long catalogItemId, String clubName,
                         String season, String league, String manufacturer,
-                        String extraSpecJson, LocalDateTime createdAt,
-                        LocalDateTime updatedAt) {
+                        String extraSpecJson, Instant createdAt,
+                        Instant updatedAt) {
         this.id = id;
         this.catalogItemId = catalogItemId;
         this.clubName = clubName;
@@ -48,7 +48,7 @@ public class UniformSpec {
      * @return 생성된 유니폼 스펙
      */
     public static UniformSpec create(Long catalogItemId, String clubName, String season) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return UniformSpec.builder()
                 .catalogItemId(catalogItemId)
                 .clubName(clubName)

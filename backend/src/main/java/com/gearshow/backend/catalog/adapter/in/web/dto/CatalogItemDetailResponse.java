@@ -5,7 +5,7 @@ import com.gearshow.backend.catalog.domain.vo.CatalogStatus;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 카탈로그 아이템 상세 조회 응답 DTO.
@@ -20,7 +20,7 @@ public record CatalogItemDetailResponse(
         CatalogStatus catalogStatus,
         BootsSpecResponse bootsSpec,
         UniformSpecResponse uniformSpec,
-        LocalDateTime createdAt
+        Instant createdAt
 ) {
 
     public record BootsSpecResponse(

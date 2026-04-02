@@ -5,7 +5,7 @@ import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 3D 모델 도메인 엔티티.
@@ -21,17 +21,17 @@ public class Showcase3dModel {
     private final String previewImageUrl;
     private final ModelStatus modelStatus;
     private final String generationProvider;
-    private final LocalDateTime requestedAt;
-    private final LocalDateTime generatedAt;
+    private final Instant requestedAt;
+    private final Instant generatedAt;
     private final String failureReason;
-    private final LocalDateTime createdAt;
+    private final Instant createdAt;
 
     @Builder
     private Showcase3dModel(Long id, Long showcaseId, String modelFileUrl,
                             String previewImageUrl, ModelStatus modelStatus,
-                            String generationProvider, LocalDateTime requestedAt,
-                            LocalDateTime generatedAt, String failureReason,
-                            LocalDateTime createdAt) {
+                            String generationProvider, Instant requestedAt,
+                            Instant generatedAt, String failureReason,
+                            Instant createdAt) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.modelFileUrl = modelFileUrl;
@@ -52,7 +52,7 @@ public class Showcase3dModel {
      * @return 요청된 3D 모델
      */
     public static Showcase3dModel request(Long showcaseId, String generationProvider) {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return Showcase3dModel.builder()
                 .showcaseId(showcaseId)
                 .modelStatus(ModelStatus.REQUESTED)
@@ -96,7 +96,7 @@ public class Showcase3dModel {
                 .modelStatus(ModelStatus.COMPLETED)
                 .generationProvider(this.generationProvider)
                 .requestedAt(this.requestedAt)
-                .generatedAt(LocalDateTime.now())
+                .generatedAt(Instant.now())
                 .createdAt(this.createdAt)
                 .build();
     }

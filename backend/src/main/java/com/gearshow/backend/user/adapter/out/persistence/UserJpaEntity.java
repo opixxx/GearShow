@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 사용자 JPA 엔티티.
@@ -40,15 +40,15 @@ public class UserJpaEntity {
     private UserStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Builder
     private UserJpaEntity(Long id, String nickname, String profileImageUrl,
                           String phoneNumber, boolean phoneVerified, UserStatus status,
-                          LocalDateTime createdAt, LocalDateTime updatedAt) {
+                          Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;

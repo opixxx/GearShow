@@ -6,7 +6,7 @@ import com.gearshow.backend.user.domain.vo.UserStatus;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 사용자 도메인 엔티티.
@@ -22,13 +22,13 @@ public class User {
     private final String phoneNumber;
     private final boolean phoneVerified;
     private final UserStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private User(Long id, String nickname, String profileImageUrl,
                  String phoneNumber, boolean phoneVerified, UserStatus status,
-                 LocalDateTime createdAt, LocalDateTime updatedAt) {
+                 Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;
@@ -49,7 +49,7 @@ public class User {
     public static User create(String nickname) {
         validateNickname(nickname);
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return User.builder()
                 .nickname(nickname)
                 .phoneVerified(false)
@@ -75,7 +75,7 @@ public class User {
                 .phoneVerified(this.phoneVerified)
                 .status(UserStatus.SUSPENDED)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
@@ -95,7 +95,7 @@ public class User {
                 .phoneVerified(this.phoneVerified)
                 .status(UserStatus.ACTIVE)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
@@ -115,7 +115,7 @@ public class User {
                 .phoneVerified(this.phoneVerified)
                 .status(UserStatus.WITHDRAWN)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
@@ -141,7 +141,7 @@ public class User {
                 .phoneVerified(this.phoneVerified)
                 .status(this.status)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 

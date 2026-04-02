@@ -3,7 +3,7 @@ package com.gearshow.backend.showcase.domain.model;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 이미지 도메인 엔티티.
@@ -18,11 +18,11 @@ public class ShowcaseImage {
     private final String imageUrl;
     private final int sortOrder;
     private final boolean primary;
-    private final LocalDateTime createdAt;
+    private final Instant createdAt;
 
     @Builder
     private ShowcaseImage(Long id, Long showcaseId, String imageUrl,
-                          int sortOrder, boolean primary, LocalDateTime createdAt) {
+                          int sortOrder, boolean primary, Instant createdAt) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.imageUrl = imageUrl;
@@ -47,7 +47,7 @@ public class ShowcaseImage {
                 .imageUrl(imageUrl)
                 .sortOrder(sortOrder)
                 .primary(primary)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
     }
 }

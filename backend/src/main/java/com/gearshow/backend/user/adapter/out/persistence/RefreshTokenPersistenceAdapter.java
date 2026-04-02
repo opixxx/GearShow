@@ -4,7 +4,7 @@ import com.gearshow.backend.user.application.port.out.RefreshTokenPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -18,12 +18,12 @@ public class RefreshTokenPersistenceAdapter implements RefreshTokenPort {
     private final RefreshTokenJpaRepository refreshTokenJpaRepository;
 
     @Override
-    public void save(Long userId, String token, LocalDateTime expiresAt) {
+    public void save(Long userId, String token, Instant expiresAt) {
         RefreshTokenJpaEntity entity = RefreshTokenJpaEntity.builder()
                 .userId(userId)
                 .token(token)
                 .expiresAt(expiresAt)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
         refreshTokenJpaRepository.save(entity);
     }
@@ -31,7 +31,7 @@ public class RefreshTokenPersistenceAdapter implements RefreshTokenPort {
     @Override
     public Optional<Long> findUserIdByToken(String token) {
         return refreshTokenJpaRepository.findByToken(token)
-                .filter(entity -> entity.getExpiresAt().isAfter(LocalDateTime.now()))
+                .filter(entity -> entity.getExpiresAt().isAfter(Instant.now()))
                 .map(RefreshTokenJpaEntity::getUserId);
     }
 

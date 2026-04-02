@@ -8,7 +8,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 소셜 인증 계정 JPA 엔티티.
@@ -44,15 +44,15 @@ public class AuthAccountJpaEntity {
     private AuthStatus authStatus;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "last_login_at")
-    private LocalDateTime lastLoginAt;
+    private Instant lastLoginAt;
 
     @Builder
     private AuthAccountJpaEntity(Long id, Long userId, ProviderType providerType,
                                  String providerUserKey, AuthStatus authStatus,
-                                 LocalDateTime createdAt, LocalDateTime lastLoginAt) {
+                                 Instant createdAt, Instant lastLoginAt) {
         this.id = id;
         this.userId = userId;
         this.providerType = providerType;

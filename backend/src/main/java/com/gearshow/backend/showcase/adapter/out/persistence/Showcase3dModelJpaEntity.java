@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 쇼케이스 3D 모델 JPA 엔티티.
@@ -40,23 +40,23 @@ public class Showcase3dModelJpaEntity {
     private String generationProvider;
 
     @Column(name = "requested_at")
-    private LocalDateTime requestedAt;
+    private Instant requestedAt;
 
     @Column(name = "generated_at")
-    private LocalDateTime generatedAt;
+    private Instant generatedAt;
 
     @Column(name = "failure_reason")
     private String failureReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Builder
     private Showcase3dModelJpaEntity(Long id, Long showcaseId, String modelFileUrl,
                                      String previewImageUrl, ModelStatus modelStatus,
-                                     String generationProvider, LocalDateTime requestedAt,
-                                     LocalDateTime generatedAt, String failureReason,
-                                     LocalDateTime createdAt) {
+                                     String generationProvider, Instant requestedAt,
+                                     Instant generatedAt, String failureReason,
+                                     Instant createdAt) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.modelFileUrl = modelFileUrl;

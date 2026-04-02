@@ -6,7 +6,7 @@ import com.gearshow.backend.catalog.domain.vo.Category;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * 카탈로그 아이템 도메인 엔티티 (Aggregate Root).
@@ -23,13 +23,13 @@ public class CatalogItem {
     private final String modelCode;
     private final String officialImageUrl;
     private final CatalogStatus status;
-    private final LocalDateTime createdAt;
-    private final LocalDateTime updatedAt;
+    private final Instant createdAt;
+    private final Instant updatedAt;
 
     @Builder
     private CatalogItem(Long id, Category category, String brand, String itemName,
                         String modelCode, String officialImageUrl, CatalogStatus status,
-                        LocalDateTime createdAt, LocalDateTime updatedAt) {
+                        Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.category = category;
         this.brand = brand;
@@ -53,7 +53,7 @@ public class CatalogItem {
     public static CatalogItem create(Category category, String brand, String itemName) {
         validate(category, brand, itemName);
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         return CatalogItem.builder()
                 .category(category)
                 .brand(brand)
@@ -88,7 +88,7 @@ public class CatalogItem {
                 .officialImageUrl(this.officialImageUrl)
                 .status(CatalogStatus.INACTIVE)
                 .createdAt(this.createdAt)
-                .updatedAt(LocalDateTime.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 
