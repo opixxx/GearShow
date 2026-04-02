@@ -118,7 +118,10 @@ ext.jacocoExcludes = [
 	'**/model3d/fake/**',
 	// S3 인프라 (테스트에서 Mock 사용)
 	'**/infrastructure/config/S3Config.*',
-	'**/storage/s3/**'
+	'**/storage/s3/**',
+	// Port 인터페이스 (구현체에서 간접 커버)
+	'**/port/out/ModelGenerationClient.*',
+	'**/port/in/ManageShowcaseImageUseCase.*'
 ]
 
 jacocoTestCoverageVerification {
@@ -179,7 +182,9 @@ sonar {
 			'**/messaging/dto/**',
 			'**/model3d/fake/**',
 			'**/infrastructure/config/S3Config.java',
-			'**/storage/s3/**'
+			'**/storage/s3/**',
+			'**/port/out/ModelGenerationClient.java',
+			'**/port/in/ManageShowcaseImageUseCase.java'
 		].join(',')
 	}
 }

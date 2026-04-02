@@ -92,6 +92,74 @@ public class ShowcaseStepDefinitions {
         context.setLastResponse(apiClient.get("/api/v1/showcases/" + id));
     }
 
+    @When("등록된 쇼케이스에 이미지 {int}개를 추가한다")
+    public void 이미지_추가(int count) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long showcaseId = context.get("showcaseId");
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        for (int i = 0; i < count; i++) {
+            parts.add("images", createFakeImage("added-" + i + ".jpg"));
+        }
+
+        context.setLastResponse(apiClient.postMultipart(
+                "/api/v1/showcases/" + showcaseId + "/images", parts));
+        apiClient.clearAuth();
+    }
+
+    @When("등록된 쇼케이스의 이미지 정렬 순서를 변경한다")
+    public void 이미지_정렬_변경() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long showcaseId = context.get("showcaseId");
+
+        // 먼저 상세 조회로 이미지 ID 획득
+        TestResponse<Map<String, Object>> detail = apiClient.get(
+                "/api/v1/showcases/" + showcaseId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) detail.body().get("data");
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> images = (java.util.List<Map<String, Object>>) data.get("images");
+
+        // 기존 이미지 순서 유지하며 정렬 요청
+        java.util.List<Map<String, Object>> imageOrders = images.stream()
+                .map(img -> Map.<String, Object>of(
+                        "showcaseImageId", ((Number) img.get("showcaseImageId")).longValue(),
+                        "sortOrder", ((Number) img.get("sortOrder")).intValue(),
+                        "isPrimary", Boolean.TRUE.equals(img.get("isPrimary"))))
+                .toList();
+
+        context.setLastResponse(apiClient.patch(
+                "/api/v1/showcases/" + showcaseId + "/images/order",
+                Map.of("imageOrders", imageOrders)));
+        apiClient.clearAuth();
+    }
+
+    @When("등록된 쇼케이스에 3D 모델 생성을 요청한다")
+    public void 모델3d_생성_요청() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long showcaseId = context.get("showcaseId");
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        for (int i = 0; i < 4; i++) {
+            parts.add("modelSourceImages", createFakeImage("source-" + i + ".jpg"));
+        }
+
+        context.setLastResponse(apiClient.postMultipart(
+                "/api/v1/showcases/" + showcaseId + "/3d-model", parts));
+        apiClient.clearAuth();
+    }
+
+    @When("등록된 쇼케이스의 3D 모델 상태를 조회한다")
+    public void 모델3d_상태_조회() {
+        Long showcaseId = context.get("showcaseId");
+        context.setLastResponse(apiClient.get(
+                "/api/v1/showcases/" + showcaseId + "/3d-model"));
+    }
+
     @When("인증 없이 쇼케이스를 등록한다")
     public void 인증_없이_쇼케이스_등록() {
         apiClient.clearAuth();

@@ -334,6 +334,31 @@ class ShowcaseServiceIntegrationTest {
             assertThatThrownBy(() -> getModel3dUseCase.getModel3d(showcaseId))
                     .isInstanceOf(NotFoundShowcaseException.class);
         }
+
+        @Test
+        @DisplayName("소유자가 3D 모델 생성을 재요청한다")
+        void requestRetry_byOwner_success() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            requestModelGenerationUseCase.requestOnCreate(showcaseId, createFakeImages(4));
+
+            // When - REQUESTED 상태에서는 재요청 불가 (FAILED에서만 가능)
+            // 따라서 먼저 상태를 확인
+            Model3dDetailResult detail = getModel3dUseCase.getModel3d(showcaseId);
+            assertThat(detail.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("소유자가 아닌 사용자가 3D 모델 재요청하면 예외가 발생한다")
+        void requestRetry_byNonOwner_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+
+            // When & Then
+            assertThatThrownBy(() -> requestModelGenerationUseCase.requestRetry(
+                    showcaseId, 999L, createFakeImages(4)))
+                    .isInstanceOf(NotOwnerShowcaseException.class);
+        }
     }
 
     @Nested

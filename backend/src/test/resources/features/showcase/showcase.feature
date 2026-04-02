@@ -69,6 +69,31 @@ Feature: 쇼케이스
     When 내 쇼케이스 목록을 조회한다
     Then 응답 상태 코드는 200이다
 
+  # ── 이미지 관리 ──
+
+  @showcase
+  Scenario: 쇼케이스에 이미지를 추가한다
+    Given 이미지 1개로 쇼케이스가 등록되어 있다
+    When 등록된 쇼케이스에 이미지 2개를 추가한다
+    Then 응답 상태 코드는 201이다
+    And 응답의 data에 "addedImageIds" 필드가 존재한다
+
+  @showcase
+  Scenario: 쇼케이스 이미지 정렬 순서를 변경한다
+    Given 이미지 1개로 쇼케이스가 등록되어 있다
+    When 등록된 쇼케이스의 이미지 정렬 순서를 변경한다
+    Then 응답 상태 코드는 200이다
+
+  # ── 3D 모델 ──
+
+  @showcase @model3d
+  Scenario: 3D 모델 생성을 재요청하고 상태를 조회한다
+    Given 이미지 1개로 쇼케이스가 등록되어 있다
+    When 등록된 쇼케이스에 3D 모델 생성을 요청한다
+    Then 응답 상태 코드는 202이다
+    When 등록된 쇼케이스의 3D 모델 상태를 조회한다
+    Then 응답 상태 코드는 200이다
+
   # ── 에러 케이스 ──
 
   @edge-case @showcase
