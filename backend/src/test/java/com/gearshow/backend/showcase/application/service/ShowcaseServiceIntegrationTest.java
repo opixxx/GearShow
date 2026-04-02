@@ -292,8 +292,14 @@ class ShowcaseServiceIntegrationTest {
                             img.sortOrder() == 1))
                     .toList();
 
-            // When & Then (예외 없이 수행되면 성공)
+            // When
             manageShowcaseImageUseCase.reorderImages(showcaseId, 1L, orders);
+
+            // Then - 정렬 순서 변경 후 상세 조회로 검증
+            ShowcaseDetailResult updated = getShowcaseUseCase.getShowcase(showcaseId);
+            assertThat(updated.images())
+                    .isNotEmpty()
+                    .anyMatch(img -> img.isPrimary() && img.sortOrder() == 1);
         }
     }
 
