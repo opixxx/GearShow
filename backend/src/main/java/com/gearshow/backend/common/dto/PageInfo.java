@@ -11,11 +11,13 @@ import java.util.function.Function;
  *
  * @param pageToken 다음 페이지 토큰 (마지막 페이지이면 null)
  * @param data      조회된 데이터 목록
+ * @param size      페이지 크기
  * @param hasNext   다음 페이지 존재 여부
  */
 public record PageInfo<T>(
         String pageToken,
         List<T> data,
+        int size,
         boolean hasNext
 ) {
 
@@ -36,15 +38,16 @@ public record PageInfo<T>(
             Function<T, Object> secondPageTokenFunction
     ) {
         if (data.size() <= expectedSize) {
-            return new PageInfo<>(null, data, false);
+            return new PageInfo<>(null, data, expectedSize, false);
         }
 
-        T lastValue = data.get(expectedSize - 1);
+        List<T> content = data.subList(0, expectedSize);
+        T lastValue = content.get(expectedSize - 1);
         String pageToken = PageTokenUtil.encode(Pair.of(
                 firstPageTokenFunction.apply(lastValue),
                 secondPageTokenFunction.apply(lastValue)
         ));
 
-        return new PageInfo<>(pageToken, data.subList(0, expectedSize), true);
+        return new PageInfo<>(pageToken, content, expectedSize, true);
     }
 }

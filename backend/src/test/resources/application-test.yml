@@ -1,4 +1,11 @@
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+  kafka:
+    enabled: false
+
   datasource:
     url: jdbc:tc:mysql:8.0:///gearshow?TC_REUSABLE=true
     username: gearshow
@@ -35,3 +42,14 @@ oauth:
     private-key-path:
     token-uri: https://appleid.apple.com/auth/token
     redirect-uri: http://localhost:8080/api/v1/auth/login/apple
+
+# AWS S3 테스트용 설정
+cloud:
+  aws:
+    s3:
+      region: ap-northeast-2
+      access-key: test-access-key
+      secret-key: test-secret-key
+      bucket: test-bucket
+      cdn-url: https://test-cdn.gearshow.com
+      endpoint: http://localhost:4566

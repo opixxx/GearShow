@@ -3,12 +3,16 @@ package com.gearshow.backend.steps;
 import com.gearshow.backend.support.ScenarioContext;
 import com.gearshow.backend.support.TestApiClient;
 import com.gearshow.backend.support.TestResponse;
+import io.cucumber.java.en.Given;
 import io.cucumber.java.en.When;
 
 import java.util.Map;
 
 /**
  * 카탈로그 관련 Cucumber Step Definitions.
+ * Given: 사전 조건 (카탈로그가 이미 존재하는 상태)
+ * When: 테스트 대상 행위
+ * Then: AuthStepDefinitions의 공통 Then 재사용
  */
 public class CatalogStepDefinitions {
 
@@ -20,38 +24,22 @@ public class CatalogStepDefinitions {
         this.context = context;
     }
 
-    @When("축구화 카탈로그 아이템을 등록한다")
-    public void 축구화_카탈로그_등록() {
-        String accessToken = context.get("accessToken");
-        apiClient.authenticate(accessToken);
+    // ===== Given (사전 조건) =====
 
-        Map<String, Object> request = Map.of(
-                "category", "BOOTS",
-                "brand", "Nike",
-                "itemName", "Mercurial Superfly 10 Elite",
-                "modelCode", "DJ2839-" + System.currentTimeMillis(),
-                "bootsSpec", Map.of(
-                        "studType", "FG",
-                        "siloName", "Mercurial",
-                        "releaseYear", "2025",
-                        "surfaceType", "천연잔디"
-                )
-        );
-
-        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/catalogs", request);
-        context.setLastResponse(response);
-        apiClient.clearAuth();
-
-        // 등록된 catalogItemId 저장
-        if (response.statusCode() == 201) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
-            context.put("catalogItemId", ((Number) data.get("catalogItemId")).longValue());
-        }
+    @Given("축구화 카탈로그 아이템을 등록한다")
+    public void 축구화_카탈로그가_등록되어_있다() {
+        축구화_카탈로그_등록_수행();
     }
 
-    @When("유니폼 카탈로그 아이템을 등록한다")
-    public void 유니폼_카탈로그_등록() {
+    // ===== When (테스트 행위) =====
+
+    @When("축구화 카탈로그 아이템 등록을 요청한다")
+    public void 축구화_카탈로그_등록_요청() {
+        축구화_카탈로그_등록_수행();
+    }
+
+    @When("유니폼 카탈로그 아이템 등록을 요청한다")
+    public void 유니폼_카탈로그_등록_요청() {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
 
@@ -108,5 +96,39 @@ public class CatalogStepDefinitions {
                 "itemName", "Test Item"
         );
         context.setLastResponse(apiClient.post("/api/v1/catalogs", request));
+    }
+
+    // ===== Helper =====
+
+    /**
+     * 축구화 카탈로그 등록 공통 로직.
+     * Given/When 모두에서 재사용한다.
+     */
+    private void 축구화_카탈로그_등록_수행() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Map<String, Object> request = Map.of(
+                "category", "BOOTS",
+                "brand", "Nike",
+                "itemName", "Mercurial Superfly 10 Elite",
+                "modelCode", "DJ2839-" + System.currentTimeMillis(),
+                "bootsSpec", Map.of(
+                        "studType", "FG",
+                        "siloName", "Mercurial",
+                        "releaseYear", "2025",
+                        "surfaceType", "천연잔디"
+                )
+        );
+
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/catalogs", request);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("catalogItemId", ((Number) data.get("catalogItemId")).longValue());
+        }
     }
 }

@@ -48,22 +48,22 @@
   "status": 200,
   "message": "Retrieved successfully",
   "data": {
-    "content": [ ... ],
-    "nextCursor": "eyJpZCI6MTAwfQ==",
+    "pageToken": "eyJpZCI6MTAwfQ==",
+    "data": [ ... ],
     "size": 20,
     "hasNext": true
   }
 }
 ```
 
-> - `nextCursor`: 다음 페이지 조회를 위한 커서 값 (Base64 인코딩). 마지막 페이지이면 `null`
-> - 첫 페이지 요청 시 `cursor` 파라미터를 생략한다.
+> - `pageToken`: 다음 페이지 조회를 위한 커서 값 (Base64 인코딩). 마지막 페이지이면 `null`
+> - 첫 페이지 요청 시 `pageToken` 파라미터를 생략한다.
 
 ### 공통 쿼리 파라미터 (페이징)
 
 | 파라미터 | 타입 | 기본값 | 설명 |
 |:--------|:-----|:------|:-----|
-| cursor | string | | 이전 응답의 `nextCursor` 값 (첫 페이지는 생략) |
+| pageToken | string | | 이전 응답의 `pageToken` 값 (첫 페이지는 생략) |
 | size | int | 20 | 페이지 크기 |
 
 ---
@@ -320,7 +320,8 @@ GET /api/v1/catalogs
   "status": 200,
   "message": "Catalog items retrieved successfully",
   "data": {
-    "content": [
+    "pageToken": "eyJpZCI6MjB9",
+    "data": [
       {
         "catalogItemId": 1,
         "category": "BOOTS",
@@ -330,7 +331,6 @@ GET /api/v1/catalogs
         "officialImageUrl": "https://cdn.gearshow.com/catalogs/1.jpg"
       }
     ],
-    "nextCursor": "eyJpZCI6MjB9",
     "size": 20,
     "hasNext": true
   }
@@ -458,7 +458,8 @@ GET /api/v1/showcases
   "status": 200,
   "message": "Showcases retrieved successfully",
   "data": {
-    "content": [
+    "pageToken": "eyJpZCI6MjB9",
+    "data": [
       {
         "showcaseId": 1,
         "title": "머큐리얼 슈퍼플라이 10 엘리트 착용 후기",
@@ -472,7 +473,6 @@ GET /api/v1/showcases
         "createdAt": "2026-03-20T14:30:00"
       }
     ],
-    "nextCursor": "eyJpZCI6MjB9",
     "size": 20,
     "hasNext": true
   }
@@ -846,7 +846,8 @@ GET /api/v1/showcases/{showcaseId}/comments
   "status": 200,
   "message": "Comments retrieved successfully",
   "data": {
-    "content": [
+    "pageToken": "eyJpZCI6NX0=",
+    "data": [
       {
         "showcaseCommentId": 1,
         "author": {
@@ -858,7 +859,6 @@ GET /api/v1/showcases/{showcaseId}/comments
         "createdAt": "2026-03-21T10:00:00"
       }
     ],
-    "nextCursor": "eyJpZCI6NX0=",
     "size": 20,
     "hasNext": false
   }
