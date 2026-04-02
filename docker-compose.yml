@@ -15,5 +15,17 @@ services:
       - gearshow-mysql-data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: gearshow-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - AWS_DEFAULT_REGION=ap-northeast-2
+    volumes:
+      - gearshow-localstack-data:/var/lib/localstack
+
 volumes:
   gearshow-mysql-data:
+  gearshow-localstack-data:

@@ -16,4 +16,9 @@ public interface ModelSourceImageJpaRepository extends JpaRepository<ModelSource
      * @return 소스 이미지 JPA 엔티티 목록
      */
     List<ModelSourceImageJpaEntity> findByShowcase3dModelId(Long showcase3dModelId);
+
+    /**
+     * 3D 모델 ID로 소스 이미지 개수를 조회한다.
+     */
+    int countByShowcase3dModelId(Long showcase3dModelId);
 }

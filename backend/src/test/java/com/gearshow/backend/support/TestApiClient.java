@@ -8,6 +8,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import java.util.Map;
 
@@ -114,6 +116,26 @@ public class TestApiClient {
                 path,
                 HttpMethod.DELETE,
                 new HttpEntity<>(buildHeaders()),
+                new ParameterizedTypeReference<>() {}
+        );
+        return TestResponse.from(response);
+    }
+
+    /**
+     * Multipart form-data POST 요청을 보낸다.
+     *
+     * @param path  API 경로
+     * @param parts multipart 파트 (key-value)
+     * @return 파싱된 응답
+     */
+    public TestResponse<Map<String, Object>> postMultipart(String path, MultiValueMap<String, Object> parts) {
+        HttpHeaders headers = buildHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                path,
+                HttpMethod.POST,
+                new HttpEntity<>(parts, headers),
                 new ParameterizedTypeReference<>() {}
         );
         return TestResponse.from(response);

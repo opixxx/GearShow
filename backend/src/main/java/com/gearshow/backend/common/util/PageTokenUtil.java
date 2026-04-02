@@ -24,9 +24,20 @@ public class PageTokenUtil {
      * @return Base64 인코딩된 pageToken
      */
     public static <T, R> String encode(Pair<T, R> data) {
-        String raw = data.getLeft().toString() + DELIMITER + data.getRight().toString();
+        String raw = toEncodableString(data.getLeft()) + DELIMITER + toEncodableString(data.getRight());
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 값을 인코딩 가능한 문자열로 변환한다.
+     * Instant는 epochMilli로 변환하여 decode와 일관성을 유지한다.
+     */
+    private static String toEncodableString(Object value) {
+        if (value instanceof Instant instant) {
+            return String.valueOf(instant.toEpochMilli());
+        }
+        return value.toString();
     }
 
     /**

@@ -157,8 +157,9 @@ class CatalogItemServiceIntegrationTest {
                     null, 20, Category.BOOTS, null, null);
 
             // Then
-            assertThat(result.data()).isNotEmpty();
-            assertThat(result.data()).allMatch(item -> item.category() == Category.BOOTS);
+            assertThat(result.data())
+                    .isNotEmpty()
+                    .allMatch(item -> item.category() == Category.BOOTS);
         }
     }
 

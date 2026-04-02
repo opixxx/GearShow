@@ -20,10 +20,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
-        log.warn("비즈니스 예외 발생: status={}, message={}", e.getStatus(), e.getMessage());
+        log.warn("비즈니스 예외 발생: code={}, message={}", e.getCode(), e.getMessage());
         return ResponseEntity
                 .status(e.getStatus())
-                .body(ApiResponse.of(e.getStatus(), e.getMessage()));
+                .body(ApiResponse.error(e.getStatus(), e.getCode(), e.getMessage()));
     }
 
     /**
@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
         log.warn("유효성 검증 실패: message={}", message);
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.of(400, message));
+                .body(ApiResponse.error(400, "INVALID_INPUT", message));
     }
 
     /**
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
         log.warn("제약 조건 위반: message={}", message);
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.of(400, message));
+                .body(ApiResponse.error(400, "INVALID_INPUT", message));
     }
 
     /**
@@ -68,6 +68,6 @@ public class GlobalExceptionHandler {
         log.error("서버 내부 오류 발생", e);
         return ResponseEntity
                 .internalServerError()
-                .body(ApiResponse.of(500, "서버 내부 오류가 발생했습니다"));
+                .body(ApiResponse.error(500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다"));
     }
 }

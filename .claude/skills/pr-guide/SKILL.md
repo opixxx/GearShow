@@ -1,5 +1,5 @@
 ---
-name: pr
+name: pr-guide
 description: PR을 생성한다. 테스트 통과 → 커버리지 검증 → PR 생성 절차를 자동으로 수행한다.
 user_invocable: true
 ---

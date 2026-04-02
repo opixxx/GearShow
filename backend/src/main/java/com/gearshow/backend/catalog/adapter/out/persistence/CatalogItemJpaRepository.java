@@ -19,6 +19,16 @@ public interface CatalogItemJpaRepository extends JpaRepository<CatalogItemJpaEn
     boolean existsByCategoryAndModelCode(Category category, String modelCode);
 
     /**
+     * 카테고리와 브랜드 조건에 해당하는 카탈로그 아이템 ID 목록을 조회한다.
+     */
+    @Query("SELECT c.id FROM CatalogItemJpaEntity c" +
+            " WHERE (:category IS NULL OR c.category = :category)" +
+            " AND (:brand IS NULL OR c.brand = :brand)")
+    List<Long> findIdsByCategoryAndBrand(
+            @Param("category") Category category,
+            @Param("brand") String brand);
+
+    /**
      * 커서 기반으로 카탈로그 아이템 목록을 조회한다.
      * 필터 조건이 null이면 무시한다.
      */

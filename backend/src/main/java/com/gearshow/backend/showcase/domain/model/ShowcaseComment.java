@@ -59,6 +59,27 @@ public class ShowcaseComment {
     }
 
     /**
+     * 댓글 내용을 수정한다.
+     *
+     * @param content 수정할 내용
+     * @return 수정된 댓글
+     */
+    public ShowcaseComment edit(String content) {
+        if (content == null || content.isBlank()) {
+            throw new InvalidShowcaseCommentException();
+        }
+        return ShowcaseComment.builder()
+                .id(this.id)
+                .showcaseId(this.showcaseId)
+                .authorId(this.authorId)
+                .content(content)
+                .status(this.status)
+                .createdAt(this.createdAt)
+                .updatedAt(Instant.now())
+                .build();
+    }
+
+    /**
      * 댓글을 삭제한다 (소프트 삭제).
      *
      * @return 삭제된 댓글

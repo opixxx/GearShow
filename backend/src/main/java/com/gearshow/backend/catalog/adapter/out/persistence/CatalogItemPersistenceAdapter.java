@@ -35,6 +35,11 @@ public class CatalogItemPersistenceAdapter implements CatalogItemPort {
     }
 
     @Override
+    public List<Long> findIdsByCategoryAndBrand(Category category, String brand) {
+        return catalogItemJpaRepository.findIdsByCategoryAndBrand(category, brand);
+    }
+
+    @Override
     public boolean existsByCategoryAndModelCode(Category category, String modelCode) {
         return catalogItemJpaRepository.existsByCategoryAndModelCode(category, modelCode);
     }

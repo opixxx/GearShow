@@ -27,6 +27,15 @@ public interface CatalogItemPort {
     boolean existsByCategoryAndModelCode(Category category, String modelCode);
 
     /**
+     * 카테고리와 브랜드 조건에 해당하는 카탈로그 아이템 ID 목록을 조회한다.
+     *
+     * @param category 카테고리 필터 (null이면 전체)
+     * @param brand    브랜드 필터 (null이면 전체)
+     * @return 카탈로그 아이템 ID 목록
+     */
+    List<Long> findIdsByCategoryAndBrand(Category category, String brand);
+
+    /**
      * 커서 기반으로 카탈로그 아이템 목록을 조회한다.
      *
      * @param cursorId  커서 ID (null이면 첫 페이지)
