@@ -4,8 +4,13 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.*;
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.*;
+import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
+import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.showcase.application.exception.MinImageRequiredException;
+import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import com.gearshow.backend.support.TestInfraConfig;
 import com.gearshow.backend.support.TestOAuthConfig;
@@ -45,6 +50,15 @@ class ShowcaseServiceIntegrationTest {
 
     @Autowired
     private DeleteShowcaseUseCase deleteShowcaseUseCase;
+
+    @Autowired
+    private ManageShowcaseImageUseCase manageShowcaseImageUseCase;
+
+    @Autowired
+    private GetModel3dUseCase getModel3dUseCase;
+
+    @Autowired
+    private RequestModelGenerationUseCase requestModelGenerationUseCase;
 
     // ===== Helper =====
 
@@ -198,6 +212,127 @@ class ShowcaseServiceIntegrationTest {
             // When & Then
             assertThatThrownBy(() -> deleteShowcaseUseCase.delete(showcaseId, 999L))
                     .isInstanceOf(NotOwnerShowcaseException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("쇼케이스 등록 - 이미지 검증")
+    class CreateImageValidation {
+
+        @Test
+        @DisplayName("이미지가 0장이면 예외가 발생한다")
+        void create_withNoImages_throwsException() {
+            // Given
+            CreateShowcaseCommand command = createCommand(1L);
+
+            // When & Then
+            assertThatThrownBy(() -> createShowcaseUseCase.create(
+                    command, List.of(), List.of()))
+                    .isInstanceOf(MinImageRequiredException.class);
+        }
+
+        @Test
+        @DisplayName("primaryImageIndex가 범위를 벗어나면 예외가 발생한다")
+        void create_withInvalidPrimaryIndex_throwsException() {
+            // Given
+            CreateShowcaseCommand command = new CreateShowcaseCommand(
+                    1L, 1L, "테스트", null, null,
+                    ConditionGrade.A, 0, false, 5, false);
+
+            // When & Then
+            assertThatThrownBy(() -> createShowcaseUseCase.create(
+                    command, createFakeImages(1), List.of()))
+                    .isInstanceOf(PrimaryImageRequiredException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("이미지 관리")
+    class ManageImage {
+
+        @Test
+        @DisplayName("쇼케이스에 이미지를 추가한다")
+        void addImages_success() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+
+            // When
+            List<Long> addedIds = manageShowcaseImageUseCase.addImages(
+                    showcaseId, 1L, createFakeImages(2));
+
+            // Then
+            assertThat(addedIds).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("소유자가 아닌 사용자가 이미지를 추가하면 예외가 발생한다")
+        void addImages_byNonOwner_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+
+            // When & Then
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.addImages(
+                    showcaseId, 999L, createFakeImages(1)))
+                    .isInstanceOf(NotOwnerShowcaseException.class);
+        }
+
+        @Test
+        @DisplayName("이미지 정렬 순서를 변경한다")
+        void reorderImages_success() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            List<Long> addedIds = manageShowcaseImageUseCase.addImages(
+                    showcaseId, 1L, createFakeImages(2));
+
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
+            List<ManageShowcaseImageUseCase.ImageOrder> orders = detail.images().stream()
+                    .map(img -> new ManageShowcaseImageUseCase.ImageOrder(
+                            img.showcaseImageId(),
+                            img.sortOrder(),
+                            img.sortOrder() == 1))
+                    .toList();
+
+            // When & Then (예외 없이 수행되면 성공)
+            manageShowcaseImageUseCase.reorderImages(showcaseId, 1L, orders);
+        }
+    }
+
+    @Nested
+    @DisplayName("3D 모델")
+    class Model3d {
+
+        @Test
+        @DisplayName("3D 모델 생성을 요청하고 상태를 조회한다")
+        void requestAndGet_success() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+
+            // When
+            ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
+                    showcaseId, createFakeImages(4));
+
+            // Then
+            assertThat(genResult.showcase3dModelId()).isNotNull();
+            assertThat(genResult.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
+
+            // When - 상태 조회
+            Model3dDetailResult detailResult = getModel3dUseCase.getModel3d(showcaseId);
+
+            // Then
+            assertThat(detailResult.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
+            assertThat(detailResult.generationProvider()).isEqualTo("fake-tripo");
+            assertThat(detailResult.sourceImageCount()).isEqualTo(4);
+        }
+
+        @Test
+        @DisplayName("3D 모델이 없는 쇼케이스를 조회하면 예외가 발생한다")
+        void getModel3d_notFound_throwsException() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+
+            // When & Then
+            assertThatThrownBy(() -> getModel3dUseCase.getModel3d(showcaseId))
+                    .isInstanceOf(NotFoundShowcaseException.class);
         }
     }
 
