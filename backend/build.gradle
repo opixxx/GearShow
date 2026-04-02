@@ -38,6 +38,9 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
+	// Apache Commons
+	implementation 'org.apache.commons:commons-lang3'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -85,14 +88,16 @@ jacocoTestReport {
 
 // JaCoCo 제외 대상 (UseCase 구현 시 해당 항목 제거)
 ext.jacocoExcludes = [
-	// Catalog 도메인 전체 (UseCase 미구현)
-	'**/catalog/**',
 	// Showcase 도메인 전체 (UseCase 미구현)
 	'**/showcase/**',
 	// OAuth Adapter (테스트에서 Stub 사용)
 	'**/oauth/**',
 	// JPA Entity (Adapter 통합 테스트에서 간접 커버)
 	'**/*JpaEntity.*',
+	// 유틸리티 클래스
+	'**/PageTokenUtil.*',
+	// 전역 예외 핸들러
+	'**/GlobalExceptionHandler.*',
 	// Spring Boot 메인 클래스
 	'**/GearShowApplication.*'
 ]
@@ -144,10 +149,11 @@ sonar {
 
 		// JaCoCo 제외 대상과 동일하게 SonarCloud 커버리지 측정 제외
 		property 'sonar.coverage.exclusions', [
-			'**/catalog/**',
 			'**/showcase/**',
 			'**/oauth/**',
 			'**/*JpaEntity.java',
+			'**/PageTokenUtil.java',
+			'**/GlobalExceptionHandler.java',
 			'**/GearShowApplication.java'
 		].join(',')
 	}
