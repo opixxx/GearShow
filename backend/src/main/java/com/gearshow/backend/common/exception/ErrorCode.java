@@ -43,9 +43,17 @@ public enum ErrorCode {
     SHOWCASE_PRIMARY_IMAGE_REQUIRED(400, "대표 이미지가 반드시 1개 존재해야 합니다"),
     SHOWCASE_MODEL_ALREADY_GENERATING(400, "3D 모델이 이미 생성 중입니다"),
     SHOWCASE_MODEL_MIN_SOURCE_IMAGE_REQUIRED(400, "3D 모델 생성에는 최소 4장의 소스 이미지가 필요합니다"),
+    SHOWCASE_IMAGE_NOT_BELONG(400, "해당 쇼케이스에 속하지 않는 이미지입니다"),
+    SHOWCASE_IMAGE_NOT_FOUND(404, "쇼케이스 이미지를 찾을 수 없습니다"),
+    SHOWCASE_IMAGE_REORDER_MISMATCH(400, "재정렬 요청 이미지 목록이 실제 이미지 목록과 일치하지 않습니다"),
+    SHOWCASE_IMAGE_DUPLICATE_SORT_ORDER(400, "이미지 정렬 순서가 중복되었습니다"),
     SHOWCASE_COMMENT_NOT_FOUND(404, "댓글을 찾을 수 없습니다"),
     SHOWCASE_COMMENT_NOT_AUTHOR(403, "댓글 작성자만 수정 또는 삭제할 수 있습니다"),
-    SHOWCASE_COMMENT_INVALID(400, "유효하지 않은 댓글입니다");
+    SHOWCASE_COMMENT_INVALID(400, "유효하지 않은 댓글입니다"),
+
+    // STORAGE
+    STORAGE_UPLOAD_FAILED(500, "이미지 업로드에 실패했습니다"),
+    STORAGE_FILE_READ_FAILED(500, "파일 스트림 읽기에 실패했습니다");
 
     private final int status;
     private final String message;

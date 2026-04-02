@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
+import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.port.in.GetModel3dUseCase;
@@ -39,7 +40,7 @@ public class ShowcaseModel3dController {
         Long ownerId = (Long) authentication.getPrincipal();
 
         ModelGenerationResult result = requestModelGenerationUseCase.requestRetry(
-                showcaseId, ownerId, modelSourceImages);
+                showcaseId, ownerId, UploadFileMapper.toUploadFiles(modelSourceImages));
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.of(202, "3D 모델 생성 요청 완료",

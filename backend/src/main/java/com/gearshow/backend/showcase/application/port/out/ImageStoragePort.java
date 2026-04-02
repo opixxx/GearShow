@@ -1,6 +1,6 @@
 package com.gearshow.backend.showcase.application.port.out;
 
-import org.springframework.web.multipart.MultipartFile;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 
 import java.util.List;
 
@@ -17,7 +17,7 @@ public interface ImageStoragePort {
      * @param file      업로드할 파일
      * @return 업로드된 이미지 URL
      */
-    String upload(String directory, MultipartFile file);
+    String upload(String directory, UploadFile file);
 
     /**
      * 여러 이미지 파일을 업로드하고 URL 목록을 반환한다.
@@ -26,7 +26,7 @@ public interface ImageStoragePort {
      * @param files     업로드할 파일 목록
      * @return 업로드된 이미지 URL 목록
      */
-    List<String> uploadAll(String directory, List<MultipartFile> files);
+    List<String> uploadAll(String directory, List<UploadFile> files);
 
     /**
      * 이미지를 삭제한다.

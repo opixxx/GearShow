@@ -71,4 +71,9 @@ public class ShowcaseCommentPersistenceAdapter implements ShowcaseCommentPort {
         }
         return result;
     }
+
+    @Override
+    public void softDeleteAllByShowcaseId(Long showcaseId) {
+        showcaseCommentJpaRepository.softDeleteAllByShowcaseId(showcaseId);
+    }
 }

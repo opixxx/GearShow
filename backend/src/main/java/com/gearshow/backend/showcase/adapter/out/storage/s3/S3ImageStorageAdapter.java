@@ -1,11 +1,12 @@
 package com.gearshow.backend.showcase.adapter.out.storage.s3;
 
+import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3UploadFailedException;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -33,16 +34,16 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
     private String cdnUrl;
 
     @Override
-    public String upload(String directory, MultipartFile file) {
-        String key = generateKey(directory, file.getOriginalFilename());
+    public String upload(String directory, UploadFile file) {
+        String key = generateKey(directory, file.originalFilename());
         putObject(key, file);
         return cdnUrl + "/" + key;
     }
 
     @Override
-    public List<String> uploadAll(String directory, List<MultipartFile> files) {
+    public List<String> uploadAll(String directory, List<UploadFile> files) {
         List<String> urls = new ArrayList<>();
-        for (MultipartFile file : files) {
+        for (UploadFile file : files) {
             urls.add(upload(directory, file));
         }
         return urls;
@@ -58,18 +59,19 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
         log.info("S3 이미지 삭제 완료: {}", key);
     }
 
-    private void putObject(String key, MultipartFile file) {
+    private void putObject(String key, UploadFile file) {
         try {
             s3Client.putObject(
                     PutObjectRequest.builder()
                             .bucket(bucket)
                             .key(key)
-                            .contentType(file.getContentType())
+                            .contentType(file.contentType())
                             .build(),
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+                    RequestBody.fromInputStream(file.inputStream(), file.size()));
             log.info("S3 이미지 업로드 완료: {}", key);
-        } catch (IOException e) {
-            throw new RuntimeException("S3 이미지 업로드에 실패했습니다: " + key, e);
+        } catch (Exception e) {
+            log.error("S3 이미지 업로드 실패: {}", key, e);
+            throw new S3UploadFailedException();
         }
     }
 

@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ReorderImagesRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
 import com.gearshow.backend.showcase.application.port.in.ManageShowcaseImageUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +37,7 @@ public class ShowcaseImageController {
 
         Long ownerId = (Long) authentication.getPrincipal();
         List<Long> addedIds = manageShowcaseImageUseCase.addImages(
-                showcaseId, ownerId, images);
+                showcaseId, ownerId, UploadFileMapper.toUploadFiles(images));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(201, "이미지 추가 성공",

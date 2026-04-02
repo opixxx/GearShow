@@ -1,7 +1,12 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.showcase.application.exception.DuplicateSortOrderException;
+import com.gearshow.backend.showcase.application.exception.ImageNotBelongToShowcaseException;
+import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchException;
+import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.ManageShowcaseImageUseCase;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -12,10 +17,12 @@ import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 쇼케이스 이미지 관리 유스케이스 구현체.
@@ -30,7 +37,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
 
     @Override
     @Transactional
-    public List<Long> addImages(Long showcaseId, Long ownerId, List<MultipartFile> images) {
+    public List<Long> addImages(Long showcaseId, Long ownerId, List<UploadFile> images) {
         validateOwnership(showcaseId, ownerId);
 
         // S3 업로드 후 이미지 저장
@@ -56,9 +63,10 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
         validateOwnership(showcaseId, ownerId);
         validateMinImageCount(showcaseId);
 
-        // DB에서 이미지 조회 후 삭제
+        // DB에서 이미지 조회 후 소속 검증
         ShowcaseImage image = showcaseImagePort.findById(imageId)
-                .orElseThrow(InvalidShowcaseException::new);
+                .orElseThrow(NotFoundShowcaseImageException::new);
+        validateImageBelongsToShowcase(image, showcaseId);
 
         showcaseImagePort.deleteById(imageId);
 
@@ -70,26 +78,44 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     @Transactional
     public void reorderImages(Long showcaseId, Long ownerId, List<ImageOrder> imageOrders) {
         validateOwnership(showcaseId, ownerId);
-        validateSinglePrimaryImage(imageOrders);
+        validateReorderInput(imageOrders);
 
         List<ShowcaseImage> existing = showcaseImagePort.findByShowcaseId(showcaseId);
-        List<ShowcaseImage> updated = new ArrayList<>();
+        validateImageSetMatch(existing, imageOrders);
 
-        for (ImageOrder order : imageOrders) {
-            existing.stream()
-                    .filter(img -> img.getId().equals(order.showcaseImageId()))
-                    .findFirst()
-                    .ifPresent(img -> updated.add(ShowcaseImage.builder()
-                            .id(img.getId())
-                            .showcaseId(img.getShowcaseId())
-                            .imageUrl(img.getImageUrl())
-                            .sortOrder(order.sortOrder())
-                            .primary(order.isPrimary())
-                            .createdAt(img.getCreatedAt())
-                            .build()));
-        }
-
+        List<ShowcaseImage> updated = buildReorderedImages(existing, imageOrders);
         showcaseImagePort.saveAll(updated);
+    }
+
+    /**
+     * 재정렬 입력값의 비즈니스 규칙을 검증한다.
+     */
+    private void validateReorderInput(List<ImageOrder> imageOrders) {
+        validateSinglePrimaryImage(imageOrders);
+        validateUniqueSortOrder(imageOrders);
+    }
+
+    /**
+     * 기존 이미지에 새 정렬 순서를 적용한 이미지 목록을 생성한다.
+     */
+    private List<ShowcaseImage> buildReorderedImages(List<ShowcaseImage> existing,
+                                                      List<ImageOrder> imageOrders) {
+        Map<Long, ShowcaseImage> existingMap = existing.stream()
+                .collect(Collectors.toMap(ShowcaseImage::getId, img -> img));
+
+        List<ShowcaseImage> updated = new ArrayList<>();
+        for (ImageOrder order : imageOrders) {
+            ShowcaseImage img = existingMap.get(order.showcaseImageId());
+            updated.add(ShowcaseImage.builder()
+                    .id(img.getId())
+                    .showcaseId(img.getShowcaseId())
+                    .imageUrl(img.getImageUrl())
+                    .sortOrder(order.sortOrder())
+                    .primary(order.isPrimary())
+                    .createdAt(img.getCreatedAt())
+                    .build());
+        }
+        return updated;
     }
 
     private void validateOwnership(Long showcaseId, Long ownerId) {
@@ -97,6 +123,15 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
                 .orElseThrow(NotFoundShowcaseException::new);
         if (!showcase.getOwnerId().equals(ownerId)) {
             throw new NotOwnerShowcaseException();
+        }
+    }
+
+    /**
+     * 이미지가 해당 쇼케이스에 속하는지 검증한다.
+     */
+    private void validateImageBelongsToShowcase(ShowcaseImage image, Long showcaseId) {
+        if (!image.getShowcaseId().equals(showcaseId)) {
+            throw new ImageNotBelongToShowcaseException();
         }
     }
 
@@ -119,6 +154,39 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
                 .count();
         if (primaryCount != 1) {
             throw new InvalidShowcaseException();
+        }
+    }
+
+    /**
+     * 정렬 순서가 중복되지 않아야 한다.
+     */
+    private void validateUniqueSortOrder(List<ImageOrder> imageOrders) {
+        Set<Integer> sortOrders = imageOrders.stream()
+                .map(ImageOrder::sortOrder)
+                .collect(Collectors.toSet());
+        if (sortOrders.size() != imageOrders.size()) {
+            throw new DuplicateSortOrderException();
+        }
+    }
+
+    /**
+     * 요청 이미지 목록과 실제 쇼케이스 이미지 목록이 정확히 일치하는지 검증한다.
+     */
+    private void validateImageSetMatch(List<ShowcaseImage> existing, List<ImageOrder> imageOrders) {
+        Set<Long> existingIds = existing.stream()
+                .map(ShowcaseImage::getId)
+                .collect(Collectors.toSet());
+        Set<Long> requestIds = imageOrders.stream()
+                .map(ImageOrder::showcaseImageId)
+                .collect(Collectors.toSet());
+
+        // 요청 ID 중복 검증 (Set 크기와 원본 리스트 크기 비교)
+        if (requestIds.size() != imageOrders.size()) {
+            throw new ImageReorderMismatchException();
+        }
+
+        if (!existingIds.equals(requestIds)) {
+            throw new ImageReorderMismatchException();
         }
     }
 }

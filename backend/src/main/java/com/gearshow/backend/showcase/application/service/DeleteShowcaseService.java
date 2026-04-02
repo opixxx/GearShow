@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.DeleteShowcaseUseCase;
+import com.gearshow.backend.showcase.application.port.out.ShowcaseCommentPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.Showcase;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeleteShowcaseService implements DeleteShowcaseUseCase {
 
     private final ShowcasePort showcasePort;
+    private final ShowcaseCommentPort showcaseCommentPort;
 
     @Override
     @Transactional
@@ -24,8 +26,12 @@ public class DeleteShowcaseService implements DeleteShowcaseUseCase {
         Showcase showcase = findShowcase(showcaseId);
         validateOwner(showcase, ownerId);
 
+        // 쇼케이스 소프트 삭제
         Showcase deleted = showcase.delete();
         showcasePort.save(deleted);
+
+        // 연관 댓글 일괄 소프트 삭제
+        showcaseCommentPort.softDeleteAllByShowcaseId(showcaseId);
     }
 
     private Showcase findShowcase(Long showcaseId) {

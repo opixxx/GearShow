@@ -2,7 +2,7 @@ package com.gearshow.backend.showcase.application.port.in;
 
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
-import org.springframework.web.multipart.MultipartFile;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 
 import java.util.List;
 
@@ -20,6 +20,6 @@ public interface CreateShowcaseUseCase {
      * @return 등록 결과
      */
     CreateShowcaseResult create(CreateShowcaseCommand command,
-                                 List<MultipartFile> images,
-                                 List<MultipartFile> modelSourceImages);
+                                 List<UploadFile> images,
+                                 List<UploadFile> modelSourceImages);
 }

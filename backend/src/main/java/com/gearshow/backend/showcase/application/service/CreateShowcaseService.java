@@ -13,10 +13,10 @@ import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,26 +35,29 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
 
     @Override
     public CreateShowcaseResult create(CreateShowcaseCommand command,
-                                        List<MultipartFile> images,
-                                        List<MultipartFile> modelSourceImages) {
-        // 1. 검증 (트랜잭션 불필요)
+                                        List<UploadFile> images,
+                                        List<UploadFile> modelSourceImages) {
         validateImages(images, command.primaryImageIndex());
 
-        // 2. S3 업로드 (트랜잭션 밖 — 외부 호출이므로 DB 커넥션 점유 방지)
         List<String> imageUrls = imageStoragePort.uploadAll("showcases", images);
-
-        // 3. DB 저장 (트랜잭션)
         Showcase saved = saveShowcaseAndImages(command, imageUrls);
-
-        // 4. 3D 모델 생성 요청 (트랜잭션 밖)
-        ModelStatus modelStatus = null;
-        if (command.hasModelSourceImages() && !modelSourceImages.isEmpty()) {
-            ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
-                    saved.getId(), modelSourceImages);
-            modelStatus = genResult.modelStatus();
-        }
+        ModelStatus modelStatus = requestModelIfNeeded(saved.getId(), command, modelSourceImages);
 
         return new CreateShowcaseResult(saved.getId(), modelStatus);
+    }
+
+    /**
+     * 3D 모델 소스 이미지가 있으면 생성을 비동기 요청한다.
+     */
+    private ModelStatus requestModelIfNeeded(Long showcaseId,
+                                              CreateShowcaseCommand command,
+                                              List<UploadFile> modelSourceImages) {
+        if (!command.hasModelSourceImages() || modelSourceImages.isEmpty()) {
+            return null;
+        }
+        ModelGenerationResult result = requestModelGenerationUseCase.requestOnCreate(
+                showcaseId, modelSourceImages);
+        return result.modelStatus();
     }
 
     /**
@@ -69,30 +72,17 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     }
 
     private Showcase createShowcase(CreateShowcaseCommand command) {
-        Showcase showcase = Showcase.create(
+        return Showcase.create(
                 command.ownerId(), command.catalogItemId(),
-                command.title(), command.conditionGrade());
-
-        return Showcase.builder()
-                .id(null)
-                .ownerId(command.ownerId())
-                .catalogItemId(command.catalogItemId())
-                .title(command.title())
-                .description(command.description())
-                .userSize(command.userSize())
-                .conditionGrade(command.conditionGrade())
-                .wearCount(command.wearCount())
-                .forSale(command.isForSale())
-                .status(showcase.getStatus())
-                .createdAt(showcase.getCreatedAt())
-                .updatedAt(showcase.getUpdatedAt())
-                .build();
+                command.title(), command.description(),
+                command.userSize(), command.conditionGrade(),
+                command.wearCount(), command.isForSale());
     }
 
     /**
      * 이미지 최소 1장, primaryImageIndex 범위 검증.
      */
-    private void validateImages(List<MultipartFile> images, int primaryImageIndex) {
+    private void validateImages(List<UploadFile> images, int primaryImageIndex) {
         if (images == null || images.isEmpty()) {
             throw new MinImageRequiredException();
         }

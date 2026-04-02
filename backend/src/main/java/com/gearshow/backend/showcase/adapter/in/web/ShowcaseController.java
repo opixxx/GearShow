@@ -5,6 +5,7 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseRequest;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseDetailResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateShowcaseRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseListResult;
@@ -99,7 +100,8 @@ public class ShowcaseController {
 
         CreateShowcaseResult result = createShowcaseUseCase.create(
                 request.toCommand(ownerId, !safeModelSourceImages.isEmpty()),
-                images, safeModelSourceImages);
+                UploadFileMapper.toUploadFiles(images),
+                UploadFileMapper.toUploadFiles(safeModelSourceImages));
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of(201, "쇼케이스 등록 성공",
@@ -139,4 +141,5 @@ public class ShowcaseController {
         return ResponseEntity.ok(
                 ApiResponse.of(200, "쇼케이스 삭제 성공"));
     }
+
 }

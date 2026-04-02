@@ -4,6 +4,7 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
+import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.exception.NotAuthorCommentException;
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseCommentException;
 import com.gearshow.backend.showcase.application.port.in.*;
@@ -17,11 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,8 +56,9 @@ class CommentServiceIntegrationTest {
         CreateShowcaseCommand command = new CreateShowcaseCommand(
                 1L, 1L, "테스트 쇼케이스", null, null,
                 ConditionGrade.A, 0, false, 0, false);
-        List<MultipartFile> images = List.of(new MockMultipartFile(
-                "images", "test.jpg", "image/jpeg", "fake".getBytes()));
+        List<UploadFile> images = List.of(new UploadFile(
+                new ByteArrayInputStream("fake".getBytes()),
+                "image/jpeg", 4L, "test.jpg"));
         CreateShowcaseResult result = createShowcaseUseCase.create(command, images, List.of());
         showcaseId = result.showcaseId();
     }
