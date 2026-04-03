@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import com.gearshow.backend.user.application.dto.MyProfileResult;
 import com.gearshow.backend.user.application.dto.UpdateProfileResult;
 import com.gearshow.backend.user.application.dto.UserProfileResult;
+import com.gearshow.backend.user.application.port.in.CheckNicknameUseCase;
 import com.gearshow.backend.user.application.port.in.GetMyProfileUseCase;
 import com.gearshow.backend.user.application.port.in.GetUserProfileUseCase;
 import com.gearshow.backend.user.application.port.in.UpdateProfileUseCase;
@@ -23,10 +24,28 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class UserController {
 
+    private final CheckNicknameUseCase checkNicknameUseCase;
     private final GetMyProfileUseCase getMyProfileUseCase;
     private final GetUserProfileUseCase getUserProfileUseCase;
     private final UpdateProfileUseCase updateProfileUseCase;
     private final WithdrawUseCase withdrawUseCase;
+
+    /**
+     * 닉네임 중복 여부를 확인한다.
+     *
+     * @param nickname 확인할 닉네임
+     * @return 닉네임 사용 가능 여부
+     */
+    @GetMapping("/nicknames/check")
+    public ResponseEntity<ApiResponse<CheckNicknameResponse>> checkNickname(
+            @RequestParam String nickname) {
+
+        boolean available = checkNicknameUseCase.isAvailable(nickname);
+
+        String message = available ? "사용 가능한 닉네임입니다" : "이미 사용 중인 닉네임입니다";
+        return ResponseEntity.ok(
+                ApiResponse.of(200, message, new CheckNicknameResponse(nickname, available)));
+    }
 
     /**
      * 내 프로필을 조회한다.

@@ -44,13 +44,12 @@ public record CatalogItemDetailResult(
             String clubName,
             String season,
             String league,
-            String manufacturer,
             String extraSpecJson
     ) {
         public static UniformSpecResult from(UniformSpec spec) {
             return new UniformSpecResult(
                     spec.getClubName(), spec.getSeason(),
-                    spec.getLeague(), spec.getManufacturer(),
+                    spec.getLeague(),
                     spec.getExtraSpecJson());
         }
     }

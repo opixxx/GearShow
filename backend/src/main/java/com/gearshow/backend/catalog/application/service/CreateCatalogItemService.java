@@ -91,7 +91,6 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
                 .clubName(spec.clubName())
                 .season(spec.season())
                 .league(spec.league())
-                .manufacturer(spec.manufacturer())
                 .extraSpecJson(spec.extraSpecJson())
                 .createdAt(java.time.Instant.now())
                 .updatedAt(java.time.Instant.now())

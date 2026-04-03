@@ -72,7 +72,6 @@ erDiagram
         string clubName
         string season
         string league
-        string manufacturer
         json extraSpecJson
         timestamp createdAt
         timestamp updatedAt
@@ -273,7 +272,6 @@ erDiagram
 | clubName | string | NOT NULL | 클럽 이름 |
 | season | string | NOT NULL | 시즌 (2024-25 등) |
 | league | string | | 리그 (EPL, LaLiga 등) |
-| manufacturer | string | | 제조사 |
 | extraSpecJson | json | | 추가 스펙 (소재, 핏 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |

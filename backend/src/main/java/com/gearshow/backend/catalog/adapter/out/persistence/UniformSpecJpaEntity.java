@@ -34,9 +34,6 @@ public class UniformSpecJpaEntity {
     @Column(name = "league")
     private String league;
 
-    @Column(name = "manufacturer")
-    private String manufacturer;
-
     @Column(name = "extra_spec_json", columnDefinition = "json")
     private String extraSpecJson;
 
@@ -48,7 +45,7 @@ public class UniformSpecJpaEntity {
 
     @Builder
     private UniformSpecJpaEntity(Long id, Long catalogItemId, String clubName,
-                                 String season, String league, String manufacturer,
+                                 String season, String league,
                                  String extraSpecJson, Instant createdAt,
                                  Instant updatedAt) {
         this.id = id;
@@ -56,7 +53,6 @@ public class UniformSpecJpaEntity {
         this.clubName = clubName;
         this.season = season;
         this.league = league;
-        this.manufacturer = manufacturer;
         this.extraSpecJson = extraSpecJson;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

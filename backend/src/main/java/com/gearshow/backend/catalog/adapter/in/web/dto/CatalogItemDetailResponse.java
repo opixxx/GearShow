@@ -35,7 +35,6 @@ public record CatalogItemDetailResponse(
             String clubName,
             String season,
             String league,
-            String manufacturer,
             String extraSpecJson
     ) {}
 
@@ -50,7 +49,7 @@ public record CatalogItemDetailResponse(
                         result.bootsSpec().extraSpecJson()) : null,
                 result.uniformSpec() != null ? new UniformSpecResponse(
                         result.uniformSpec().clubName(), result.uniformSpec().season(),
-                        result.uniformSpec().league(), result.uniformSpec().manufacturer(),
+                        result.uniformSpec().league(),
                         result.uniformSpec().extraSpecJson()) : null,
                 result.createdAt());
     }

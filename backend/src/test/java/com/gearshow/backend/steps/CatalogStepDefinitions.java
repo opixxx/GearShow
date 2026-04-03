@@ -50,8 +50,7 @@ public class CatalogStepDefinitions {
                 "uniformSpec", Map.of(
                         "clubName", "Liverpool",
                         "season", "2024-25",
-                        "league", "EPL",
-                        "manufacturer", "Nike"
+                        "league", "EPL"
                 )
         );
 

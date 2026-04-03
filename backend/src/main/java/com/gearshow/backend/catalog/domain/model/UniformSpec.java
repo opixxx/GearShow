@@ -18,14 +18,13 @@ public class UniformSpec {
     private final String clubName;
     private final String season;
     private final String league;
-    private final String manufacturer;
     private final String extraSpecJson;
     private final Instant createdAt;
     private final Instant updatedAt;
 
     @Builder
     private UniformSpec(Long id, Long catalogItemId, String clubName,
-                        String season, String league, String manufacturer,
+                        String season, String league,
                         String extraSpecJson, Instant createdAt,
                         Instant updatedAt) {
         this.id = id;
@@ -33,7 +32,6 @@ public class UniformSpec {
         this.clubName = clubName;
         this.season = season;
         this.league = league;
-        this.manufacturer = manufacturer;
         this.extraSpecJson = extraSpecJson;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

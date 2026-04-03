@@ -3,6 +3,7 @@ package com.gearshow.backend.user.application.service;
 import com.gearshow.backend.user.application.dto.LoginCommand;
 import com.gearshow.backend.user.application.dto.LoginResult;
 import com.gearshow.backend.user.application.dto.OAuthUserInfo;
+import com.gearshow.backend.user.application.exception.InvalidAuthCodeException;
 import com.gearshow.backend.user.application.exception.UnsupportedProviderException;
 import com.gearshow.backend.user.application.port.in.LoginUseCase;
 import com.gearshow.backend.user.application.port.out.AuthAccountPort;
@@ -39,7 +40,7 @@ public class LoginService implements LoginUseCase {
     @Transactional
     public LoginResult login(LoginCommand command) {
         OAuthClient client = findOAuthClient(command.provider());
-        OAuthUserInfo userInfo = client.getUserInfo(command.authorizationCode());
+        OAuthUserInfo userInfo = getOAuthUserInfo(client, command);
 
         ProviderType providerType = resolveProviderType(command.provider());
         User user = findOrCreateUser(providerType, userInfo);
@@ -55,6 +56,16 @@ public class LoginService implements LoginUseCase {
                 .filter(client -> client.getProvider().equals(provider))
                 .findFirst()
                 .orElseThrow(UnsupportedProviderException::new);
+    }
+
+    private OAuthUserInfo getOAuthUserInfo(OAuthClient client, LoginCommand command) {
+        if (command.accessToken() != null && !command.accessToken().isBlank()) {
+            return client.getUserInfoByAccessToken(command.accessToken());
+        }
+        if (command.authorizationCode() != null && !command.authorizationCode().isBlank()) {
+            return client.getUserInfo(command.authorizationCode());
+        }
+        throw new InvalidAuthCodeException();
     }
 
     /**
@@ -86,13 +97,12 @@ public class LoginService implements LoginUseCase {
     }
 
     /**
-     * 닉네임 중복 시 고유한 닉네임을 생성한다.
+     * 신규 가입 시 임시 닉네임을 생성한다.
+     * 카카오 등 소셜 닉네임은 사용하지 않고, 가입 후 사용자가 직접 설정하도록 한다.
+     * "사용자_"로 시작하는 닉네임은 닉네임 미설정 상태를 의미한다.
      */
     private String generateUniqueNickname(String nickname) {
-        if (nickname == null || nickname.isBlank()) {
-            return "사용자_" + System.currentTimeMillis();
-        }
-        return nickname;
+        return "사용자_" + System.currentTimeMillis();
     }
 
     /**

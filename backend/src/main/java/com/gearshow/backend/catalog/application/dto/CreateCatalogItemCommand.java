@@ -34,7 +34,6 @@ public record CreateCatalogItemCommand(
             String clubName,
             String season,
             String league,
-            String manufacturer,
             String extraSpecJson
     ) {}
 }

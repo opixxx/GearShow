@@ -37,7 +37,6 @@ public record CreateCatalogItemRequest(
             String clubName,
             String season,
             String league,
-            String manufacturer,
             String extraSpecJson
     ) {}
 
@@ -53,7 +52,7 @@ public record CreateCatalogItemRequest(
                         bootsSpec.extraSpecJson) : null,
                 uniformSpec != null ? new CreateCatalogItemCommand.UniformSpecCommand(
                         uniformSpec.clubName, uniformSpec.season,
-                        uniformSpec.league, uniformSpec.manufacturer,
+                        uniformSpec.league,
                         uniformSpec.extraSpecJson) : null
         );
     }

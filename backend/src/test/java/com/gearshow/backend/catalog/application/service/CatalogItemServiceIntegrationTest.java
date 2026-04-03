@@ -75,7 +75,7 @@ class CatalogItemServiceIntegrationTest {
                     Category.UNIFORM, "Nike", "Liverpool 24-25 Home",
                     null, null, null,
                     new CreateCatalogItemCommand.UniformSpecCommand(
-                            "Liverpool", "2024-25", "EPL", "Nike", null));
+                            "Liverpool", "2024-25", "EPL", null));
 
             // When
             CreateCatalogItemResult result = createCatalogItemUseCase.create(command);
