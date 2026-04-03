@@ -70,23 +70,31 @@ class AuthControllerIntegrationTest {
         }
 
         @Test
-        @DisplayName("인가 코드가 비어있으면 400을 반환한다")
-        void login_withEmptyCode_returns400() throws Exception {
-            // Given & When & Then
+        @DisplayName("인가 코드와 액세스 토큰 모두 비어있으면 에러를 반환한다")
+        void login_withEmptyCodeAndToken_returnsError() throws Exception {
+            // Given
+            given(loginUseCase.login(any()))
+                    .willThrow(new com.gearshow.backend.user.application.exception.InvalidAuthCodeException());
+
+            // When & Then
             mockMvc.perform(post("/api/v1/auth/login/kakao")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"authorizationCode\":\"\"}"))
-                    .andExpect(status().isBadRequest());
+                            .content("{\"authorizationCode\":\"\",\"accessToken\":\"\"}"))
+                    .andExpect(status().is4xxClientError());
         }
 
         @Test
-        @DisplayName("인가 코드 필드가 없으면 400을 반환한다")
-        void login_withoutCode_returns400() throws Exception {
-            // Given & When & Then
+        @DisplayName("인가 코드와 액세스 토큰 필드가 없으면 에러를 반환한다")
+        void login_withoutCodeAndToken_returnsError() throws Exception {
+            // Given
+            given(loginUseCase.login(any()))
+                    .willThrow(new com.gearshow.backend.user.application.exception.InvalidAuthCodeException());
+
+            // When & Then
             mockMvc.perform(post("/api/v1/auth/login/kakao")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().is4xxClientError());
         }
     }
 

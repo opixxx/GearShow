@@ -34,7 +34,7 @@ class RefreshTokenServiceIntegrationTest {
     @DisplayName("유효한 Refresh Token으로 새 토큰을 발급받는다")
     void refresh_withValidToken_returnsNewTokens() {
         // Given
-        LoginResult loginResult = loginUseCase.login(new LoginCommand("kakao", "valid-code"));
+        LoginResult loginResult = loginUseCase.login(new LoginCommand("kakao", "valid-code", null));
 
         // When
         LoginResult refreshResult = refreshTokenUseCase.refresh(

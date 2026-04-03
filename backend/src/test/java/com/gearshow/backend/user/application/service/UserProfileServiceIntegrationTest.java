@@ -47,7 +47,7 @@ class UserProfileServiceIntegrationTest {
      * 테스트용 사용자를 생성하고 userId를 반환한다.
      */
     private Long createUser(String authCode) {
-        loginUseCase.login(new LoginCommand("kakao", authCode));
+        loginUseCase.login(new LoginCommand("kakao", authCode, null));
         return userJpaRepository.findAll().stream()
                 .reduce((first, second) -> second)
                 .orElseThrow()

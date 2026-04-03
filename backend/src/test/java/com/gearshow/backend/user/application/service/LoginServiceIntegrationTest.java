@@ -38,7 +38,7 @@ class LoginServiceIntegrationTest {
     @DisplayName("신규 사용자가 카카오 로그인하면 자동 가입 후 토큰이 발급된다")
     void login_newUser_createsAccountAndReturnsToken() {
         // Given
-        LoginCommand command = new LoginCommand("kakao", "valid-code");
+        LoginCommand command = new LoginCommand("kakao", "valid-code", null);
 
         // When
         LoginResult result = loginUseCase.login(command);
@@ -56,11 +56,11 @@ class LoginServiceIntegrationTest {
     @DisplayName("기존 사용자가 로그인하면 새 사용자를 생성하지 않고 토큰을 발급한다")
     void login_existingUser_doesNotCreateNewUser() {
         // Given
-        loginUseCase.login(new LoginCommand("kakao", "valid-code"));
+        loginUseCase.login(new LoginCommand("kakao", "valid-code", null));
         long userCountBefore = userJpaRepository.count();
 
         // When
-        LoginResult result = loginUseCase.login(new LoginCommand("kakao", "valid-code"));
+        LoginResult result = loginUseCase.login(new LoginCommand("kakao", "valid-code", null));
 
         // Then
         assertThat(result.accessToken()).isNotBlank();
@@ -71,7 +71,7 @@ class LoginServiceIntegrationTest {
     @DisplayName("유효하지 않은 인가 코드로 로그인하면 예외가 발생한다")
     void login_invalidCode_throwsException() {
         // Given
-        LoginCommand command = new LoginCommand("kakao", "invalid-code");
+        LoginCommand command = new LoginCommand("kakao", "invalid-code", null);
 
         // When & Then
         assertThatThrownBy(() -> loginUseCase.login(command))
@@ -82,7 +82,7 @@ class LoginServiceIntegrationTest {
     @DisplayName("지원하지 않는 제공자로 로그인하면 예외가 발생한다")
     void login_unsupportedProvider_throwsException() {
         // Given
-        LoginCommand command = new LoginCommand("naver", "valid-code");
+        LoginCommand command = new LoginCommand("naver", "valid-code", null);
 
         // When & Then
         assertThatThrownBy(() -> loginUseCase.login(command))
