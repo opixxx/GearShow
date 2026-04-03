@@ -17,6 +17,16 @@ public interface OAuthClient {
     OAuthUserInfo getUserInfo(String authorizationCode);
 
     /**
+     * 액세스 토큰을 사용하여 소셜 제공자로부터 사용자 정보를 조회한다.
+     *
+     * @param accessToken 액세스 토큰
+     * @return 사용자 정보
+     */
+    default OAuthUserInfo getUserInfoByAccessToken(String accessToken) {
+        throw new UnsupportedOperationException("토큰 기반 조회를 지원하지 않습니다.");
+    }
+
+    /**
      * 이 클라이언트가 지원하는 제공자 이름을 반환한다.
      *
      * @return 제공자 이름 (kakao, apple)

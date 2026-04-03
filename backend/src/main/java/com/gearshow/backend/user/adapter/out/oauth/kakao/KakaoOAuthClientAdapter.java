@@ -48,6 +48,11 @@ public class KakaoOAuthClientAdapter implements OAuthClient {
     }
 
     @Override
+    public OAuthUserInfo getUserInfoByAccessToken(String accessToken) {
+        return requestUserInfo(accessToken);
+    }
+
+    @Override
     public String getProvider() {
         return "kakao";
     }
