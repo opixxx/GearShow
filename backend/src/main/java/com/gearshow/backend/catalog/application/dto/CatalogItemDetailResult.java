@@ -5,6 +5,7 @@ import com.gearshow.backend.catalog.domain.model.CatalogItem;
 import com.gearshow.backend.catalog.domain.model.UniformSpec;
 import com.gearshow.backend.catalog.domain.vo.CatalogStatus;
 import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 
 import java.time.Instant;
@@ -16,7 +17,6 @@ public record CatalogItemDetailResult(
         Long catalogItemId,
         Category category,
         String brand,
-        String itemName,
         String modelCode,
         String officialImageUrl,
         CatalogStatus catalogStatus,
@@ -44,12 +44,13 @@ public record CatalogItemDetailResult(
             String clubName,
             String season,
             String league,
+            KitType kitType,
             String extraSpecJson
     ) {
         public static UniformSpecResult from(UniformSpec spec) {
             return new UniformSpecResult(
                     spec.getClubName(), spec.getSeason(),
-                    spec.getLeague(),
+                    spec.getLeague(), spec.getKitType(),
                     spec.getExtraSpecJson());
         }
     }
@@ -57,7 +58,7 @@ public record CatalogItemDetailResult(
     public static CatalogItemDetailResult of(CatalogItem item, BootsSpec bootsSpec, UniformSpec uniformSpec) {
         return new CatalogItemDetailResult(
                 item.getId(), item.getCategory(), item.getBrand(),
-                item.getItemName(), item.getModelCode(), item.getOfficialImageUrl(),
+                item.getModelCode(), item.getOfficialImageUrl(),
                 item.getStatus(),
                 bootsSpec != null ? BootsSpecResult.from(bootsSpec) : null,
                 uniformSpec != null ? UniformSpecResult.from(uniformSpec) : null,

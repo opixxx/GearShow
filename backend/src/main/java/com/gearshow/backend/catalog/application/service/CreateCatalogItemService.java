@@ -44,13 +44,12 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
     }
 
     private CatalogItem saveCatalogItem(CreateCatalogItemCommand command) {
-        CatalogItem item = CatalogItem.create(command.category(), command.brand(), command.itemName());
+        CatalogItem item = CatalogItem.create(command.category(), command.brand());
         // modelCode, officialImageUrl은 Builder로 직접 설정
         CatalogItem withDetails = CatalogItem.builder()
                 .id(null)
                 .category(command.category())
                 .brand(command.brand())
-                .itemName(command.itemName())
                 .modelCode(command.modelCode())
                 .officialImageUrl(command.officialImageUrl())
                 .status(item.getStatus())
@@ -91,6 +90,7 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
                 .clubName(spec.clubName())
                 .season(spec.season())
                 .league(spec.league())
+                .kitType(spec.kitType())
                 .extraSpecJson(spec.extraSpecJson())
                 .createdAt(java.time.Instant.now())
                 .updatedAt(java.time.Instant.now())

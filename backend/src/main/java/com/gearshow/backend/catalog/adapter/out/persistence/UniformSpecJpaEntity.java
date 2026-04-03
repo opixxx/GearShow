@@ -1,5 +1,6 @@
 package com.gearshow.backend.catalog.adapter.out.persistence;
 
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -34,6 +35,10 @@ public class UniformSpecJpaEntity {
     @Column(name = "league")
     private String league;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kit_type", nullable = false)
+    private KitType kitType;
+
     @Column(name = "extra_spec_json", columnDefinition = "json")
     private String extraSpecJson;
 
@@ -45,7 +50,7 @@ public class UniformSpecJpaEntity {
 
     @Builder
     private UniformSpecJpaEntity(Long id, Long catalogItemId, String clubName,
-                                 String season, String league,
+                                 String season, String league, KitType kitType,
                                  String extraSpecJson, Instant createdAt,
                                  Instant updatedAt) {
         this.id = id;
@@ -53,6 +58,7 @@ public class UniformSpecJpaEntity {
         this.clubName = clubName;
         this.season = season;
         this.league = league;
+        this.kitType = kitType;
         this.extraSpecJson = extraSpecJson;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

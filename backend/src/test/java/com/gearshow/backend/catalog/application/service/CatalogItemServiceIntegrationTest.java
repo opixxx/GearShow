@@ -43,7 +43,7 @@ class CatalogItemServiceIntegrationTest {
 
     private CreateCatalogItemCommand createBootsCommand(String modelCode) {
         return new CreateCatalogItemCommand(
-                Category.BOOTS, "Nike", "Mercurial Superfly 10",
+                Category.BOOTS, "Nike",
                 modelCode, null,
                 new CreateCatalogItemCommand.BootsSpecCommand(
                         StudType.FG, "Mercurial", "2025", "천연잔디", null),
@@ -72,10 +72,11 @@ class CatalogItemServiceIntegrationTest {
         void create_uniform_success() {
             // Given
             CreateCatalogItemCommand command = new CreateCatalogItemCommand(
-                    Category.UNIFORM, "Nike", "Liverpool 24-25 Home",
+                    Category.UNIFORM, "Nike",
                     null, null, null,
                     new CreateCatalogItemCommand.UniformSpecCommand(
-                            "Liverpool", "2024-25", "EPL", null));
+                            "Liverpool", "2024-25", "EPL",
+                            com.gearshow.backend.catalog.domain.vo.KitType.HOME, null));
 
             // When
             CreateCatalogItemResult result = createCatalogItemUseCase.create(command);
@@ -172,21 +173,20 @@ class CatalogItemServiceIntegrationTest {
         void update_changesBrand() {
             // Given
             CreateCatalogItemResult created = createCatalogItemUseCase.create(createBootsCommand("UPDATE-001"));
-            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null, null);
+            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null);
 
             // When
             CatalogItemDetailResult result = updateCatalogItemUseCase.update(created.catalogItemId(), command);
 
             // Then
             assertThat(result.brand()).isEqualTo("Adidas");
-            assertThat(result.itemName()).isEqualTo("Mercurial Superfly 10");
         }
 
         @Test
         @DisplayName("존재하지 않는 카탈로그 아이템을 수정하면 예외가 발생한다")
         void update_notFound_throwsException() {
             // Given
-            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null, null);
+            UpdateCatalogItemCommand command = new UpdateCatalogItemCommand("Adidas", null, null);
 
             // When & Then
             assertThatThrownBy(() -> updateCatalogItemUseCase.update(999L, command))
