@@ -46,6 +46,62 @@ public class ShowcaseStepDefinitions {
         등록_수행(1, modelSourceImageCount);
     }
 
+    @When("축구화 스펙과 함께 쇼케이스를 등록한다")
+    public void 축구화_스펙과_함께_쇼케이스_등록() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        parts.add("category", "BOOTS");
+        parts.add("brand", "Nike");
+        parts.add("modelCode", "DJ2839");
+        parts.add("title", "머큐리얼 스펙 테스트");
+        parts.add("conditionGrade", "A");
+        parts.add("userSize", "270mm");
+        // 축구화 스펙 필드
+        parts.add("studType", "FG");
+        parts.add("siloName", "Mercurial");
+        parts.add("releaseYear", "2025");
+        parts.add("surfaceType", "천연잔디");
+        parts.add("images", createFakeImage("spec-test.jpg"));
+
+        TestResponse<Map<String, Object>> response = apiClient.postMultipart(
+                "/api/v1/showcases", parts);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("showcaseId", ((Number) data.get("showcaseId")).longValue());
+        }
+    }
+
+    @When("카탈로그 없이 직접 입력으로 쇼케이스를 등록한다")
+    public void 카탈로그_없이_직접_입력_등록() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        parts.add("category", "BOOTS");
+        parts.add("brand", "Adidas");
+        parts.add("title", "직접 입력 테스트");
+        parts.add("conditionGrade", "B");
+        parts.add("userSize", "260mm");
+        parts.add("images", createFakeImage("manual-test.jpg"));
+
+        TestResponse<Map<String, Object>> response = apiClient.postMultipart(
+                "/api/v1/showcases", parts);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("showcaseId", ((Number) data.get("showcaseId")).longValue());
+        }
+    }
+
     @When("등록된 쇼케이스 상세를 조회한다")
     public void 쇼케이스_상세_조회() {
         Long showcaseId = context.get("showcaseId");
