@@ -1,11 +1,13 @@
 package com.gearshow.backend.catalog.domain.model;
 
+import com.gearshow.backend.catalog.domain.exception.InvalidCatalogItemException;
 import com.gearshow.backend.catalog.domain.vo.KitType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class UniformSpecTest {
 
@@ -37,6 +39,30 @@ class UniformSpecTest {
             // Then
             assertThat(spec.getLeague()).isNull();
             assertThat(spec.getExtraSpecJson()).isNull();
+        }
+
+        @Test
+        @DisplayName("카탈로그 아이템 ID가 null이면 예외가 발생한다")
+        void create_withNullCatalogItemId_throwsException() {
+            // Given & When & Then
+            assertThatThrownBy(() -> UniformSpec.create(null, "Liverpool", "24-25", KitType.HOME))
+                    .isInstanceOf(InvalidCatalogItemException.class);
+        }
+
+        @Test
+        @DisplayName("클럽명이 빈 문자열이면 예외가 발생한다")
+        void create_withBlankClubName_throwsException() {
+            // Given & When & Then
+            assertThatThrownBy(() -> UniformSpec.create(1L, "  ", "24-25", KitType.HOME))
+                    .isInstanceOf(InvalidCatalogItemException.class);
+        }
+
+        @Test
+        @DisplayName("킷 타입이 null이면 예외가 발생한다")
+        void create_withNullKitType_throwsException() {
+            // Given & When & Then
+            assertThatThrownBy(() -> UniformSpec.create(1L, "Liverpool", "24-25", null))
+                    .isInstanceOf(InvalidCatalogItemException.class);
         }
     }
 

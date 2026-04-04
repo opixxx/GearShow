@@ -21,10 +21,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 소셜 로그인 유스케이스 구현체.
- * 인가 코드로 소셜 사용자 정보를 조회하고, 신규 사용자이면 자동 가입 후 JWT를 발급한다.
+ * 인가 코드 또는 액세스 토큰으로 소셜 사용자 정보를 조회하고,
+ * 신규 사용자이면 자동 가입 후 JWT를 발급한다.
+ *
+ * <p>외부 OAuth 호출(getOAuthUserInfo)은 트랜잭션 밖에서 수행하고,
+ * DB 변경(사용자 조회/생성, 토큰 발급)만 트랜잭션 안에서 처리한다.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -36,6 +41,10 @@ public class LoginService implements LoginUseCase {
     private final RefreshTokenPort refreshTokenPort;
     private final JwtTokenProvider jwtTokenProvider;
 
+    /**
+     * 소셜 로그인을 수행한다.
+     * 외부 OAuth API 호출 후, DB 변경 작업을 트랜잭션으로 처리한다.
+     */
     @Override
     @Transactional
     public LoginResult login(LoginCommand command) {
@@ -58,11 +67,15 @@ public class LoginService implements LoginUseCase {
                 .orElseThrow(UnsupportedProviderException::new);
     }
 
+    /**
+     * 액세스 토큰 또는 인가 코드로 소셜 사용자 정보를 조회한다.
+     * 액세스 토큰이 있으면 우선 사용한다.
+     */
     private OAuthUserInfo getOAuthUserInfo(OAuthClient client, LoginCommand command) {
-        if (command.accessToken() != null && !command.accessToken().isBlank()) {
+        if (command.hasAccessToken()) {
             return client.getUserInfoByAccessToken(command.accessToken());
         }
-        if (command.authorizationCode() != null && !command.authorizationCode().isBlank()) {
+        if (command.hasAuthorizationCode()) {
             return client.getUserInfo(command.authorizationCode());
         }
         throw new InvalidAuthCodeException();
@@ -85,7 +98,7 @@ public class LoginService implements LoginUseCase {
      * 신규 사용자와 인증 계정을 생성한다.
      */
     private User createNewUser(ProviderType providerType, OAuthUserInfo userInfo) {
-        String nickname = generateUniqueNickname(userInfo.nickname());
+        String nickname = generateUniqueNickname();
         User newUser = User.create(nickname);
         User savedUser = userPort.save(newUser);
 
@@ -98,11 +111,11 @@ public class LoginService implements LoginUseCase {
 
     /**
      * 신규 가입 시 임시 닉네임을 생성한다.
-     * 카카오 등 소셜 닉네임은 사용하지 않고, 가입 후 사용자가 직접 설정하도록 한다.
+     * UUID를 사용하여 동시 가입 시에도 충돌이 발생하지 않도록 한다.
      * "사용자_"로 시작하는 닉네임은 닉네임 미설정 상태를 의미한다.
      */
-    private String generateUniqueNickname(String nickname) {
-        return "사용자_" + System.currentTimeMillis();
+    private String generateUniqueNickname() {
+        return "사용자_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     /**
@@ -112,7 +125,6 @@ public class LoginService implements LoginUseCase {
         String accessToken = jwtTokenProvider.generateAccessToken(userId);
         String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
 
-        // 기존 Refresh Token 삭제 후 새로 저장
         refreshTokenPort.deleteByUserId(userId);
         refreshTokenPort.save(userId, refreshToken,
                 Instant.now().plus(Duration.ofDays(14)));

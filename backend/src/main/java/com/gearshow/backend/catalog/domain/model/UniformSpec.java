@@ -1,5 +1,6 @@
 package com.gearshow.backend.catalog.domain.model;
 
+import com.gearshow.backend.catalog.domain.exception.InvalidCatalogItemException;
 import com.gearshow.backend.catalog.domain.vo.KitType;
 import lombok.Builder;
 import lombok.Getter;
@@ -51,6 +52,8 @@ public class UniformSpec {
      * @return 생성된 유니폼 스펙
      */
     public static UniformSpec create(Long catalogItemId, String clubName, String season, KitType kitType) {
+        validate(catalogItemId, clubName, season, kitType);
+
         Instant now = Instant.now();
         return UniformSpec.builder()
                 .catalogItemId(catalogItemId)
@@ -60,5 +63,17 @@ public class UniformSpec {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 유니폼 스펙 필수값을 검증한다.
+     */
+    private static void validate(Long catalogItemId, String clubName, String season, KitType kitType) {
+        if (catalogItemId == null
+                || clubName == null || clubName.isBlank()
+                || season == null || season.isBlank()
+                || kitType == null) {
+            throw new InvalidCatalogItemException();
+        }
     }
 }

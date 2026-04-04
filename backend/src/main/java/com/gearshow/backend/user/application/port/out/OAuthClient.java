@@ -22,9 +22,7 @@ public interface OAuthClient {
      * @param accessToken 액세스 토큰
      * @return 사용자 정보
      */
-    default OAuthUserInfo getUserInfoByAccessToken(String accessToken) {
-        throw new UnsupportedOperationException("토큰 기반 조회를 지원하지 않습니다.");
-    }
+    OAuthUserInfo getUserInfoByAccessToken(String accessToken);
 
     /**
      * 이 클라이언트가 지원하는 제공자 이름을 반환한다.
