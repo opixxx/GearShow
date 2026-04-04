@@ -165,7 +165,8 @@ public class ShowcaseStepDefinitions {
         apiClient.clearAuth();
 
         MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("catalogItemId", "1");
+        parts.add("category", "BOOTS");
+        parts.add("brand", "Nike");
         parts.add("title", "테스트");
         parts.add("conditionGrade", "A");
         parts.add("images", createFakeImage("test.jpg"));
@@ -185,10 +186,10 @@ public class ShowcaseStepDefinitions {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
 
-        Long catalogItemId = context.get("catalogItemId");
-
         MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("catalogItemId", catalogItemId.toString());
+        parts.add("category", "BOOTS");
+        parts.add("brand", "Nike");
+        parts.add("modelCode", "DJ2839");
         parts.add("title", "머큐리얼 슈퍼플라이 착용 후기");
         parts.add("description", "FG 천연잔디에서 5번 착용했습니다");
         parts.add("userSize", "270");

@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
@@ -8,16 +9,21 @@ import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredE
 import com.gearshow.backend.showcase.application.port.in.CreateShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
+import com.gearshow.backend.showcase.application.port.out.ShowcaseBootsSpecPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
+import com.gearshow.backend.showcase.application.port.out.ShowcaseUniformSpecPort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
+import com.gearshow.backend.showcase.domain.model.ShowcaseBootsSpec;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
+import com.gearshow.backend.showcase.domain.model.ShowcaseUniformSpec;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.application.dto.UploadFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,16 +37,19 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
     private final ImageStoragePort imageStoragePort;
+    private final ShowcaseBootsSpecPort showcaseBootsSpecPort;
+    private final ShowcaseUniformSpecPort showcaseUniformSpecPort;
     private final RequestModelGenerationUseCase requestModelGenerationUseCase;
 
     @Override
+    @Transactional
     public CreateShowcaseResult create(CreateShowcaseCommand command,
                                         List<UploadFile> images,
                                         List<UploadFile> modelSourceImages) {
         validateImages(images, command.primaryImageIndex());
 
         List<String> imageUrls = imageStoragePort.uploadAll("showcases", images);
-        Showcase saved = saveShowcaseAndImages(command, imageUrls);
+        Showcase saved = saveShowcaseWithSpec(command, imageUrls);
         ModelStatus modelStatus = requestModelIfNeeded(saved.getId(), command, modelSourceImages);
 
         return new CreateShowcaseResult(saved.getId(), modelStatus);
@@ -61,19 +70,20 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
     }
 
     /**
-     * 쇼케이스와 이미지를 DB에 저장한다.
+     * 쇼케이스, 이미지, 스펙을 DB에 저장한다.
      */
-    @Transactional
-    protected Showcase saveShowcaseAndImages(CreateShowcaseCommand command, List<String> imageUrls) {
+    protected Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
         Showcase showcase = createShowcase(command);
         Showcase saved = showcasePort.save(showcase);
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
+        saveSpec(saved.getId(), command.category(), command);
         return saved;
     }
 
     private Showcase createShowcase(CreateShowcaseCommand command) {
         return Showcase.create(
                 command.ownerId(), command.catalogItemId(),
+                command.category(), command.brand(), command.modelCode(),
                 command.title(), command.description(),
                 command.userSize(), command.conditionGrade(),
                 command.wearCount(), command.isForSale());
@@ -99,5 +109,46 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
                     i + 1, i == primaryImageIndex));
         }
         showcaseImagePort.saveAll(images);
+    }
+
+    /**
+     * 카테고리에 따라 쇼케이스 스펙을 저장한다.
+     */
+    private void saveSpec(Long showcaseId, Category category, CreateShowcaseCommand command) {
+        if (category == Category.BOOTS && command.bootsSpec() != null) {
+            saveBootsSpec(showcaseId, command.bootsSpec());
+        } else if (category == Category.UNIFORM && command.uniformSpec() != null) {
+            saveUniformSpec(showcaseId, command.uniformSpec());
+        }
+    }
+
+    private void saveBootsSpec(Long showcaseId, CreateShowcaseCommand.BootsSpecCommand spec) {
+        Instant now = Instant.now();
+        ShowcaseBootsSpec bootsSpec = ShowcaseBootsSpec.builder()
+                .showcaseId(showcaseId)
+                .studType(spec.studType())
+                .siloName(spec.siloName())
+                .releaseYear(spec.releaseYear())
+                .surfaceType(spec.surfaceType())
+                .extraSpecJson(spec.extraSpecJson())
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        showcaseBootsSpecPort.save(bootsSpec);
+    }
+
+    private void saveUniformSpec(Long showcaseId, CreateShowcaseCommand.UniformSpecCommand spec) {
+        Instant now = Instant.now();
+        ShowcaseUniformSpec uniformSpec = ShowcaseUniformSpec.builder()
+                .showcaseId(showcaseId)
+                .clubName(spec.clubName())
+                .season(spec.season())
+                .league(spec.league())
+                .kitType(spec.kitType())
+                .extraSpecJson(spec.extraSpecJson())
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        showcaseUniformSpecPort.save(uniformSpec);
     }
 }

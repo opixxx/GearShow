@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
@@ -54,8 +55,10 @@ class CommentServiceIntegrationTest {
     void setUp() {
         // 댓글 테스트를 위한 쇼케이스 사전 등록
         CreateShowcaseCommand command = new CreateShowcaseCommand(
-                1L, 1L, "테스트 쇼케이스", null, null,
-                ConditionGrade.A, 0, false, 0, false);
+                1L, null, Category.BOOTS, "Nike", null,
+                "테스트 쇼케이스", null, null,
+                ConditionGrade.A, 0, false, 0, false,
+                null, null);
         List<UploadFile> images = List.of(new UploadFile(
                 new ByteArrayInputStream("fake".getBytes()),
                 "image/jpeg", 4L, "test.jpg"));

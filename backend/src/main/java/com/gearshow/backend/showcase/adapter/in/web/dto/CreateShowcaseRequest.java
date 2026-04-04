@@ -1,5 +1,8 @@
 package com.gearshow.backend.showcase.adapter.in.web.dto;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
+import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import jakarta.validation.constraints.NotBlank;
@@ -11,8 +14,15 @@ import jakarta.validation.constraints.Size;
  * multipart/form-data 요청에서 JSON 필드가 아닌 개별 파라미터로 바인딩된다.
  */
 public record CreateShowcaseRequest(
-        @NotNull(message = "카탈로그 아이템 ID는 필수입니다")
         Long catalogItemId,
+
+        @NotNull(message = "카테고리는 필수입니다")
+        Category category,
+
+        @NotBlank(message = "브랜드는 필수입니다")
+        String brand,
+
+        String modelCode,
 
         @NotBlank(message = "제목은 필수입니다")
         @Size(max = 100, message = "제목은 100자 이내여야 합니다")
@@ -29,7 +39,19 @@ public record CreateShowcaseRequest(
 
         Boolean isForSale,
 
-        Integer primaryImageIndex
+        Integer primaryImageIndex,
+
+        // ── 축구화 스펙 (BOOTS) ──
+        StudType studType,
+        String siloName,
+        String releaseYear,
+        String surfaceType,
+
+        // ── 유니폼 스펙 (UNIFORM) ──
+        String clubName,
+        String season,
+        String league,
+        KitType kitType
 ) {
 
     /**
@@ -43,6 +65,9 @@ public record CreateShowcaseRequest(
         return new CreateShowcaseCommand(
                 ownerId,
                 catalogItemId,
+                category,
+                brand,
+                modelCode,
                 title,
                 description,
                 userSize,
@@ -50,6 +75,26 @@ public record CreateShowcaseRequest(
                 wearCount != null ? wearCount : 0,
                 isForSale != null && isForSale,
                 primaryImageIndex != null ? primaryImageIndex : 0,
-                hasModelSourceImages);
+                hasModelSourceImages,
+                buildBootsSpec(),
+                buildUniformSpec());
+    }
+
+    /** 축구화 스펙 필드가 있으면 BootsSpecCommand를 생성한다. */
+    private CreateShowcaseCommand.BootsSpecCommand buildBootsSpec() {
+        if (studType == null) {
+            return null;
+        }
+        return new CreateShowcaseCommand.BootsSpecCommand(
+                studType, siloName, releaseYear, surfaceType, null);
+    }
+
+    /** 유니폼 스펙 필드가 있으면 UniformSpecCommand를 생성한다. */
+    private CreateShowcaseCommand.UniformSpecCommand buildUniformSpec() {
+        if (clubName == null || clubName.isBlank()) {
+            return null;
+        }
+        return new CreateShowcaseCommand.UniformSpecCommand(
+                clubName, season, league, kitType, null);
     }
 }

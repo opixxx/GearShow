@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import jakarta.persistence.*;
@@ -27,8 +28,18 @@ public class ShowcaseJpaEntity {
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
 
-    @Column(name = "catalog_item_id", nullable = false)
+    @Column(name = "catalog_item_id")
     private Long catalogItemId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category", nullable = false)
+    private Category category;
+
+    @Column(name = "brand", nullable = false)
+    private String brand;
+
+    @Column(name = "model_code")
+    private String modelCode;
 
     @Column(name = "title", nullable = false)
     private String title;
@@ -60,13 +71,17 @@ public class ShowcaseJpaEntity {
     private Instant updatedAt;
 
     @Builder
-    private ShowcaseJpaEntity(Long id, Long ownerId, Long catalogItemId, String title,
-                              String description, String userSize, ConditionGrade conditionGrade,
-                              int wearCount, boolean forSale, ShowcaseStatus status,
-                              Instant createdAt, Instant updatedAt) {
+    private ShowcaseJpaEntity(Long id, Long ownerId, Long catalogItemId,
+                              Category category, String brand, String modelCode,
+                              String title, String description, String userSize,
+                              ConditionGrade conditionGrade, int wearCount, boolean forSale,
+                              ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
         this.catalogItemId = catalogItemId;
+        this.category = category;
+        this.brand = brand;
+        this.modelCode = modelCode;
         this.title = title;
         this.description = description;
         this.userSize = userSize;

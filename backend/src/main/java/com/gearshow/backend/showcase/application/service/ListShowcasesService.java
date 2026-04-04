@@ -1,6 +1,5 @@
 package com.gearshow.backend.showcase.application.service;
 
-import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.common.util.PageTokenUtil;
@@ -34,24 +33,21 @@ public class ListShowcasesService implements ListShowcasesUseCase {
     private final ShowcaseImagePort showcaseImagePort;
     private final ShowcaseCommentPort showcaseCommentPort;
     private final Showcase3dModelPort showcase3dModelPort;
-    private final CatalogItemPort catalogItemPort;
 
     @Override
     @Transactional(readOnly = true)
     public PageInfo<ShowcaseListResult> list(String pageToken, int size,
                                               Category category, String brand, String keyword,
                                               Boolean isForSale, ConditionGrade conditionGrade) {
-        List<Long> catalogItemIds = findCatalogItemIds(category, brand);
-
         List<Showcase> showcases;
         if (pageToken == null) {
             showcases = showcasePort.findAllFirstPage(
-                    size, catalogItemIds, keyword, isForSale, conditionGrade);
+                    size, category, brand, keyword, isForSale, conditionGrade);
         } else {
             Pair<Instant, Long> cursor = PageTokenUtil.decode(pageToken, Instant.class, Long.class);
             showcases = showcasePort.findAllWithCursor(
                     cursor.getLeft(), cursor.getRight(), size,
-                    catalogItemIds, keyword, isForSale, conditionGrade);
+                    category, brand, keyword, isForSale, conditionGrade);
         }
 
         return toPageInfo(showcases, size);
@@ -71,17 +67,6 @@ public class ListShowcasesService implements ListShowcasesUseCase {
         }
 
         return toPageInfo(showcases, size);
-    }
-
-    /**
-     * category/brand 필터가 있으면 해당하는 카탈로그 아이템 ID 목록을 조회한다.
-     * 필터가 없으면 null을 반환하여 전체 조회되도록 한다.
-     */
-    private List<Long> findCatalogItemIds(Category category, String brand) {
-        if (category == null && brand == null) {
-            return null;
-        }
-        return catalogItemPort.findIdsByCategoryAndBrand(category, brand);
     }
 
     /**
@@ -108,6 +93,8 @@ public class ListShowcasesService implements ListShowcasesUseCase {
                 .map(showcase -> new ShowcaseListResult(
                         showcase.getId(),
                         showcase.getTitle(),
+                        showcase.getCategory(),
+                        showcase.getBrand(),
                         showcase.getConditionGrade(),
                         showcase.isForSale(),
                         showcase.getWearCount(),

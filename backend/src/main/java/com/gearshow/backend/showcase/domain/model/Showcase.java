@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.domain.model;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseStatusTransitionException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
@@ -19,7 +20,11 @@ public class Showcase {
 
     private final Long id;
     private final Long ownerId;
+    /** 카탈로그 아이템 ID (선택사항, 카탈로그를 연결한 경우에만 존재) */
     private final Long catalogItemId;
+    private final Category category;
+    private final String brand;
+    private final String modelCode;
     private final String title;
     private final String description;
     private final String userSize;
@@ -31,13 +36,17 @@ public class Showcase {
     private final Instant updatedAt;
 
     @Builder
-    private Showcase(Long id, Long ownerId, Long catalogItemId, String title,
-                     String description, String userSize, ConditionGrade conditionGrade,
-                     int wearCount, boolean forSale, ShowcaseStatus status,
-                     Instant createdAt, Instant updatedAt) {
+    private Showcase(Long id, Long ownerId, Long catalogItemId,
+                     Category category, String brand, String modelCode,
+                     String title, String description, String userSize,
+                     ConditionGrade conditionGrade, int wearCount, boolean forSale,
+                     ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
         this.catalogItemId = catalogItemId;
+        this.category = category;
+        this.brand = brand;
+        this.modelCode = modelCode;
         this.title = title;
         this.description = description;
         this.userSize = userSize;
@@ -52,9 +61,13 @@ public class Showcase {
     /**
      * 새로운 쇼케이스를 생성한다.
      * 최초 상태는 ACTIVE이다.
+     * 카탈로그 아이템 연결은 선택사항이며, category와 brand는 필수이다.
      *
      * @param ownerId        소유자 ID
-     * @param catalogItemId  카탈로그 아이템 ID
+     * @param catalogItemId  카탈로그 아이템 ID (선택, null 허용)
+     * @param category       카테고리
+     * @param brand          브랜드명
+     * @param modelCode      모델 코드 (선택)
      * @param title          제목
      * @param description    설명
      * @param userSize       사용자 사이즈
@@ -64,15 +77,19 @@ public class Showcase {
      * @return 생성된 쇼케이스
      */
     public static Showcase create(Long ownerId, Long catalogItemId,
+                                  Category category, String brand, String modelCode,
                                   String title, String description,
                                   String userSize, ConditionGrade conditionGrade,
                                   int wearCount, boolean forSale) {
-        validate(ownerId, catalogItemId, title, conditionGrade);
+        validate(ownerId, category, brand, title, conditionGrade);
 
         Instant now = Instant.now();
         return Showcase.builder()
                 .ownerId(ownerId)
                 .catalogItemId(catalogItemId)
+                .category(category)
+                .brand(brand)
+                .modelCode(modelCode)
                 .title(title)
                 .description(description)
                 .userSize(userSize)
@@ -167,6 +184,9 @@ public class Showcase {
                 .id(this.id)
                 .ownerId(this.ownerId)
                 .catalogItemId(this.catalogItemId)
+                .category(this.category)
+                .brand(this.brand)
+                .modelCode(this.modelCode)
                 .title(this.title)
                 .description(this.description)
                 .userSize(this.userSize)
@@ -178,9 +198,14 @@ public class Showcase {
                 .updatedAt(Instant.now());
     }
 
-    private static void validate(Long ownerId, Long catalogItemId,
+    /**
+     * 쇼케이스 생성 시 필수 필드를 검증한다.
+     * category와 brand는 필수, catalogItemId는 선택이다.
+     */
+    private static void validate(Long ownerId, Category category, String brand,
                                  String title, ConditionGrade conditionGrade) {
-        if (ownerId == null || catalogItemId == null
+        if (ownerId == null || category == null
+                || brand == null || brand.isBlank()
                 || title == null || title.isBlank()
                 || conditionGrade == null) {
             throw new InvalidShowcaseException();

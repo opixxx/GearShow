@@ -10,6 +10,7 @@ import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseExcep
 import com.gearshow.backend.showcase.application.port.in.*;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.exception.MinImageRequiredException;
 import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
@@ -68,8 +69,10 @@ class ShowcaseServiceIntegrationTest {
 
     private CreateShowcaseCommand createCommand(Long ownerId) {
         return new CreateShowcaseCommand(
-                ownerId, 1L, "테스트 쇼케이스", "테스트 설명",
-                "270", ConditionGrade.A, 5, false, 0, false);
+                ownerId, null, Category.BOOTS, "Nike", "DJ2839",
+                "테스트 쇼케이스", "테스트 설명",
+                "270", ConditionGrade.A, 5, false, 0, false,
+                null, null);
     }
 
     private List<UploadFile> createFakeImages(int count) {
@@ -111,8 +114,10 @@ class ShowcaseServiceIntegrationTest {
         void create_withModelSourceImages_returnsRequested() {
             // Given
             CreateShowcaseCommand command = new CreateShowcaseCommand(
-                    1L, 1L, "테스트", null, null,
-                    ConditionGrade.A, 0, false, 0, true);
+                    1L, null, Category.BOOTS, "Nike", null,
+                    "테스트", null, null,
+                    ConditionGrade.A, 0, false, 0, true,
+                    null, null);
             List<UploadFile> images = createFakeImages(1);
             List<UploadFile> modelSourceImages = createFakeImages(4);
 
@@ -241,8 +246,10 @@ class ShowcaseServiceIntegrationTest {
         void create_withInvalidPrimaryIndex_throwsException() {
             // Given
             CreateShowcaseCommand command = new CreateShowcaseCommand(
-                    1L, 1L, "테스트", null, null,
-                    ConditionGrade.A, 0, false, 5, false);
+                    1L, null, Category.BOOTS, "Nike", null,
+                    "테스트", null, null,
+                    ConditionGrade.A, 0, false, 5, false,
+                    null, null);
 
             // When & Then
             assertThatThrownBy(() -> createShowcaseUseCase.create(

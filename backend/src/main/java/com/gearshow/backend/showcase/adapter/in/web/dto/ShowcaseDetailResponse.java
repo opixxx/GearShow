@@ -1,5 +1,8 @@
 package com.gearshow.backend.showcase.adapter.in.web.dto;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
+import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
@@ -15,6 +18,9 @@ public record ShowcaseDetailResponse(
         Long showcaseId,
         Long ownerId,
         Long catalogItemId,
+        Category category,
+        String brand,
+        String modelCode,
         String title,
         String description,
         String userSize,
@@ -24,6 +30,8 @@ public record ShowcaseDetailResponse(
         ShowcaseStatus showcaseStatus,
         List<ImageResponse> images,
         Model3dResponse model3d,
+        BootsSpecResponse bootsSpec,
+        UniformSpecResponse uniformSpec,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -40,6 +48,20 @@ public record ShowcaseDetailResponse(
             String modelFileUrl,
             String previewImageUrl,
             ModelStatus modelStatus
+    ) {}
+
+    public record BootsSpecResponse(
+            StudType studType,
+            String siloName,
+            String releaseYear,
+            String surfaceType
+    ) {}
+
+    public record UniformSpecResponse(
+            String clubName,
+            String season,
+            String league,
+            KitType kitType
     ) {}
 
     /**
@@ -60,11 +82,28 @@ public record ShowcaseDetailResponse(
                         result.model3d().modelStatus())
                 : null;
 
+        BootsSpecResponse bootsSpec = result.bootsSpec() != null
+                ? new BootsSpecResponse(
+                        result.bootsSpec().studType(),
+                        result.bootsSpec().siloName(),
+                        result.bootsSpec().releaseYear(),
+                        result.bootsSpec().surfaceType())
+                : null;
+
+        UniformSpecResponse uniformSpec = result.uniformSpec() != null
+                ? new UniformSpecResponse(
+                        result.uniformSpec().clubName(),
+                        result.uniformSpec().season(),
+                        result.uniformSpec().league(),
+                        result.uniformSpec().kitType())
+                : null;
+
         return new ShowcaseDetailResponse(
                 result.showcaseId(), result.ownerId(), result.catalogItemId(),
+                result.category(), result.brand(), result.modelCode(),
                 result.title(), result.description(), result.userSize(),
                 result.conditionGrade(), result.wearCount(), result.isForSale(),
-                result.showcaseStatus(), images, model3d,
+                result.showcaseStatus(), images, model3d, bootsSpec, uniformSpec,
                 result.createdAt(), result.updatedAt());
     }
 }
