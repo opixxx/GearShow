@@ -6,7 +6,6 @@ package com.gearshow.backend.catalog.application.dto;
  */
 public record UpdateCatalogItemCommand(
         String brand,
-        String itemName,
         String modelCode,
         String officialImageUrl
 ) {

@@ -2,6 +2,7 @@ package com.gearshow.backend.catalog.adapter.in.web.dto;
 
 import com.gearshow.backend.catalog.application.dto.CreateCatalogItemCommand;
 import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,9 +16,6 @@ public record CreateCatalogItemRequest(
 
         @NotBlank(message = "브랜드는 필수입니다")
         String brand,
-
-        @NotBlank(message = "아이템 이름은 필수입니다")
-        String itemName,
 
         String modelCode,
         String officialImageUrl,
@@ -37,7 +35,7 @@ public record CreateCatalogItemRequest(
             String clubName,
             String season,
             String league,
-            String manufacturer,
+            KitType kitType,
             String extraSpecJson
     ) {}
 
@@ -46,14 +44,14 @@ public record CreateCatalogItemRequest(
      */
     public CreateCatalogItemCommand toCommand() {
         return new CreateCatalogItemCommand(
-                category, brand, itemName, modelCode, officialImageUrl,
+                category, brand, modelCode, officialImageUrl,
                 bootsSpec != null ? new CreateCatalogItemCommand.BootsSpecCommand(
                         bootsSpec.studType, bootsSpec.siloName,
                         bootsSpec.releaseYear, bootsSpec.surfaceType,
                         bootsSpec.extraSpecJson) : null,
                 uniformSpec != null ? new CreateCatalogItemCommand.UniformSpecCommand(
                         uniformSpec.clubName, uniformSpec.season,
-                        uniformSpec.league, uniformSpec.manufacturer,
+                        uniformSpec.league, uniformSpec.kitType,
                         uniformSpec.extraSpecJson) : null
         );
     }

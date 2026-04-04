@@ -38,8 +38,7 @@ public interface CatalogItemJpaRepository extends JpaRepository<CatalogItemJpaEn
               AND (:cursorId IS NULL OR c.id < :cursorId)
               AND (:category IS NULL OR c.category = :category)
               AND (:brand IS NULL OR c.brand = :brand)
-              AND (:keyword IS NULL OR c.itemName LIKE CONCAT('%', :keyword, '%')
-                   OR c.modelCode LIKE CONCAT('%', :keyword, '%'))
+              AND (:keyword IS NULL OR c.modelCode LIKE CONCAT('%', :keyword, '%'))
             ORDER BY c.id DESC
             """)
     List<CatalogItemJpaEntity> findAllWithCursor(

@@ -1,5 +1,7 @@
 package com.gearshow.backend.catalog.domain.model;
 
+import com.gearshow.backend.catalog.domain.exception.InvalidCatalogItemException;
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -18,14 +20,15 @@ public class UniformSpec {
     private final String clubName;
     private final String season;
     private final String league;
-    private final String manufacturer;
+    /** 홈/어웨이/서드 킷 타입 */
+    private final KitType kitType;
     private final String extraSpecJson;
     private final Instant createdAt;
     private final Instant updatedAt;
 
     @Builder
     private UniformSpec(Long id, Long catalogItemId, String clubName,
-                        String season, String league, String manufacturer,
+                        String season, String league, KitType kitType,
                         String extraSpecJson, Instant createdAt,
                         Instant updatedAt) {
         this.id = id;
@@ -33,7 +36,7 @@ public class UniformSpec {
         this.clubName = clubName;
         this.season = season;
         this.league = league;
-        this.manufacturer = manufacturer;
+        this.kitType = kitType;
         this.extraSpecJson = extraSpecJson;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -45,16 +48,32 @@ public class UniformSpec {
      * @param catalogItemId 카탈로그 아이템 ID
      * @param clubName      클럽 이름
      * @param season        시즌
+     * @param kitType       킷 타입 (HOME/AWAY/THIRD)
      * @return 생성된 유니폼 스펙
      */
-    public static UniformSpec create(Long catalogItemId, String clubName, String season) {
+    public static UniformSpec create(Long catalogItemId, String clubName, String season, KitType kitType) {
+        validate(catalogItemId, clubName, season, kitType);
+
         Instant now = Instant.now();
         return UniformSpec.builder()
                 .catalogItemId(catalogItemId)
                 .clubName(clubName)
                 .season(season)
+                .kitType(kitType)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 유니폼 스펙 필수값을 검증한다.
+     */
+    private static void validate(Long catalogItemId, String clubName, String season, KitType kitType) {
+        if (catalogItemId == null
+                || clubName == null || clubName.isBlank()
+                || season == null || season.isBlank()
+                || kitType == null) {
+            throw new InvalidCatalogItemException();
+        }
     }
 }

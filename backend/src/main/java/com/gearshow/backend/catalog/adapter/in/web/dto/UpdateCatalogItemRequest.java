@@ -7,7 +7,6 @@ import com.gearshow.backend.catalog.application.dto.UpdateCatalogItemCommand;
  */
 public record UpdateCatalogItemRequest(
         String brand,
-        String itemName,
         String modelCode,
         String officialImageUrl
 ) {
@@ -16,6 +15,6 @@ public record UpdateCatalogItemRequest(
      * 요청을 커맨드로 변환한다.
      */
     public UpdateCatalogItemCommand toCommand() {
-        return new UpdateCatalogItemCommand(brand, itemName, modelCode, officialImageUrl);
+        return new UpdateCatalogItemCommand(brand, modelCode, officialImageUrl);
     }
 }

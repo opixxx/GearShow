@@ -10,7 +10,6 @@ public record CatalogItemListResult(
         Long catalogItemId,
         Category category,
         String brand,
-        String itemName,
         String modelCode,
         String officialImageUrl
 ) {
@@ -18,6 +17,6 @@ public record CatalogItemListResult(
     public static CatalogItemListResult from(CatalogItem item) {
         return new CatalogItemListResult(
                 item.getId(), item.getCategory(), item.getBrand(),
-                item.getItemName(), item.getModelCode(), item.getOfficialImageUrl());
+                item.getModelCode(), item.getOfficialImageUrl());
     }
 }

@@ -40,7 +40,10 @@ public class AuthController {
             @PathVariable String provider,
             @Valid @RequestBody LoginRequest request) {
 
-        LoginCommand command = new LoginCommand(provider, request.authorizationCode());
+        LoginCommand command = new LoginCommand(
+                provider,
+                request.authorizationCode(),
+                request.accessToken());
         LoginResult result = loginUseCase.login(command);
 
         return ResponseEntity.ok(

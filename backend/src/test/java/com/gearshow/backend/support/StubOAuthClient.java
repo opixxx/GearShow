@@ -38,6 +38,14 @@ public class StubOAuthClient implements OAuthClient {
     }
 
     @Override
+    public OAuthUserInfo getUserInfoByAccessToken(String accessToken) {
+        if (accessToken.startsWith("valid-")) {
+            return new OAuthUserInfo("provider-user-token-123", "토큰유저", null);
+        }
+        throw new InvalidAuthCodeException();
+    }
+
+    @Override
     public String getProvider() {
         return provider;
     }

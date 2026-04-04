@@ -31,9 +31,6 @@ public class CatalogItemJpaEntity {
     @Column(name = "brand", nullable = false)
     private String brand;
 
-    @Column(name = "item_name", nullable = false)
-    private String itemName;
-
     @Column(name = "model_code")
     private String modelCode;
 
@@ -51,13 +48,12 @@ public class CatalogItemJpaEntity {
     private Instant updatedAt;
 
     @Builder
-    private CatalogItemJpaEntity(Long id, Category category, String brand, String itemName,
+    private CatalogItemJpaEntity(Long id, Category category, String brand,
                                  String modelCode, String officialImageUrl, CatalogStatus status,
                                  Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.category = category;
         this.brand = brand;
-        this.itemName = itemName;
         this.modelCode = modelCode;
         this.officialImageUrl = officialImageUrl;
         this.status = status;

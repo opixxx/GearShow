@@ -12,6 +12,7 @@ import java.time.Instant;
  * 카탈로그 아이템 도메인 엔티티 (Aggregate Root).
  *
  * <p>플랫폼에 등록된 공식 장비 정보를 나타낸다.</p>
+ * <p>아이템 식별은 스펙 필드 조합(브랜드 + 축구화는 siloName, 유니폼은 clubName + season)으로 한다.</p>
  */
 @Getter
 public class CatalogItem {
@@ -19,7 +20,6 @@ public class CatalogItem {
     private final Long id;
     private final Category category;
     private final String brand;
-    private final String itemName;
     private final String modelCode;
     private final String officialImageUrl;
     private final CatalogStatus status;
@@ -27,13 +27,12 @@ public class CatalogItem {
     private final Instant updatedAt;
 
     @Builder
-    private CatalogItem(Long id, Category category, String brand, String itemName,
+    private CatalogItem(Long id, Category category, String brand,
                         String modelCode, String officialImageUrl, CatalogStatus status,
                         Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.category = category;
         this.brand = brand;
-        this.itemName = itemName;
         this.modelCode = modelCode;
         this.officialImageUrl = officialImageUrl;
         this.status = status;
@@ -47,17 +46,15 @@ public class CatalogItem {
      *
      * @param category 카테고리
      * @param brand    브랜드명
-     * @param itemName 아이템 이름
      * @return 생성된 카탈로그 아이템
      */
-    public static CatalogItem create(Category category, String brand, String itemName) {
-        validate(category, brand, itemName);
+    public static CatalogItem create(Category category, String brand) {
+        validate(category, brand);
 
         Instant now = Instant.now();
         return CatalogItem.builder()
                 .category(category)
                 .brand(brand)
-                .itemName(itemName)
                 .status(CatalogStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)
@@ -83,7 +80,6 @@ public class CatalogItem {
                 .id(this.id)
                 .category(this.category)
                 .brand(this.brand)
-                .itemName(this.itemName)
                 .modelCode(this.modelCode)
                 .officialImageUrl(this.officialImageUrl)
                 .status(CatalogStatus.INACTIVE)
@@ -92,10 +88,8 @@ public class CatalogItem {
                 .build();
     }
 
-    private static void validate(Category category, String brand, String itemName) {
-        if (category == null
-                || brand == null || brand.isBlank()
-                || itemName == null || itemName.isBlank()) {
+    private static void validate(Category category, String brand) {
+        if (category == null || brand == null || brand.isBlank()) {
             throw new InvalidCatalogItemException();
         }
     }

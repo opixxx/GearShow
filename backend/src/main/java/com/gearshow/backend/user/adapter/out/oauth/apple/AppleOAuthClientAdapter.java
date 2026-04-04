@@ -42,6 +42,15 @@ public class AppleOAuthClientAdapter implements OAuthClient {
         return extractUserInfoFromIdToken(tokenResponse);
     }
 
+    /**
+     * 애플은 SDK 액세스 토큰 기반 사용자 정보 조회를 지원하지 않는다.
+     * 애플 로그인은 반드시 인가 코드(authorization code) 방식을 사용해야 한다.
+     */
+    @Override
+    public OAuthUserInfo getUserInfoByAccessToken(String accessToken) {
+        throw new InvalidAuthCodeException();
+    }
+
     @Override
     public String getProvider() {
         return "apple";

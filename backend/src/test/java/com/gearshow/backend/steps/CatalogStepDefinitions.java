@@ -46,12 +46,11 @@ public class CatalogStepDefinitions {
         Map<String, Object> request = Map.of(
                 "category", "UNIFORM",
                 "brand", "Nike",
-                "itemName", "Liverpool 24-25 Home Kit",
                 "uniformSpec", Map.of(
                         "clubName", "Liverpool",
                         "season", "2024-25",
                         "league", "EPL",
-                        "manufacturer", "Nike"
+                        "kitType", "HOME"
                 )
         );
 
@@ -92,8 +91,7 @@ public class CatalogStepDefinitions {
         apiClient.clearAuth();
         Map<String, Object> request = Map.of(
                 "category", "BOOTS",
-                "brand", "Nike",
-                "itemName", "Test Item"
+                "brand", "Nike"
         );
         context.setLastResponse(apiClient.post("/api/v1/catalogs", request));
     }
@@ -111,7 +109,6 @@ public class CatalogStepDefinitions {
         Map<String, Object> request = Map.of(
                 "category", "BOOTS",
                 "brand", "Nike",
-                "itemName", "Mercurial Superfly 10 Elite",
                 "modelCode", "DJ2839-" + System.currentTimeMillis(),
                 "bootsSpec", Map.of(
                         "studType", "FG",

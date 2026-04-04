@@ -1,6 +1,7 @@
 package com.gearshow.backend.catalog.application.dto;
 
 import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 
 /**
@@ -9,7 +10,6 @@ import com.gearshow.backend.catalog.domain.vo.StudType;
 public record CreateCatalogItemCommand(
         Category category,
         String brand,
-        String itemName,
         String modelCode,
         String officialImageUrl,
         BootsSpecCommand bootsSpec,
@@ -34,7 +34,7 @@ public record CreateCatalogItemCommand(
             String clubName,
             String season,
             String league,
-            String manufacturer,
+            KitType kitType,
             String extraSpecJson
     ) {}
 }

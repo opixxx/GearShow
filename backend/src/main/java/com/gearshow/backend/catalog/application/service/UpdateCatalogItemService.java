@@ -57,7 +57,6 @@ public class UpdateCatalogItemService implements UpdateCatalogItemUseCase {
                 .id(item.getId())
                 .category(item.getCategory())
                 .brand(command.brand() != null ? command.brand() : item.getBrand())
-                .itemName(command.itemName() != null ? command.itemName() : item.getItemName())
                 .modelCode(command.modelCode() != null ? command.modelCode() : item.getModelCode())
                 .officialImageUrl(command.officialImageUrl() != null ? command.officialImageUrl() : item.getOfficialImageUrl())
                 .status(item.getStatus())

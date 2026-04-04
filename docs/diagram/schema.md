@@ -46,7 +46,6 @@ erDiagram
         bigint catalogItemId PK
         enum category
         string brand
-        string itemName
         string modelCode
         string officialImageUrl
         enum catalogStatus
@@ -72,7 +71,7 @@ erDiagram
         string clubName
         string season
         string league
-        string manufacturer
+        enum kitType
         json extraSpecJson
         timestamp createdAt
         timestamp updatedAt
@@ -239,7 +238,6 @@ erDiagram
 | catalogItemId | bigint | PK | 카탈로그 아이템 고유 식별자 |
 | category | enum | NOT NULL | 카테고리 (BOOTS, UNIFORM 등) |
 | brand | string | NOT NULL | 브랜드명 |
-| itemName | string | NOT NULL | 아이템 이름 |
 | modelCode | string | | 모델 코드 |
 | officialImageUrl | string | | 공식 이미지 URL |
 | catalogStatus | enum | NOT NULL | 카탈로그 상태 (ACTIVE, INACTIVE 등) |
@@ -273,7 +271,7 @@ erDiagram
 | clubName | string | NOT NULL | 클럽 이름 |
 | season | string | NOT NULL | 시즌 (2024-25 등) |
 | league | string | | 리그 (EPL, LaLiga 등) |
-| manufacturer | string | | 제조사 |
+| kitType | enum | NOT NULL | 킷 타입 (HOME, AWAY, THIRD) |
 | extraSpecJson | json | | 추가 스펙 (소재, 핏 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
