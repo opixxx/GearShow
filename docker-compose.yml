@@ -25,6 +25,7 @@ services:
       - AWS_DEFAULT_REGION=ap-northeast-2
     volumes:
       - gearshow-localstack-data:/var/lib/localstack
+      - ./localstack/init:/etc/localstack/init/ready.d
 
 volumes:
   gearshow-mysql-data:

@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
@@ -36,11 +37,11 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     }
 
     @Override
-    public List<Showcase> findAllFirstPage(int size, List<Long> catalogItemIds,
+    public List<Showcase> findAllFirstPage(int size, Category category, String brand,
                                            String keyword, Boolean isForSale,
                                            ConditionGrade conditionGrade) {
         return showcaseJpaRepository.findAllFirstPage(
-                        catalogItemIds, keyword, isForSale, conditionGrade,
+                        category, brand, keyword, isForSale, conditionGrade,
                         PageRequest.of(0, size + 1))
                 .stream()
                 .map(showcaseMapper::toDomain)
@@ -49,11 +50,11 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
 
     @Override
     public List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size,
-                                            List<Long> catalogItemIds, String keyword,
+                                            Category category, String brand, String keyword,
                                             Boolean isForSale, ConditionGrade conditionGrade) {
         return showcaseJpaRepository.findAllWithCursor(
                         cursorCreatedAt, cursorId,
-                        catalogItemIds, keyword, isForSale, conditionGrade,
+                        category, brand, keyword, isForSale, conditionGrade,
                         PageRequest.of(0, size + 1))
                 .stream()
                 .map(showcaseMapper::toDomain)

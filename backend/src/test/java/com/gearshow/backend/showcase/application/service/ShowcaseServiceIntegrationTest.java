@@ -10,6 +10,9 @@ import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseExcep
 import com.gearshow.backend.showcase.application.port.in.*;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
+import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.application.exception.MinImageRequiredException;
 import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
@@ -68,8 +71,10 @@ class ShowcaseServiceIntegrationTest {
 
     private CreateShowcaseCommand createCommand(Long ownerId) {
         return new CreateShowcaseCommand(
-                ownerId, 1L, "테스트 쇼케이스", "테스트 설명",
-                "270", ConditionGrade.A, 5, false, 0, false);
+                ownerId, null, Category.BOOTS, "Nike", "DJ2839",
+                "테스트 쇼케이스", "테스트 설명",
+                "270", ConditionGrade.A, 5, false, 0, false,
+                null, null);
     }
 
     private List<UploadFile> createFakeImages(int count) {
@@ -107,12 +112,85 @@ class ShowcaseServiceIntegrationTest {
         }
 
         @Test
+        @DisplayName("축구화 스펙과 함께 쇼케이스를 등록하면 상세에서 스펙이 조회된다")
+        void create_withBootsSpec_specIncludedInDetail() {
+            // Given
+            CreateShowcaseCommand command = new CreateShowcaseCommand(
+                    1L, null, Category.BOOTS, "Nike", "DJ2839",
+                    "스펙 테스트", null, "270mm",
+                    ConditionGrade.A, 5, false, 0, false,
+                    new CreateShowcaseCommand.BootsSpecCommand(
+                            StudType.FG, "Mercurial", "2025", "천연잔디", null),
+                    null);
+
+            // When
+            CreateShowcaseResult result = createShowcaseUseCase.create(
+                    command, createFakeImages(1), List.of());
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
+
+            // Then
+            assertThat(detail.category()).isEqualTo(Category.BOOTS);
+            assertThat(detail.brand()).isEqualTo("Nike");
+            assertThat(detail.bootsSpec()).isNotNull();
+            assertThat(detail.bootsSpec().studType()).isEqualTo(StudType.FG);
+            assertThat(detail.bootsSpec().siloName()).isEqualTo("Mercurial");
+            assertThat(detail.uniformSpec()).isNull();
+        }
+
+        @Test
+        @DisplayName("유니폼 스펙과 함께 쇼케이스를 등록하면 상세에서 스펙이 조회된다")
+        void create_withUniformSpec_specIncludedInDetail() {
+            // Given
+            CreateShowcaseCommand command = new CreateShowcaseCommand(
+                    1L, null, Category.UNIFORM, "Nike", null,
+                    "유니폼 테스트", null, "L",
+                    ConditionGrade.S, 0, false, 0, false,
+                    null,
+                    new CreateShowcaseCommand.UniformSpecCommand(
+                            "Liverpool", "24-25", "EPL", KitType.HOME, null));
+
+            // When
+            CreateShowcaseResult result = createShowcaseUseCase.create(
+                    command, createFakeImages(1), List.of());
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
+
+            // Then
+            assertThat(detail.category()).isEqualTo(Category.UNIFORM);
+            assertThat(detail.uniformSpec()).isNotNull();
+            assertThat(detail.uniformSpec().clubName()).isEqualTo("Liverpool");
+            assertThat(detail.uniformSpec().kitType()).isEqualTo(KitType.HOME);
+            assertThat(detail.bootsSpec()).isNull();
+        }
+
+        @Test
+        @DisplayName("카탈로그 없이 category/brand만으로 쇼케이스를 등록한다")
+        void create_withoutCatalogItem_success() {
+            // Given
+            CreateShowcaseCommand command = new CreateShowcaseCommand(
+                    1L, null, Category.BOOTS, "Adidas", null,
+                    "카탈로그 없이 등록", null, null,
+                    ConditionGrade.B, 0, false, 0, false,
+                    null, null);
+
+            // When
+            CreateShowcaseResult result = createShowcaseUseCase.create(
+                    command, createFakeImages(1), List.of());
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
+
+            // Then
+            assertThat(detail.catalogItemId()).isNull();
+            assertThat(detail.brand()).isEqualTo("Adidas");
+        }
+
+        @Test
         @DisplayName("3D 모델 소스 이미지와 함께 쇼케이스를 등록하면 REQUESTED 상태이다")
         void create_withModelSourceImages_returnsRequested() {
             // Given
             CreateShowcaseCommand command = new CreateShowcaseCommand(
-                    1L, 1L, "테스트", null, null,
-                    ConditionGrade.A, 0, false, 0, true);
+                    1L, null, Category.BOOTS, "Nike", null,
+                    "테스트", null, null,
+                    ConditionGrade.A, 0, false, 0, true,
+                    null, null);
             List<UploadFile> images = createFakeImages(1);
             List<UploadFile> modelSourceImages = createFakeImages(4);
 
@@ -241,8 +319,10 @@ class ShowcaseServiceIntegrationTest {
         void create_withInvalidPrimaryIndex_throwsException() {
             // Given
             CreateShowcaseCommand command = new CreateShowcaseCommand(
-                    1L, 1L, "테스트", null, null,
-                    ConditionGrade.A, 0, false, 5, false);
+                    1L, null, Category.BOOTS, "Nike", null,
+                    "테스트", null, null,
+                    ConditionGrade.A, 0, false, 5, false,
+                    null, null);
 
             // When & Then
             assertThatThrownBy(() -> createShowcaseUseCase.create(

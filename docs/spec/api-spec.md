@@ -449,6 +449,10 @@ GET /api/v1/showcases
 | keyword | string | N | 제목 검색 |
 | isForSale | boolean | N | 판매 여부 필터 |
 | conditionGrade | string | N | 상태 등급 필터 (`S`, `A`, `B`, `C`) |
+| studType | string | N | (BOOTS) 스터드 타입 필터 |
+| siloName | string | N | (BOOTS) 사일로 필터 |
+| clubName | string | N | (UNIFORM) 클럽명 필터 |
+| league | string | N | (UNIFORM) 리그 필터 |
 | cursor | string | N | 커서 값 |
 | size | int | N | 페이지 크기 |
 
@@ -463,6 +467,8 @@ GET /api/v1/showcases
       {
         "showcaseId": 1,
         "title": "머큐리얼 슈퍼플라이 10 엘리트 착용 후기",
+        "category": "BOOTS",
+        "brand": "Nike",
         "ownerNickname": "축구매니아",
         "primaryImageUrl": "https://cdn.gearshow.com/showcases/1/primary.jpg",
         "conditionGrade": "A",
@@ -503,12 +509,10 @@ GET /api/v1/showcases/{showcaseId}
       "nickname": "축구매니아",
       "profileImageUrl": "https://cdn.gearshow.com/profiles/1.jpg"
     },
-    "catalogItem": {
-      "catalogItemId": 1,
-      "brand": "Nike",
-      "itemName": "Mercurial Superfly 10 Elite",
-      "category": "BOOTS"
-    },
+    "category": "BOOTS",
+    "brand": "Nike",
+    "modelCode": "DJ2839-XXX",
+    "catalogItem": null,
     "title": "머큐리얼 슈퍼플라이 10 엘리트 착용 후기",
     "description": "FG 천연잔디에서 5번 착용했습니다. 경량성이 뛰어나고...",
     "userSize": "270",
@@ -516,6 +520,12 @@ GET /api/v1/showcases/{showcaseId}
     "wearCount": 5,
     "isForSale": true,
     "showcaseStatus": "ACTIVE",
+    "spec": {
+      "studType": "FG",
+      "siloName": "Mercurial",
+      "releaseYear": "2025",
+      "surfaceType": "천연잔디"
+    },
     "images": [
       {
         "showcaseImageId": 1,
@@ -552,7 +562,10 @@ POST /api/v1/showcases
 
 | 필드 | 타입 | 필수 | 설명 |
 |:----|:-----|:----|:-----|
-| catalogItemId | long | Y | 카탈로그 아이템 ID |
+| catalogItemId | long | N | 카탈로그 아이템 ID (선택, 연결 시 category/brand/modelCode 자동 복사) |
+| category | string | Y | 카테고리 (`BOOTS`, `UNIFORM`) — catalogItemId 제공 시 자동 설정 |
+| brand | string | Y | 브랜드명 — catalogItemId 제공 시 자동 설정 |
+| modelCode | string | N | 모델 코드 — catalogItemId 제공 시 자동 설정 |
 | title | string | Y | 제목 |
 | description | string | N | 상세 설명 |
 | userSize | string | N | 사용자 사이즈 |
@@ -562,6 +575,14 @@ POST /api/v1/showcases
 | images | MultipartFile[] | Y | 일반 이미지 파일 (최소 1개) |
 | primaryImageIndex | int | N | 대표 이미지 인덱스 (기본값: 0) |
 | modelSourceImages | MultipartFile[] | N | 3D 모델 생성용 이미지 (앞/뒤/좌/우, 기본 4장) |
+| spec.studType | string | N | (BOOTS) 스터드 타입 (FG, SG, AG, TF, IC) |
+| spec.siloName | string | N | (BOOTS) 사일로명 |
+| spec.releaseYear | string | N | (BOOTS) 출시 연도 |
+| spec.surfaceType | string | N | (BOOTS) 적합 표면 |
+| spec.clubName | string | N | (UNIFORM) 클럽명 |
+| spec.season | string | N | (UNIFORM) 시즌 |
+| spec.league | string | N | (UNIFORM) 리그 |
+| spec.kitType | string | N | (UNIFORM) 킷 타입 (HOME, AWAY, THIRD) |
 
 > `modelSourceImages`가 포함되면 쇼케이스 등록 후 3D 모델 생성을 비동기로 요청한다.
 

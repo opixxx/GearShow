@@ -26,6 +26,24 @@ Feature: 쇼케이스
     When 3D 모델 소스 이미지 2장과 함께 쇼케이스를 등록한다
     Then 응답 상태 코드는 400이다
 
+  @smoke @showcase
+  Scenario: 축구화 스펙을 포함하여 쇼케이스를 등록하고 상세에서 확인한다
+    When 축구화 스펙과 함께 쇼케이스를 등록한다
+    Then 응답 상태 코드는 201이다
+    When 등록된 쇼케이스 상세를 조회한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data의 "category" 필드는 "BOOTS"이다
+    And 응답의 data의 "brand" 필드는 "Nike"이다
+    And 응답의 data에 "bootsSpec" 필드가 존재한다
+
+  @showcase
+  Scenario: 카탈로그 없이 직접 입력으로 쇼케이스를 등록한다
+    When 카탈로그 없이 직접 입력으로 쇼케이스를 등록한다
+    Then 응답 상태 코드는 201이다
+    When 등록된 쇼케이스 상세를 조회한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data의 "brand" 필드는 "Adidas"이다
+
   # ── 상세 조회 ──
 
   @smoke @showcase

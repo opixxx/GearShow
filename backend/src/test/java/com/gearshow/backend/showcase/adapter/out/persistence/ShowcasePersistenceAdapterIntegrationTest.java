@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
@@ -79,7 +80,7 @@ class ShowcasePersistenceAdapterIntegrationTest {
 
             // When
             List<Showcase> result = adapter.findAllFirstPage(
-                    2, null, null, null, null);
+                    2, null, null, null, null, null);
 
             // Then - size+1 조회이므로 3개가 반환될 수 있음 (hasNext 판단용)
             assertThat(result).hasSizeGreaterThanOrEqualTo(2);
@@ -97,7 +98,7 @@ class ShowcasePersistenceAdapterIntegrationTest {
             // When - 가장 최신(third) 이후의 데이터를 조회
             List<Showcase> result = adapter.findAllWithCursor(
                     third.getCreatedAt(), third.getId(), 10,
-                    null, null, null, null);
+                    null, null, null, null, null);
 
             // Then - third보다 이전 데이터만 반환
             assertThat(result)
@@ -130,7 +131,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
     private Showcase createShowcase(String title) {
         return Showcase.builder()
                 .ownerId(1L)
-                .catalogItemId(1L)
+                .catalogItemId(null)
+                .category(Category.BOOTS)
+                .brand("Nike")
                 .title(title)
                 .conditionGrade(ConditionGrade.A)
                 .wearCount(0)
@@ -144,7 +147,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
     private Showcase createShowcaseWithTime(String title, Instant createdAt) {
         return Showcase.builder()
                 .ownerId(1L)
-                .catalogItemId(1L)
+                .catalogItemId(null)
+                .category(Category.BOOTS)
+                .brand("Nike")
                 .title(title)
                 .conditionGrade(ConditionGrade.A)
                 .wearCount(0)
@@ -158,7 +163,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
     private Showcase createShowcaseWithOwner(String title, Long ownerId) {
         return Showcase.builder()
                 .ownerId(ownerId)
-                .catalogItemId(1L)
+                .catalogItemId(null)
+                .category(Category.BOOTS)
+                .brand("Nike")
                 .title(title)
                 .conditionGrade(ConditionGrade.A)
                 .wearCount(0)
