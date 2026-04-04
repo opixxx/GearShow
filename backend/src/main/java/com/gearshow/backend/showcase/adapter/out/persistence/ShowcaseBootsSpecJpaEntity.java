@@ -16,15 +16,12 @@ import java.time.Instant;
 @Table(name = "showcase_boots_spec")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ShowcaseBootsSpecJpaEntity {
+public class ShowcaseBootsSpecJpaEntity extends BaseShowcaseSpecJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "showcase_boots_spec_id")
     private Long id;
-
-    @Column(name = "showcase_id", nullable = false, unique = true)
-    private Long showcaseId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stud_type", nullable = false)
@@ -39,28 +36,16 @@ public class ShowcaseBootsSpecJpaEntity {
     @Column(name = "surface_type")
     private String surfaceType;
 
-    @Column(name = "extra_spec_json", columnDefinition = "json")
-    private String extraSpecJson;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private Instant updatedAt;
-
     @Builder
     private ShowcaseBootsSpecJpaEntity(Long id, Long showcaseId, StudType studType,
                                        String siloName, String releaseYear, String surfaceType,
                                        String extraSpecJson, Instant createdAt,
                                        Instant updatedAt) {
+        super(showcaseId, extraSpecJson, createdAt, updatedAt);
         this.id = id;
-        this.showcaseId = showcaseId;
         this.studType = studType;
         this.siloName = siloName;
         this.releaseYear = releaseYear;
         this.surfaceType = surfaceType;
-        this.extraSpecJson = extraSpecJson;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
     }
 }
