@@ -2,13 +2,6 @@ package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
-import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
-import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
-import com.gearshow.backend.showcase.application.exception.MinImageRequiredException;
-import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
-import com.gearshow.backend.showcase.application.port.in.CreateShowcaseUseCase;
-import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
-import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseBootsSpecPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -17,8 +10,6 @@ import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.ShowcaseBootsSpec;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
 import com.gearshow.backend.showcase.domain.model.ShowcaseUniformSpec;
-import com.gearshow.backend.showcase.domain.vo.ModelStatus;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,51 +19,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 쇼케이스 등록 유스케이스 구현체.
+ * 쇼케이스 DB 저장 서비스.
+ *
+ * <p>쇼케이스, 이미지, 스펙을 하나의 트랜잭션으로 저장한다.
+ * 외부 I/O(S3, 3D 모델)는 {@link CreateShowcaseFacade}가 트랜잭션 밖에서 처리한다.</p>
  */
 @Service
 @RequiredArgsConstructor
-public class CreateShowcaseService implements CreateShowcaseUseCase {
+public class CreateShowcaseService {
 
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
-    private final ImageStoragePort imageStoragePort;
     private final ShowcaseBootsSpecPort showcaseBootsSpecPort;
     private final ShowcaseUniformSpecPort showcaseUniformSpecPort;
-    private final RequestModelGenerationUseCase requestModelGenerationUseCase;
-
-    @Override
-    @Transactional
-    public CreateShowcaseResult create(CreateShowcaseCommand command,
-                                        List<UploadFile> images,
-                                        List<UploadFile> modelSourceImages) {
-        validateImages(images, command.primaryImageIndex());
-
-        List<String> imageUrls = imageStoragePort.uploadAll("showcases", images);
-        Showcase saved = saveShowcaseWithSpec(command, imageUrls);
-        ModelStatus modelStatus = requestModelIfNeeded(saved.getId(), command, modelSourceImages);
-
-        return new CreateShowcaseResult(saved.getId(), modelStatus);
-    }
-
-    /**
-     * 3D 모델 소스 이미지가 있으면 생성을 비동기 요청한다.
-     */
-    private ModelStatus requestModelIfNeeded(Long showcaseId,
-                                              CreateShowcaseCommand command,
-                                              List<UploadFile> modelSourceImages) {
-        if (!command.hasModelSourceImages() || modelSourceImages.isEmpty()) {
-            return null;
-        }
-        ModelGenerationResult result = requestModelGenerationUseCase.requestOnCreate(
-                showcaseId, modelSourceImages);
-        return result.modelStatus();
-    }
 
     /**
      * 쇼케이스, 이미지, 스펙을 DB에 저장한다.
      */
-    protected Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
+    @Transactional
+    public Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
         Showcase showcase = createShowcase(command);
         Showcase saved = showcasePort.save(showcase);
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
@@ -87,18 +52,6 @@ public class CreateShowcaseService implements CreateShowcaseUseCase {
                 command.title(), command.description(),
                 command.userSize(), command.conditionGrade(),
                 command.wearCount(), command.isForSale());
-    }
-
-    /**
-     * 이미지 최소 1장, primaryImageIndex 범위 검증.
-     */
-    private void validateImages(List<UploadFile> images, int primaryImageIndex) {
-        if (images == null || images.isEmpty()) {
-            throw new MinImageRequiredException();
-        }
-        if (primaryImageIndex < 0 || primaryImageIndex >= images.size()) {
-            throw new PrimaryImageRequiredException();
-        }
     }
 
     private void saveImages(Long showcaseId, List<String> imageUrls, int primaryImageIndex) {
