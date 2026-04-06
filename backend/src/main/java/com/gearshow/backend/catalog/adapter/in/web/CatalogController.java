@@ -18,7 +18,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,7 +49,7 @@ public class CatalogController {
      * @return 카탈로그 아이템 목록
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageInfo<CatalogItemListResult>>> list(
+    public ApiResponse<PageInfo<CatalogItemListResult>> list(
             @RequestParam(required = false) Category category,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String keyword,
@@ -63,8 +62,7 @@ public class CatalogController {
         PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
                 pageToken, size, category, brand, keyword);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "카탈로그 아이템 목록 조회 성공", result));
+        return ApiResponse.of(200, "카탈로그 아이템 목록 조회 성공", result);
     }
 
     /**
@@ -74,14 +72,14 @@ public class CatalogController {
      * @return 등록된 카탈로그 아이템 ID
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Map<String, Long>>> create(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Map<String, Long>> create(
             @Valid @RequestBody CreateCatalogItemRequest request) {
 
         CreateCatalogItemResult result = createCatalogItemUseCase.create(request.toCommand());
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.of(201, "카탈로그 아이템 등록 성공",
-                        Map.of("catalogItemId", result.catalogItemId())));
+        return ApiResponse.of(201, "카탈로그 아이템 등록 성공",
+                Map.of("catalogItemId", result.catalogItemId()));
     }
 
     /**
@@ -91,14 +89,13 @@ public class CatalogController {
      * @return 상세 정보
      */
     @GetMapping("/{catalogItemId}")
-    public ResponseEntity<ApiResponse<CatalogItemDetailResponse>> getDetail(
+    public ApiResponse<CatalogItemDetailResponse> getDetail(
             @PathVariable Long catalogItemId) {
 
         CatalogItemDetailResult result = getCatalogItemUseCase.getCatalogItem(catalogItemId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "카탈로그 아이템 조회 성공",
-                        CatalogItemDetailResponse.from(result)));
+        return ApiResponse.of(200, "카탈로그 아이템 조회 성공",
+                CatalogItemDetailResponse.from(result));
     }
 
     /**
@@ -109,15 +106,14 @@ public class CatalogController {
      * @return 수정된 카탈로그 아이템 상세
      */
     @PatchMapping("/{catalogItemId}")
-    public ResponseEntity<ApiResponse<CatalogItemDetailResponse>> update(
+    public ApiResponse<CatalogItemDetailResponse> update(
             @PathVariable Long catalogItemId,
             @Valid @RequestBody UpdateCatalogItemRequest request) {
 
         CatalogItemDetailResult result = updateCatalogItemUseCase.update(
                 catalogItemId, request.toCommand());
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "카탈로그 아이템 수정 성공",
-                        CatalogItemDetailResponse.from(result)));
+        return ApiResponse.of(200, "카탈로그 아이템 수정 성공",
+                CatalogItemDetailResponse.from(result));
     }
 }

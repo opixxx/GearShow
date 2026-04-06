@@ -9,7 +9,6 @@ import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationU
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,7 +31,8 @@ public class ShowcaseModel3dController {
      * 3D 모델 생성을 재요청한다.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> requestGeneration(
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<Map<String, Object>> requestGeneration(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @RequestParam("modelSourceImages") List<MultipartFile> modelSourceImages) {
@@ -42,22 +42,20 @@ public class ShowcaseModel3dController {
         ModelGenerationResult result = requestModelGenerationUseCase.requestRetry(
                 showcaseId, ownerId, UploadFileMapper.toUploadFiles(modelSourceImages));
 
-        return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.of(202, "3D 모델 생성 요청 완료",
-                        Map.of("showcase3dModelId", result.showcase3dModelId(),
-                                "modelStatus", result.modelStatus().name())));
+        return ApiResponse.of(202, "3D 모델 생성 요청 완료",
+                Map.of("showcase3dModelId", result.showcase3dModelId(),
+                        "modelStatus", result.modelStatus().name()));
     }
 
     /**
      * 3D 모델 상태를 조회한다.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<Model3dDetailResult>> getModel3d(
+    public ApiResponse<Model3dDetailResult> getModel3d(
             @PathVariable Long showcaseId) {
 
         Model3dDetailResult result = getModel3dUseCase.getModel3d(showcaseId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "3D 모델 조회 성공", result));
+        return ApiResponse.of(200, "3D 모델 조회 성공", result);
     }
 }

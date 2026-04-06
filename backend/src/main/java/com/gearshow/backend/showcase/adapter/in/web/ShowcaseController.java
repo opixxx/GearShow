@@ -22,7 +22,6 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +49,7 @@ public class ShowcaseController {
      * 쇼케이스 목록을 조회한다.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageInfo<ShowcaseListResult>>> list(
+    public ApiResponse<PageInfo<ShowcaseListResult>> list(
             @RequestParam(required = false) Category category,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String keyword,
@@ -65,22 +64,20 @@ public class ShowcaseController {
         PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(
                 pageToken, size, category, brand, keyword, isForSale, conditionGrade);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "쇼케이스 목록 조회 성공", result));
+        return ApiResponse.of(200, "쇼케이스 목록 조회 성공", result);
     }
 
     /**
      * 쇼케이스 상세를 조회한다.
      */
     @GetMapping("/{showcaseId}")
-    public ResponseEntity<ApiResponse<ShowcaseDetailResponse>> getDetail(
+    public ApiResponse<ShowcaseDetailResponse> getDetail(
             @PathVariable Long showcaseId) {
 
         ShowcaseDetailResult result = getShowcaseUseCase.getShowcase(showcaseId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "쇼케이스 조회 성공",
-                        ShowcaseDetailResponse.from(result)));
+        return ApiResponse.of(200, "쇼케이스 조회 성공",
+                ShowcaseDetailResponse.from(result));
     }
 
     /**
@@ -88,7 +85,8 @@ public class ShowcaseController {
      * 이미지는 multipart/form-data로 업로드한다.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> create(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Map<String, Object>> create(
             Authentication authentication,
             @Valid @ModelAttribute CreateShowcaseRequest request,
             @RequestParam("images") List<MultipartFile> images,
@@ -103,18 +101,17 @@ public class ShowcaseController {
                 UploadFileMapper.toUploadFiles(images),
                 UploadFileMapper.toUploadFiles(safeModelSourceImages));
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.of(201, "쇼케이스 등록 성공",
-                        Map.of("showcaseId", result.showcaseId(),
-                                "model3dStatus", result.model3dStatus() != null
-                                        ? result.model3dStatus().name() : "null")));
+        return ApiResponse.of(201, "쇼케이스 등록 성공",
+                Map.of("showcaseId", result.showcaseId(),
+                        "model3dStatus", result.model3dStatus() != null
+                                ? result.model3dStatus().name() : "null"));
     }
 
     /**
      * 쇼케이스를 수정한다.
      */
     @PatchMapping("/{showcaseId}")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> update(
+    public ApiResponse<Map<String, Long>> update(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody UpdateShowcaseRequest request) {
@@ -122,24 +119,22 @@ public class ShowcaseController {
         Long ownerId = (Long) authentication.getPrincipal();
         updateShowcaseUseCase.update(showcaseId, ownerId, request.toCommand());
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "쇼케이스 수정 성공",
-                        Map.of("showcaseId", showcaseId)));
+        return ApiResponse.of(200, "쇼케이스 수정 성공",
+                Map.of("showcaseId", showcaseId));
     }
 
     /**
      * 쇼케이스를 삭제한다 (소프트 삭제).
      */
     @DeleteMapping("/{showcaseId}")
-    public ResponseEntity<ApiResponse<Void>> delete(
+    public ApiResponse<Void> delete(
             Authentication authentication,
             @PathVariable Long showcaseId) {
 
         Long ownerId = (Long) authentication.getPrincipal();
         deleteShowcaseUseCase.delete(showcaseId, ownerId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "쇼케이스 삭제 성공"));
+        return ApiResponse.of(200, "쇼케이스 삭제 성공");
     }
 
 }
