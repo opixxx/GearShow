@@ -225,7 +225,63 @@ public class ShowcaseDetailResponse {
 }
 ```
 
-### 3-6. 도메인 모델
+### 3-6. 일급 컬렉션과 Value Object
+
+#### 일급 컬렉션
+
+컬렉션에 **검증, 계산, 필터링** 등 비즈니스 로직이 붙으면 일급 컬렉션으로 감싼다.
+
+```java
+// Bad — 검증이 Service에 산재
+private void validateImages(List<UploadFile> images, int primaryImageIndex) {
+    if (images == null || images.isEmpty()) { throw new MinImageRequiredException(); }
+    if (primaryImageIndex < 0 || primaryImageIndex >= images.size()) { throw new PrimaryImageRequiredException(); }
+}
+
+// Good — 일급 컬렉션이 불변식을 보장
+public class ShowcaseImages {
+
+    private final List<UploadFile> files;
+    private final int primaryIndex;
+
+    public static ShowcaseImages create(List<UploadFile> files, int primaryIndex) {
+        validateNotEmpty(files);
+        validatePrimaryIndex(files, primaryIndex);
+        return new ShowcaseImages(files, primaryIndex);
+    }
+
+    public UploadFile primaryImage() {
+        return files.get(primaryIndex);
+    }
+}
+```
+
+**적용 기준**: 컬렉션에 아래 중 하나라도 해당하면 일급 컬렉션 후보다.
+- 컬렉션 자체에 검증 규칙이 있음 (최소 N개, 중복 금지 등)
+- 컬렉션에서 특정 요소를 꺼내는 로직이 반복됨 (대표 이미지, 첫 번째 항목 등)
+- 컬렉션에 대한 계산이 Service에 산재 (합산, 중복 체크, 필터링 등)
+
+#### Value Object (VO) vs Primitive
+
+비즈니스 규칙이 있는 값은 VO로 감싼다. 단순 식별자/크기는 primitive가 적절하다.
+
+```java
+// primitive가 적절한 경우 — 비즈니스 규칙 없음
+void delete(Long showcaseId)
+List<Showcase> findRecent(int size)
+
+// VO가 필요한 경우 — 검증/계산/비교 로직 존재
+WearCount wearCount = WearCount.of(5);  // 음수 불가 규칙 캡슐화
+```
+
+| 기준 | primitive | VO |
+|:-----|:---------:|:--:|
+| 검증 로직 있음 (음수 불가, 범위 제한 등) | | O |
+| 단위/의미가 있음 (가격, 횟수, 등급 등) | | O |
+| 같은 검증이 여러 곳에서 반복됨 | | O |
+| 단순 식별자, 크기, 인덱스 | O | |
+
+### 3-7. 도메인 모델
 
 ```java
 // Good - 정적 팩토리 메서드 + Builder
@@ -276,7 +332,7 @@ public class Showcase {
 }
 ```
 
-### 3-7. 의존성 주입
+### 3-8. 의존성 주입
 
 ```java
 // Good - @RequiredArgsConstructor를 통한 생성자 주입
@@ -297,7 +353,7 @@ public class CreateShowcaseService {
 }
 ```
 
-### 3-8. 테스트 (BDD 스타일)
+### 3-9. 테스트 (BDD 스타일)
 
 ```java
 @Test
