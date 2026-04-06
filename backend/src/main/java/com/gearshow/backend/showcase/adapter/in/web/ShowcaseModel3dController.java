@@ -1,19 +1,17 @@
 package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
-import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
+import com.gearshow.backend.showcase.adapter.in.web.dto.RequestModelGenerationRequest;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.port.in.GetModel3dUseCase;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,18 +27,24 @@ public class ShowcaseModel3dController {
 
     /**
      * 3D 모델 생성을 재요청한다.
+     * 클라이언트가 Presigned URL로 S3에 소스 이미지를 직접 업로드한 후 S3 키 목록을 전달한다.
      */
+<<<<<<< HEAD
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, Object>> requestGeneration(
+=======
+    @PostMapping
+    public ResponseEntity<ApiResponse<Map<String, Object>>> requestGeneration(
+>>>>>>> 7205c15 (feat: S3 Presigned URL 업로드로 전환)
             Authentication authentication,
             @PathVariable Long showcaseId,
-            @RequestParam("modelSourceImages") List<MultipartFile> modelSourceImages) {
+            @Valid @RequestBody RequestModelGenerationRequest request) {
 
         Long ownerId = (Long) authentication.getPrincipal();
 
         ModelGenerationResult result = requestModelGenerationUseCase.requestRetry(
-                showcaseId, ownerId, UploadFileMapper.toUploadFiles(modelSourceImages));
+                showcaseId, ownerId, request.modelSourceImageKeys());
 
         return ApiResponse.of(202, "3D 모델 생성 요청 완료",
                 Map.of("showcase3dModelId", result.showcase3dModelId(),

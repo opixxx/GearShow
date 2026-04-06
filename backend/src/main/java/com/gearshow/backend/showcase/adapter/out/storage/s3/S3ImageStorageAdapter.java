@@ -1,24 +1,19 @@
 package com.gearshow.backend.showcase.adapter.out.storage.s3;
 
-import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3UploadFailedException;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 /**
  * AWS S3 이미지 저장소 어댑터.
+ * 이미지 업로드는 Presigned URL을 통해 클라이언트가 직접 수행하므로,
+ * 이 어댑터는 URL 변환, 존재 여부 확인, 삭제 기능만 제공한다.
  */
 @Slf4j
 @Component
@@ -33,22 +28,41 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
     @Value("${cloud.aws.s3.cdn-url}")
     private String cdnUrl;
 
+    /**
+     * S3 키를 DB에 저장할 URL로 변환한다.
+     * CDN 도입 시 설정값(cdn-url)만 변경하면 자동 적용된다.
+     */
     @Override
-    public String upload(String directory, UploadFile file) {
-        String key = generateKey(directory, file.originalFilename());
-        putObject(key, file);
-        return cdnUrl + "/" + key;
+    public String toUrl(String s3Key) {
+        return cdnUrl + "/" + s3Key;
     }
 
+    /**
+     * S3 키가 실제 존재하는 객체인지 HeadObject로 확인한다.
+     * 클라이언트가 Presigned URL을 통해 실제로 업로드했는지 검증할 때 사용한다.
+     *
+     * @return true: 객체 존재, false: 객체 없음
+     */
     @Override
-    public List<String> uploadAll(String directory, List<UploadFile> files) {
-        List<String> urls = new ArrayList<>();
-        for (UploadFile file : files) {
-            urls.add(upload(directory, file));
+    public boolean exists(String s3Key) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(s3Key)
+                    .build());
+            return true;
+        } catch (NoSuchKeyException e) {
+            return false;
+        } catch (Exception e) {
+            log.error("S3 객체 존재 여부 확인 중 오류 발생: key={}", s3Key, e);
+            return false;
         }
-        return urls;
     }
 
+    /**
+     * S3에서 이미지 파일을 삭제한다.
+     * imageUrl에서 CDN 접두어를 제거하여 S3 키를 추출한다.
+     */
     @Override
     public void delete(String imageUrl) {
         String key = extractKeyFromUrl(imageUrl);
@@ -56,43 +70,12 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
                 .bucket(bucket)
                 .key(key)
                 .build());
-        log.info("S3 이미지 삭제 완료: {}", key);
-    }
-
-    private void putObject(String key, UploadFile file) {
-        try {
-            s3Client.putObject(
-                    PutObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(key)
-                            .contentType(file.contentType())
-                            .build(),
-                    RequestBody.fromInputStream(file.inputStream(), file.size()));
-            log.info("S3 이미지 업로드 완료: {}", key);
-        } catch (Exception e) {
-            log.error("S3 이미지 업로드 실패: {}", key, e);
-            throw new S3UploadFailedException();
-        }
-    }
-
-    /**
-     * 고유한 S3 키를 생성한다.
-     * 파일명 충돌 방지를 위해 UUID를 사용한다.
-     */
-    private String generateKey(String directory, String originalFilename) {
-        String extension = extractExtension(originalFilename);
-        return directory + "/" + UUID.randomUUID() + extension;
-    }
-
-    private String extractExtension(String filename) {
-        if (filename == null || !filename.contains(".")) {
-            return "";
-        }
-        return filename.substring(filename.lastIndexOf("."));
+        log.info("S3 이미지 삭제 완료: key={}", key);
     }
 
     /**
      * CDN URL에서 S3 키를 추출한다.
+     * 예: "https://cdn.example.com/showcases/images/uuid.jpg" → "showcases/images/uuid.jpg"
      */
     private String extractKeyFromUrl(String imageUrl) {
         return imageUrl.replace(cdnUrl + "/", "");

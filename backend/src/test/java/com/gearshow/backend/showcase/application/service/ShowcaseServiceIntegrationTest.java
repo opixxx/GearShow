@@ -1,15 +1,19 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.common.dto.PageInfo;
-import com.gearshow.backend.showcase.application.dto.*;
+import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
+import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
+import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
+import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseListResult;
+import com.gearshow.backend.showcase.application.dto.UpdateShowcaseCommand;
 import com.gearshow.backend.showcase.application.exception.DuplicateSortOrderException;
 import com.gearshow.backend.showcase.application.exception.ImageNotBelongToShowcaseException;
 import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchException;
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.*;
-import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
-import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
@@ -31,8 +35,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,17 +81,15 @@ class ShowcaseServiceIntegrationTest {
                 null, null);
     }
 
-    private List<UploadFile> createFakeImages(int count) {
-        return java.util.stream.IntStream.range(0, count)
-                .mapToObj(i -> new UploadFile(
-                        new ByteArrayInputStream("fake".getBytes()),
-                        "image/jpeg", 4L, "test-" + i + ".jpg"))
+    private List<String> createFakeImageKeys(int count) {
+        return IntStream.range(0, count)
+                .mapToObj(i -> "showcases/images/test-" + i + ".jpg")
                 .toList();
     }
 
     private Long createAndGetShowcaseId(Long ownerId) {
         CreateShowcaseResult result = createShowcaseUseCase.create(
-                createCommand(ownerId), createFakeImages(1), List.of());
+                createCommand(ownerId), createFakeImageKeys(1), List.of());
         return result.showcaseId();
     }
 
@@ -100,11 +102,11 @@ class ShowcaseServiceIntegrationTest {
         void create_withImages_success() {
             // Given
             CreateShowcaseCommand command = createCommand(1L);
-            List<UploadFile> images = createFakeImages(2);
+            List<String> imageKeys = createFakeImageKeys(2);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
-                    command, images, List.of());
+                    command, imageKeys, List.of());
 
             // Then
             assertThat(result.showcaseId()).isNotNull();
@@ -125,7 +127,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
-                    command, createFakeImages(1), List.of());
+                    command, createFakeImageKeys(1), List.of());
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
 
             // Then
@@ -151,7 +153,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
-                    command, createFakeImages(1), List.of());
+                    command, createFakeImageKeys(1), List.of());
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
 
             // Then
@@ -174,7 +176,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
-                    command, createFakeImages(1), List.of());
+                    command, createFakeImageKeys(1), List.of());
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
 
             // Then
@@ -191,8 +193,8 @@ class ShowcaseServiceIntegrationTest {
                     "테스트", null, null,
                     ConditionGrade.A, 0, false, 0, true,
                     null, null);
-            List<UploadFile> images = createFakeImages(1);
-            List<UploadFile> modelSourceImages = createFakeImages(4);
+            List<String> images = createFakeImageKeys(1);
+            List<String> modelSourceImages = createFakeImageKeys(4);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -326,7 +328,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When & Then
             assertThatThrownBy(() -> createShowcaseUseCase.create(
-                    command, createFakeImages(1), List.of()))
+                    command, createFakeImageKeys(1), List.of()))
                     .isInstanceOf(PrimaryImageRequiredException.class);
         }
     }
@@ -343,7 +345,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             List<Long> addedIds = manageShowcaseImageUseCase.addImages(
-                    showcaseId, 1L, createFakeImages(2));
+                    showcaseId, 1L, createFakeImageKeys(2));
 
             // Then
             assertThat(addedIds).hasSize(2);
@@ -357,7 +359,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When & Then
             assertThatThrownBy(() -> manageShowcaseImageUseCase.addImages(
-                    showcaseId, 999L, createFakeImages(1)))
+                    showcaseId, 999L, createFakeImageKeys(1)))
                     .isInstanceOf(NotOwnerShowcaseException.class);
         }
 
@@ -367,7 +369,7 @@ class ShowcaseServiceIntegrationTest {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             List<Long> addedIds = manageShowcaseImageUseCase.addImages(
-                    showcaseId, 1L, createFakeImages(2));
+                    showcaseId, 1L, createFakeImageKeys(2));
 
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
             List<ManageShowcaseImageUseCase.ImageOrder> orders = detail.images().stream()
@@ -395,12 +397,12 @@ class ShowcaseServiceIntegrationTest {
             Long showcaseIdB = createAndGetShowcaseId(1L);
 
             // 쇼케이스 B에 이미지 추가 후 이미지 ID 획득
-            manageShowcaseImageUseCase.addImages(showcaseIdB, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseIdB, 1L, createFakeImageKeys(1));
             ShowcaseDetailResult detailB = getShowcaseUseCase.getShowcase(showcaseIdB);
             Long imageBId = detailB.images().get(0).showcaseImageId();
 
             // 쇼케이스 A에도 삭제 가능하도록 이미지 2개 보장
-            manageShowcaseImageUseCase.addImages(showcaseIdA, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseIdA, 1L, createFakeImageKeys(1));
 
             // When & Then - 쇼케이스 A 경로로 쇼케이스 B의 이미지 삭제 시도
             assertThatThrownBy(() -> manageShowcaseImageUseCase.deleteImage(
@@ -413,7 +415,7 @@ class ShowcaseServiceIntegrationTest {
         void deleteImage_notFound_throwsException() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
-            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
 
             // When & Then
             assertThatThrownBy(() -> manageShowcaseImageUseCase.deleteImage(
@@ -426,7 +428,7 @@ class ShowcaseServiceIntegrationTest {
         void reorderImages_mismatch_throwsException() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
-            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
 
             // 존재하지 않는 이미지 ID로 재정렬 요청
             List<ManageShowcaseImageUseCase.ImageOrder> orders = List.of(
@@ -443,7 +445,7 @@ class ShowcaseServiceIntegrationTest {
         void reorderImages_duplicateSortOrder_throwsException() {
             // Given - 이미지 2개 이상 필요
             Long showcaseId = createAndGetShowcaseId(1L);
-            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
 
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
             // 대표 이미지 1개 유지 + 같은 sortOrder(1)를 모든 이미지에 할당
@@ -466,7 +468,7 @@ class ShowcaseServiceIntegrationTest {
         void reorderImages_multiplePrimary_throwsException() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
-            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImages(1));
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
 
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
             // 모든 이미지를 대표 이미지로 설정
@@ -494,7 +496,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
-                    showcaseId, createFakeImages(4));
+                    showcaseId, createFakeImageKeys(4));
 
             // Then
             assertThat(genResult.showcase3dModelId()).isNotNull();
@@ -525,7 +527,7 @@ class ShowcaseServiceIntegrationTest {
         void requestRetry_byOwner_success() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
-            requestModelGenerationUseCase.requestOnCreate(showcaseId, createFakeImages(4));
+            requestModelGenerationUseCase.requestOnCreate(showcaseId, createFakeImageKeys(4));
 
             // When - REQUESTED 상태에서는 재요청 불가 (FAILED에서만 가능)
             // 따라서 먼저 상태를 확인
@@ -541,7 +543,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When & Then
             assertThatThrownBy(() -> requestModelGenerationUseCase.requestRetry(
-                    showcaseId, 999L, createFakeImages(4)))
+                    showcaseId, 999L, createFakeImageKeys(4)))
                     .isInstanceOf(NotOwnerShowcaseException.class);
         }
     }

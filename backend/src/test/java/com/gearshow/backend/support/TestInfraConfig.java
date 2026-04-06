@@ -1,17 +1,13 @@
 package com.gearshow.backend.support;
 
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
+import com.gearshow.backend.showcase.application.port.out.PresignedUrlPort;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import software.amazon.awssdk.services.s3.S3Client;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 import static org.mockito.Mockito.mock;
 
@@ -33,24 +29,21 @@ public class TestInfraConfig {
 
     /**
      * 테스트용 이미지 저장소 Mock.
-     * 실제 S3 업로드 대신 가짜 URL을 반환한다.
+     * 실제 S3 연동 없이 가짜 URL을 반환하고, 모든 키를 존재하는 것으로 처리한다.
      */
     @Bean
     @Primary
     public ImageStoragePort testImageStoragePort() {
         return new ImageStoragePort() {
             @Override
-            public String upload(String directory, UploadFile file) {
-                return "https://test-cdn.gearshow.com/" + directory + "/" + UUID.randomUUID() + ".jpg";
+            public String toUrl(String s3Key) {
+                return "https://test-cdn.gearshow.com/" + s3Key;
             }
 
             @Override
-            public List<String> uploadAll(String directory, List<UploadFile> files) {
-                List<String> urls = new ArrayList<>();
-                for (UploadFile file : files) {
-                    urls.add(upload(directory, file));
-                }
-                return urls;
+            public boolean exists(String s3Key) {
+                // 테스트에서는 모든 키를 존재하는 것으로 처리
+                return true;
             }
 
             @Override
@@ -58,6 +51,17 @@ public class TestInfraConfig {
                 // 테스트에서는 삭제 무시
             }
         };
+    }
+
+    /**
+     * 테스트용 Presigned URL Stub.
+     * 실제 S3Presigner(AWS SDK) 없이 결정적인 가짜 URL을 반환한다.
+     */
+    @Bean
+    @Primary
+    public PresignedUrlPort testPresignedUrlPort() {
+        return (s3Key, contentType) ->
+                "https://test-bucket.s3.amazonaws.com/" + s3Key + "?X-Amz-Signature=test-sig";
     }
 
     /**

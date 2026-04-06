@@ -15,7 +15,6 @@ import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.AngleType;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,13 +40,14 @@ public class RequestModelGenerationService implements RequestModelGenerationUseC
     private final ImageStoragePort imageStoragePort;
 
     @Override
-    public ModelGenerationResult requestOnCreate(Long showcaseId, List<UploadFile> modelSourceImages) {
+    public ModelGenerationResult requestOnCreate(Long showcaseId, List<String> modelSourceImageKeys) {
         // 1. 검증
-        validateSourceImageCount(modelSourceImages);
+        validateSourceImageCount(modelSourceImageKeys);
 
-        // 2. S3 업로드 (트랜잭션 밖)
-        List<String> imageUrls = imageStoragePort.uploadAll(
-                "showcases/" + showcaseId + "/model-sources", modelSourceImages);
+        // 2. S3 키 → URL 변환
+        List<String> imageUrls = modelSourceImageKeys.stream()
+                .map(imageStoragePort::toUrl)
+                .toList();
 
         // 3. DB 저장 (트랜잭션)
         Showcase3dModel model = saveModelAndSourceImages(showcaseId, imageUrls);
@@ -60,15 +60,16 @@ public class RequestModelGenerationService implements RequestModelGenerationUseC
 
     @Override
     public ModelGenerationResult requestRetry(Long showcaseId, Long ownerId,
-                                               List<UploadFile> modelSourceImages) {
+                                               List<String> modelSourceImageKeys) {
         // 1. 검증
         validateOwner(showcaseId, ownerId);
-        validateSourceImageCount(modelSourceImages);
+        validateSourceImageCount(modelSourceImageKeys);
         validateNotAlreadyGenerating(showcaseId);
 
-        // 2. S3 업로드 (트랜잭션 밖)
-        List<String> imageUrls = imageStoragePort.uploadAll(
-                "showcases/" + showcaseId + "/model-sources", modelSourceImages);
+        // 2. S3 키 → URL 변환
+        List<String> imageUrls = modelSourceImageKeys.stream()
+                .map(imageStoragePort::toUrl)
+                .toList();
 
         // 3. DB 저장 (트랜잭션)
         Showcase3dModel model = resetOrCreateModelAndSaveSourceImages(showcaseId, imageUrls);
@@ -127,8 +128,8 @@ public class RequestModelGenerationService implements RequestModelGenerationUseC
         modelSourceImagePort.saveAll(sourceImages);
     }
 
-    private void validateSourceImageCount(List<UploadFile> images) {
-        if (images == null || images.size() < MIN_SOURCE_IMAGES) {
+    private void validateSourceImageCount(List<String> keys) {
+        if (keys == null || keys.size() < MIN_SOURCE_IMAGES) {
             throw new InsufficientModelSourceImagesException();
         }
     }

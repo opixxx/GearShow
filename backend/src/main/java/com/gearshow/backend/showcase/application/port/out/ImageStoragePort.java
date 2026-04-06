@@ -1,32 +1,28 @@
 package com.gearshow.backend.showcase.application.port.out;
 
-import com.gearshow.backend.showcase.application.dto.UploadFile;
-
-import java.util.List;
-
 /**
  * 이미지 저장소 Outbound Port.
- * S3 등 외부 저장소에 이미지를 업로드/삭제한다.
+ * 업로드는 Presigned URL을 통해 클라이언트가 직접 수행하므로 이 포트에 포함하지 않는다.
  */
 public interface ImageStoragePort {
 
     /**
-     * 이미지 파일을 업로드하고 URL을 반환한다.
+     * S3 키를 DB에 저장할 URL로 변환한다.
+     * CDN 도입 시 설정값만 변경하면 자동 적용된다.
      *
-     * @param directory 저장 디렉터리 경로 (예: "showcases/1")
-     * @param file      업로드할 파일
-     * @return 업로드된 이미지 URL
+     * @param s3Key S3 객체 키 (예: "showcases/images/uuid.jpg")
+     * @return 이미지 URL
      */
-    String upload(String directory, UploadFile file);
+    String toUrl(String s3Key);
 
     /**
-     * 여러 이미지 파일을 업로드하고 URL 목록을 반환한다.
+     * S3 키가 실제 존재하는 객체인지 확인한다.
+     * 클라이언트가 Presigned URL로 실제로 업로드했는지 검증할 때 사용한다.
      *
-     * @param directory 저장 디렉터리 경로
-     * @param files     업로드할 파일 목록
-     * @return 업로드된 이미지 URL 목록
+     * @param s3Key S3 객체 키
+     * @return 객체 존재 여부
      */
-    List<String> uploadAll(String directory, List<UploadFile> files);
+    boolean exists(String s3Key);
 
     /**
      * 이미지를 삭제한다.

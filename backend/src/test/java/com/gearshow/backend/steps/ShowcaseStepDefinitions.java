@@ -3,13 +3,18 @@ package com.gearshow.backend.steps;
 import com.gearshow.backend.support.ScenarioContext;
 import com.gearshow.backend.support.TestApiClient;
 import com.gearshow.backend.support.TestResponse;
+import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 쇼케이스 관련 Cucumber Step Definitions.
@@ -51,22 +56,21 @@ public class ShowcaseStepDefinitions {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
 
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("category", "BOOTS");
-        parts.add("brand", "Nike");
-        parts.add("modelCode", "DJ2839");
-        parts.add("title", "머큐리얼 스펙 테스트");
-        parts.add("conditionGrade", "A");
-        parts.add("userSize", "270mm");
+        Map<String, Object> body = new HashMap<>();
+        body.put("category", "BOOTS");
+        body.put("brand", "Nike");
+        body.put("modelCode", "DJ2839");
+        body.put("title", "머큐리얼 스펙 테스트");
+        body.put("conditionGrade", "A");
+        body.put("userSize", "270mm");
         // 축구화 스펙 필드
-        parts.add("studType", "FG");
-        parts.add("siloName", "Mercurial");
-        parts.add("releaseYear", "2025");
-        parts.add("surfaceType", "천연잔디");
-        parts.add("images", createFakeImage("spec-test.jpg"));
+        body.put("studType", "FG");
+        body.put("siloName", "Mercurial");
+        body.put("releaseYear", "2025");
+        body.put("surfaceType", "천연잔디");
+        body.put("imageKeys", List.of("showcases/images/spec-test.jpg"));
 
-        TestResponse<Map<String, Object>> response = apiClient.postMultipart(
-                "/api/v1/showcases", parts);
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/showcases", body);
         context.setLastResponse(response);
         apiClient.clearAuth();
 
@@ -82,16 +86,15 @@ public class ShowcaseStepDefinitions {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
 
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("category", "BOOTS");
-        parts.add("brand", "Adidas");
-        parts.add("title", "직접 입력 테스트");
-        parts.add("conditionGrade", "B");
-        parts.add("userSize", "260mm");
-        parts.add("images", createFakeImage("manual-test.jpg"));
+        Map<String, Object> body = new HashMap<>();
+        body.put("category", "BOOTS");
+        body.put("brand", "Adidas");
+        body.put("title", "직접 입력 테스트");
+        body.put("conditionGrade", "B");
+        body.put("userSize", "260mm");
+        body.put("imageKeys", List.of("showcases/images/manual-test.jpg"));
 
-        TestResponse<Map<String, Object>> response = apiClient.postMultipart(
-                "/api/v1/showcases", parts);
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/showcases", body);
         context.setLastResponse(response);
         apiClient.clearAuth();
 
@@ -154,13 +157,13 @@ public class ShowcaseStepDefinitions {
         apiClient.authenticate(accessToken);
 
         Long showcaseId = context.get("showcaseId");
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        for (int i = 0; i < count; i++) {
-            parts.add("images", createFakeImage("added-" + i + ".jpg"));
-        }
+        List<String> imageKeys = IntStream.range(0, count)
+                .mapToObj(i -> "showcases/images/added-" + i + ".jpg")
+                .toList();
 
-        context.setLastResponse(apiClient.postMultipart(
-                "/api/v1/showcases/" + showcaseId + "/images", parts));
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/" + showcaseId + "/images",
+                Map.of("imageKeys", imageKeys)));
         apiClient.clearAuth();
     }
 
@@ -199,13 +202,13 @@ public class ShowcaseStepDefinitions {
         apiClient.authenticate(accessToken);
 
         Long showcaseId = context.get("showcaseId");
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        for (int i = 0; i < 4; i++) {
-            parts.add("modelSourceImages", createFakeImage("source-" + i + ".jpg"));
-        }
+        List<String> modelSourceImageKeys = IntStream.range(0, 4)
+                .mapToObj(i -> "showcases/model-source/source-" + i + ".jpg")
+                .toList();
 
-        context.setLastResponse(apiClient.postMultipart(
-                "/api/v1/showcases/" + showcaseId + "/3d-model", parts));
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/" + showcaseId + "/3d-model",
+                Map.of("modelSourceImageKeys", modelSourceImageKeys)));
         apiClient.clearAuth();
     }
 
@@ -220,20 +223,116 @@ public class ShowcaseStepDefinitions {
     public void 인증_없이_쇼케이스_등록() {
         apiClient.clearAuth();
 
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("category", "BOOTS");
-        parts.add("brand", "Nike");
-        parts.add("title", "테스트");
-        parts.add("conditionGrade", "A");
-        parts.add("images", createFakeImage("test.jpg"));
+        Map<String, Object> body = new HashMap<>();
+        body.put("category", "BOOTS");
+        body.put("brand", "Nike");
+        body.put("title", "테스트");
+        body.put("conditionGrade", "A");
+        body.put("imageKeys", List.of("showcases/images/test.jpg"));
 
-        context.setLastResponse(apiClient.postMultipart("/api/v1/showcases", parts));
+        context.setLastResponse(apiClient.post("/api/v1/showcases", body));
+    }
+
+    // ===== Presigned URL =====
+
+    @When("SHOWCASE_IMAGE 유형으로 Presigned URL {int}개를 요청한다")
+    public void showcase_image_presigned_url_요청(int count) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        List<Map<String, Object>> files = IntStream.range(0, count)
+                .mapToObj(i -> Map.<String, Object>of(
+                        "contentType", "image/jpeg",
+                        "filename", "photo-" + i + ".jpg",
+                        "type", "SHOWCASE_IMAGE"))
+                .toList();
+
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/upload-urls",
+                Map.of("files", files)));
+        apiClient.clearAuth();
+    }
+
+    @When("MODEL_SOURCE 유형으로 Presigned URL {int}개를 요청한다")
+    public void model_source_presigned_url_요청(int count) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        List<Map<String, Object>> files = IntStream.range(0, count)
+                .mapToObj(i -> Map.<String, Object>of(
+                        "contentType", "image/jpeg",
+                        "filename", "source-" + i + ".jpg",
+                        "type", "MODEL_SOURCE"))
+                .toList();
+
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/upload-urls",
+                Map.of("files", files)));
+        apiClient.clearAuth();
+    }
+
+    @When("등록된 쇼케이스의 이미지 추가용 Presigned URL {int}개를 요청한다")
+    public void showcase_image_추가용_presigned_url_요청(int count) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long showcaseId = context.get("showcaseId");
+        List<Map<String, Object>> files = IntStream.range(0, count)
+                .mapToObj(i -> Map.<String, Object>of(
+                        "contentType", "image/jpeg",
+                        "filename", "added-" + i + ".jpg",
+                        "type", "SHOWCASE_IMAGE"))
+                .toList();
+
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/" + showcaseId + "/images/upload-urls",
+                Map.of("files", files)));
+        apiClient.clearAuth();
+    }
+
+    @When("빈 파일 목록으로 Presigned URL을 요청한다")
+    public void 빈_파일_목록으로_presigned_url_요청() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        context.setLastResponse(apiClient.post(
+                "/api/v1/showcases/upload-urls",
+                Map.of("files", List.of())));
+        apiClient.clearAuth();
+    }
+
+    @Then("응답의 data에 Presigned URL 목록이 {int}개 반환된다")
+    public void presigned_url_목록_개수_검증(int expectedCount) {
+        @SuppressWarnings("unchecked")
+        List<Object> data = (List<Object>) context.getLastResponse().body().get("data");
+        assertThat(data).hasSize(expectedCount);
+    }
+
+    @Then("반환된 각 항목에 {string} 필드가 존재한다")
+    public void presigned_url_항목_필드_존재_검증(String fieldName) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> data =
+                (List<Map<String, Object>>) context.getLastResponse().body().get("data");
+        assertThat(data).allSatisfy(item ->
+                assertThat(item).containsKey(fieldName));
+    }
+
+    @Then("반환된 s3Key 는 {string} 경로를 포함한다")
+    public void presigned_url_s3key_경로_검증(String expectedPath) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> data =
+                (List<Map<String, Object>>) context.getLastResponse().body().get("data");
+        assertThat(data).allSatisfy(item -> {
+            String s3Key = (String) item.get("s3Key");
+            assertThat(s3Key).contains(expectedPath);
+        });
     }
 
     // ===== Helper =====
 
     /**
      * 쇼케이스 등록 공통 로직.
+     * 클라이언트가 S3에 미리 업로드한 것으로 가정하고 S3 키 목록을 전달한다.
      *
      * @param imageCount             일반 이미지 개수
      * @param modelSourceImageCount  3D 모델 소스 이미지 개수 (0이면 미포함)
@@ -242,29 +341,32 @@ public class ShowcaseStepDefinitions {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
 
-        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
-        parts.add("category", "BOOTS");
-        parts.add("brand", "Nike");
-        parts.add("modelCode", "DJ2839");
-        parts.add("title", "머큐리얼 슈퍼플라이 착용 후기");
-        parts.add("description", "FG 천연잔디에서 5번 착용했습니다");
-        parts.add("userSize", "270");
-        parts.add("conditionGrade", "A");
-        parts.add("wearCount", "5");
-        parts.add("isForSale", "true");
+        Map<String, Object> body = new HashMap<>();
+        body.put("category", "BOOTS");
+        body.put("brand", "Nike");
+        body.put("modelCode", "DJ2839");
+        body.put("title", "머큐리얼 슈퍼플라이 착용 후기");
+        body.put("description", "FG 천연잔디에서 5번 착용했습니다");
+        body.put("userSize", "270");
+        body.put("conditionGrade", "A");
+        body.put("wearCount", 5);
+        body.put("isForSale", true);
 
-        // 일반 이미지
-        for (int i = 0; i < imageCount; i++) {
-            parts.add("images", createFakeImage("test-image-" + i + ".jpg"));
+        // 일반 이미지 키 목록
+        List<String> imageKeys = IntStream.range(0, imageCount)
+                .mapToObj(i -> "showcases/images/test-image-" + i + ".jpg")
+                .toList();
+        body.put("imageKeys", imageKeys);
+
+        // 3D 모델 소스 이미지 키 목록 (0이면 미포함)
+        if (modelSourceImageCount > 0) {
+            List<String> modelSourceImageKeys = IntStream.range(0, modelSourceImageCount)
+                    .mapToObj(i -> "showcases/model-source/model-source-" + i + ".jpg")
+                    .toList();
+            body.put("modelSourceImageKeys", modelSourceImageKeys);
         }
 
-        // 3D 모델 소스 이미지 (0이면 미포함)
-        for (int i = 0; i < modelSourceImageCount; i++) {
-            parts.add("modelSourceImages", createFakeImage("model-source-" + i + ".jpg"));
-        }
-
-        TestResponse<Map<String, Object>> response = apiClient.postMultipart(
-                "/api/v1/showcases", parts);
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/showcases", body);
         context.setLastResponse(response);
         apiClient.clearAuth();
 
@@ -274,14 +376,5 @@ public class ShowcaseStepDefinitions {
             Map<String, Object> data = (Map<String, Object>) response.body().get("data");
             context.put("showcaseId", ((Number) data.get("showcaseId")).longValue());
         }
-    }
-
-    private ByteArrayResource createFakeImage(String filename) {
-        return new ByteArrayResource("fake-image-data".getBytes()) {
-            @Override
-            public String getFilename() {
-                return filename;
-            }
-        };
     }
 }
