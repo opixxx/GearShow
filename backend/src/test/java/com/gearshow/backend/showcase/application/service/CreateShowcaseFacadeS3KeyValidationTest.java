@@ -82,8 +82,9 @@ class CreateShowcaseFacadeS3KeyValidationTest {
         List<String> imageKeys = List.of("showcases/images/not-uploaded.jpg");
 
         // When & Then
+        List<String> emptyModelKeys = List.of();
         assertThatThrownBy(() ->
-                createShowcaseUseCase.create(command, imageKeys, List.of())
+                createShowcaseUseCase.create(command, imageKeys, emptyModelKeys)
         ).isInstanceOf(InvalidImageKeyException.class);
     }
 
@@ -99,8 +100,9 @@ class CreateShowcaseFacadeS3KeyValidationTest {
         );
 
         // When & Then
+        List<String> emptyModelKeys = List.of();
         assertThatThrownBy(() ->
-                createShowcaseUseCase.create(command, imageKeys, List.of())
+                createShowcaseUseCase.create(command, imageKeys, emptyModelKeys)
         ).isInstanceOf(InvalidImageKeyException.class);
     }
 }

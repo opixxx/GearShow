@@ -327,8 +327,8 @@ class ShowcaseServiceIntegrationTest {
                     null, null);
 
             // When & Then
-            assertThatThrownBy(() -> createShowcaseUseCase.create(
-                    command, createFakeImageKeys(1), List.of()))
+            List<String> imageKeys = createFakeImageKeys(1);
+            assertThatThrownBy(() -> createShowcaseUseCase.create(command, imageKeys, List.of()))
                     .isInstanceOf(PrimaryImageRequiredException.class);
         }
     }
@@ -358,8 +358,8 @@ class ShowcaseServiceIntegrationTest {
             Long showcaseId = createAndGetShowcaseId(1L);
 
             // When & Then
-            assertThatThrownBy(() -> manageShowcaseImageUseCase.addImages(
-                    showcaseId, 999L, createFakeImageKeys(1)))
+            List<String> imageKeys = createFakeImageKeys(1);
+            assertThatThrownBy(() -> manageShowcaseImageUseCase.addImages(showcaseId, 999L, imageKeys))
                     .isInstanceOf(NotOwnerShowcaseException.class);
         }
 
@@ -542,8 +542,8 @@ class ShowcaseServiceIntegrationTest {
             Long showcaseId = createAndGetShowcaseId(1L);
 
             // When & Then
-            assertThatThrownBy(() -> requestModelGenerationUseCase.requestRetry(
-                    showcaseId, 999L, createFakeImageKeys(4)))
+            List<String> modelSourceImageKeys = createFakeImageKeys(4);
+            assertThatThrownBy(() -> requestModelGenerationUseCase.requestRetry(showcaseId, 999L, modelSourceImageKeys))
                     .isInstanceOf(NotOwnerShowcaseException.class);
         }
     }
