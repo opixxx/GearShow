@@ -12,7 +12,6 @@ import com.gearshow.backend.user.application.port.in.LogoutUseCase;
 import com.gearshow.backend.user.application.port.in.RefreshTokenUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,7 +35,7 @@ public class AuthController {
      * @return JWT 토큰
      */
     @PostMapping("/login/{provider}")
-    public ResponseEntity<ApiResponse<LoginResponse>> login(
+    public ApiResponse<LoginResponse> login(
             @PathVariable String provider,
             @Valid @RequestBody LoginRequest request) {
 
@@ -46,8 +45,7 @@ public class AuthController {
                 request.accessToken());
         LoginResult result = loginUseCase.login(command);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "로그인 성공", LoginResponse.from(result)));
+        return ApiResponse.of(200, "로그인 성공", LoginResponse.from(result));
     }
 
     /**
@@ -57,14 +55,13 @@ public class AuthController {
      * @return 새로운 JWT 토큰
      */
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<LoginResponse>> refresh(
+    public ApiResponse<LoginResponse> refresh(
             @Valid @RequestBody RefreshTokenRequest request) {
 
         RefreshTokenCommand command = new RefreshTokenCommand(request.refreshToken());
         LoginResult result = refreshTokenUseCase.refresh(command);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "토큰 갱신 성공", LoginResponse.from(result)));
+        return ApiResponse.of(200, "토큰 갱신 성공", LoginResponse.from(result));
     }
 
     /**
@@ -74,12 +71,11 @@ public class AuthController {
      * @return 로그아웃 결과
      */
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(
+    public ApiResponse<Void> logout(
             @AuthenticationPrincipal Long userId) {
 
         logoutUseCase.logout(userId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "로그아웃 성공"));
+        return ApiResponse.of(200, "로그아웃 성공");
     }
 }

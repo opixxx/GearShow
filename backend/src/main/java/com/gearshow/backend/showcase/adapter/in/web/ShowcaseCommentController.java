@@ -14,7 +14,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +38,7 @@ public class ShowcaseCommentController {
      * 댓글 목록을 조회한다.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageInfo<CommentResult>>> list(
+    public ApiResponse<PageInfo<CommentResult>> list(
             @PathVariable Long showcaseId,
             @RequestParam(required = false) String pageToken,
             @RequestParam(defaultValue = "20")
@@ -49,15 +48,15 @@ public class ShowcaseCommentController {
 
         PageInfo<CommentResult> result = listCommentsUseCase.list(showcaseId, pageToken, size);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "댓글 목록 조회 성공", result));
+        return ApiResponse.of(200, "댓글 목록 조회 성공", result);
     }
 
     /**
      * 댓글을 작성한다.
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Map<String, Long>>> create(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Map<String, Long>> create(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody CreateCommentRequest request) {
@@ -65,16 +64,15 @@ public class ShowcaseCommentController {
         Long authorId = (Long) authentication.getPrincipal();
         Long commentId = createCommentUseCase.create(showcaseId, authorId, request.content());
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.of(201, "댓글 작성 성공",
-                        Map.of("showcaseCommentId", commentId)));
+        return ApiResponse.of(201, "댓글 작성 성공",
+                Map.of("showcaseCommentId", commentId));
     }
 
     /**
      * 댓글을 수정한다.
      */
     @PatchMapping("/{commentId}")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> update(
+    public ApiResponse<Map<String, Long>> update(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @PathVariable Long commentId,
@@ -83,16 +81,15 @@ public class ShowcaseCommentController {
         Long authorId = (Long) authentication.getPrincipal();
         updateCommentUseCase.update(showcaseId, commentId, authorId, request.content());
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "댓글 수정 성공",
-                        Map.of("showcaseCommentId", commentId)));
+        return ApiResponse.of(200, "댓글 수정 성공",
+                Map.of("showcaseCommentId", commentId));
     }
 
     /**
      * 댓글을 삭제한다.
      */
     @DeleteMapping("/{commentId}")
-    public ResponseEntity<ApiResponse<Void>> delete(
+    public ApiResponse<Void> delete(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @PathVariable Long commentId) {
@@ -100,7 +97,6 @@ public class ShowcaseCommentController {
         Long authorId = (Long) authentication.getPrincipal();
         deleteCommentUseCase.delete(showcaseId, commentId, authorId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "댓글 삭제 성공"));
+        return ApiResponse.of(200, "댓글 삭제 성공");
     }
 }

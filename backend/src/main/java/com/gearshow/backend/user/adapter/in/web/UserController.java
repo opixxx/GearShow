@@ -12,7 +12,6 @@ import com.gearshow.backend.user.application.port.in.GetUserProfileUseCase;
 import com.gearshow.backend.user.application.port.in.UpdateProfileUseCase;
 import com.gearshow.backend.user.application.port.in.WithdrawUseCase;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,14 +36,13 @@ public class UserController {
      * @return 닉네임 사용 가능 여부
      */
     @GetMapping("/nicknames/check")
-    public ResponseEntity<ApiResponse<CheckNicknameResponse>> checkNickname(
+    public ApiResponse<CheckNicknameResponse> checkNickname(
             @RequestParam String nickname) {
 
         boolean available = checkNicknameUseCase.isAvailable(nickname);
 
         String message = available ? "사용 가능한 닉네임입니다" : "이미 사용 중인 닉네임입니다";
-        return ResponseEntity.ok(
-                ApiResponse.of(200, message, new CheckNicknameResponse(nickname, available)));
+        return ApiResponse.of(200, message, new CheckNicknameResponse(nickname, available));
     }
 
     /**
@@ -54,13 +52,12 @@ public class UserController {
      * @return 내 프로필 정보
      */
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<MyProfileResponse>> getMyProfile(
+    public ApiResponse<MyProfileResponse> getMyProfile(
             @AuthenticationPrincipal Long userId) {
 
         MyProfileResult result = getMyProfileUseCase.getMyProfile(userId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "프로필 조회 성공", MyProfileResponse.from(result)));
+        return ApiResponse.of(200, "프로필 조회 성공", MyProfileResponse.from(result));
     }
 
     /**
@@ -70,13 +67,12 @@ public class UserController {
      * @return 공개 프로필 정보
      */
     @GetMapping("/{userId}")
-    public ResponseEntity<ApiResponse<UserProfileResponse>> getUserProfile(
+    public ApiResponse<UserProfileResponse> getUserProfile(
             @PathVariable Long userId) {
 
         UserProfileResult result = getUserProfileUseCase.getUserProfile(userId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "프로필 조회 성공", UserProfileResponse.from(result)));
+        return ApiResponse.of(200, "프로필 조회 성공", UserProfileResponse.from(result));
     }
 
     /**
@@ -87,15 +83,14 @@ public class UserController {
      * @return 수정된 프로필 정보
      */
     @PatchMapping("/me")
-    public ResponseEntity<ApiResponse<UpdateProfileResponse>> updateProfile(
+    public ApiResponse<UpdateProfileResponse> updateProfile(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody UpdateProfileRequest request) {
 
         UpdateProfileResult result = updateProfileUseCase.updateProfile(
                 userId, request.toCommand());
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "프로필 수정 성공", UpdateProfileResponse.from(result)));
+        return ApiResponse.of(200, "프로필 수정 성공", UpdateProfileResponse.from(result));
     }
 
     /**
@@ -105,12 +100,11 @@ public class UserController {
      * @return 탈퇴 결과
      */
     @DeleteMapping("/me")
-    public ResponseEntity<ApiResponse<Void>> withdraw(
+    public ApiResponse<Void> withdraw(
             @AuthenticationPrincipal Long userId) {
 
         withdrawUseCase.withdraw(userId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "회원 탈퇴 성공"));
+        return ApiResponse.of(200, "회원 탈퇴 성공");
     }
 }

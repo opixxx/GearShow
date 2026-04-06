@@ -8,7 +8,6 @@ import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,7 +30,7 @@ public class MyShowcaseController {
      * 내 쇼케이스 목록을 조회한다.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageInfo<ShowcaseListResult>>> listMyShowcases(
+    public ApiResponse<PageInfo<ShowcaseListResult>> listMyShowcases(
             Authentication authentication,
             @RequestParam(required = false) ShowcaseStatus showcaseStatus,
             @RequestParam(required = false) String pageToken,
@@ -44,7 +43,6 @@ public class MyShowcaseController {
         PageInfo<ShowcaseListResult> result = listShowcasesUseCase.listByOwner(
                 ownerId, pageToken, size, showcaseStatus);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "내 쇼케이스 목록 조회 성공", result));
+        return ApiResponse.of(200, "내 쇼케이스 목록 조회 성공", result);
     }
 }

@@ -8,7 +8,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,7 +29,8 @@ public class ShowcaseImageController {
      * 이미지를 추가한다.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<Map<String, List<Long>>>> addImages(
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Map<String, List<Long>>> addImages(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @RequestParam("images") List<MultipartFile> images) {
@@ -39,16 +39,15 @@ public class ShowcaseImageController {
         List<Long> addedIds = manageShowcaseImageUseCase.addImages(
                 showcaseId, ownerId, UploadFileMapper.toUploadFiles(images));
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.of(201, "이미지 추가 성공",
-                        Map.of("addedImageIds", addedIds)));
+        return ApiResponse.of(201, "이미지 추가 성공",
+                Map.of("addedImageIds", addedIds));
     }
 
     /**
      * 이미지를 삭제한다.
      */
     @DeleteMapping("/{showcaseImageId}")
-    public ResponseEntity<ApiResponse<Void>> deleteImage(
+    public ApiResponse<Void> deleteImage(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @PathVariable Long showcaseImageId) {
@@ -56,15 +55,14 @@ public class ShowcaseImageController {
         Long ownerId = (Long) authentication.getPrincipal();
         manageShowcaseImageUseCase.deleteImage(showcaseId, showcaseImageId, ownerId);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "이미지 삭제 성공"));
+        return ApiResponse.of(200, "이미지 삭제 성공");
     }
 
     /**
      * 이미지 정렬 순서를 변경한다.
      */
     @PatchMapping("/order")
-    public ResponseEntity<ApiResponse<Void>> reorderImages(
+    public ApiResponse<Void> reorderImages(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody ReorderImagesRequest request) {
@@ -76,7 +74,6 @@ public class ShowcaseImageController {
                 .toList();
         manageShowcaseImageUseCase.reorderImages(showcaseId, ownerId, orders);
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "이미지 정렬 순서 변경 성공"));
+        return ApiResponse.of(200, "이미지 정렬 순서 변경 성공");
     }
 }
