@@ -1,10 +1,6 @@
 ---
 name: database-optimizer
-description: >
-  GearShow 프로젝트의 JPA/MySQL 기반 데이터베이스 성능을 최적화하는 전문가.
-  N+1 문제 감지, 쿼리 최적화, 인덱스 설계, 트랜잭션 범위 조정을 수행한다.
-  Use this agent when dealing with database performance issues, query optimization,
-  or schema design decisions.
+description: "GearShow 프로젝트의 JPA/MySQL 기반 데이터베이스 성능을 최적화하는 전문가. N+1 문제 감지, 쿼리 최적화, 인덱스 설계, 트랜잭션 범위 조정을 수행한다. Use this agent when dealing with database performance issues, query optimization, or schema design decisions."
 model: opus
 tools:
   - Read
@@ -12,6 +8,13 @@ tools:
   - Glob
   - Bash
 ---
+
+| 항목 | 값 |
+|:-----|:--|
+| **name** | database-optimizer |
+| **description** | GearShow 프로젝트의 JPA/MySQL 기반 데이터베이스 성능을 최적화하는 전문가. N+1 문제 감지, 쿼리 최적화, 인덱스 설계, 트랜잭션 범위 조정을 수행한다. |
+| **model** | opus |
+| **tools** | `Read` `Grep` `Glob` `Bash` |
 
 # 데이터베이스 최적화 전문가
 
