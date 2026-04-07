@@ -1,20 +1,19 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
-import com.gearshow.backend.showcase.application.port.out.ShowcaseBootsSpecPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
-import com.gearshow.backend.showcase.application.port.out.ShowcaseUniformSpecPort;
+import com.gearshow.backend.showcase.application.port.out.ShowcaseSpecPort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
-import com.gearshow.backend.showcase.domain.model.ShowcaseBootsSpec;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
-import com.gearshow.backend.showcase.domain.model.ShowcaseUniformSpec;
+import com.gearshow.backend.showcase.domain.model.ShowcaseSpec;
+import com.gearshow.backend.showcase.domain.vo.SpecType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,28 +29,31 @@ public class CreateShowcaseService {
 
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
-    private final ShowcaseBootsSpecPort showcaseBootsSpecPort;
-    private final ShowcaseUniformSpecPort showcaseUniformSpecPort;
+    private final ShowcaseSpecPort showcaseSpecPort;
+    private final ObjectMapper objectMapper;
 
     /**
      * 쇼케이스, 이미지, 스펙을 DB에 저장한다.
      */
     @Transactional
     public Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
-        Showcase showcase = createShowcase(command);
+        // 대표 이미지 URL을 미리 결정하여 Showcase에 함께 저장
+        String primaryImageUrl = imageUrls.get(command.primaryImageIndex());
+        Showcase showcase = createShowcase(command, primaryImageUrl);
         Showcase saved = showcasePort.save(showcase);
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
         saveSpec(saved.getId(), command.category(), command);
         return saved;
     }
 
-    private Showcase createShowcase(CreateShowcaseCommand command) {
+    private Showcase createShowcase(CreateShowcaseCommand command, String primaryImageUrl) {
         return Showcase.create(
                 command.ownerId(), command.catalogItemId(),
                 command.category(), command.brand(), command.modelCode(),
                 command.title(), command.description(),
                 command.userSize(), command.conditionGrade(),
-                command.wearCount(), command.isForSale());
+                command.wearCount(), command.isForSale(),
+                primaryImageUrl);
     }
 
     private void saveImages(Long showcaseId, List<String> imageUrls, int primaryImageIndex) {
@@ -65,43 +67,19 @@ public class CreateShowcaseService {
     }
 
     /**
-     * 카테고리에 따라 쇼케이스 스펙을 저장한다.
+     * 카테고리에 따라 쇼케이스 스펙을 JSON으로 변환하여 저장한다.
      */
     private void saveSpec(Long showcaseId, Category category, CreateShowcaseCommand command) {
-        if (category == Category.BOOTS && command.bootsSpec() != null) {
-            saveBootsSpec(showcaseId, command.bootsSpec());
-        } else if (category == Category.UNIFORM && command.uniformSpec() != null) {
-            saveUniformSpec(showcaseId, command.uniformSpec());
+        try {
+            if (category == Category.BOOTS && command.bootsSpec() != null) {
+                String specData = objectMapper.writeValueAsString(command.bootsSpec());
+                showcaseSpecPort.save(ShowcaseSpec.create(showcaseId, SpecType.BOOTS, specData));
+            } else if (category == Category.UNIFORM && command.uniformSpec() != null) {
+                String specData = objectMapper.writeValueAsString(command.uniformSpec());
+                showcaseSpecPort.save(ShowcaseSpec.create(showcaseId, SpecType.UNIFORM, specData));
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("스펙 JSON 직렬화 실패", e);
         }
-    }
-
-    private void saveBootsSpec(Long showcaseId, CreateShowcaseCommand.BootsSpecCommand spec) {
-        Instant now = Instant.now();
-        ShowcaseBootsSpec bootsSpec = ShowcaseBootsSpec.builder()
-                .showcaseId(showcaseId)
-                .studType(spec.studType())
-                .siloName(spec.siloName())
-                .releaseYear(spec.releaseYear())
-                .surfaceType(spec.surfaceType())
-                .extraSpecJson(spec.extraSpecJson())
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-        showcaseBootsSpecPort.save(bootsSpec);
-    }
-
-    private void saveUniformSpec(Long showcaseId, CreateShowcaseCommand.UniformSpecCommand spec) {
-        Instant now = Instant.now();
-        ShowcaseUniformSpec uniformSpec = ShowcaseUniformSpec.builder()
-                .showcaseId(showcaseId)
-                .clubName(spec.clubName())
-                .season(spec.season())
-                .league(spec.league())
-                .kitType(spec.kitType())
-                .extraSpecJson(spec.extraSpecJson())
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-        showcaseUniformSpecPort.save(uniformSpec);
     }
 }

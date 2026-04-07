@@ -1,8 +1,6 @@
 package com.gearshow.backend.showcase.application.port.out;
 
-import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.domain.model.Showcase;
-import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 
 import java.time.Instant;
@@ -18,28 +16,19 @@ public interface ShowcasePort {
 
     Optional<Showcase> findById(Long id);
 
-    // ── 공개 목록 조회 ──
+    // ── 공개 목록 조회 (최신순) ──
 
     /**
-     * 첫 페이지 쇼케이스 목록을 조회한다.
+     * 첫 페이지 쇼케이스 목록을 조회한다 (ACTIVE, 최신순).
      *
-     * @param size           조회 개수
-     * @param category       카테고리 필터 (null이면 전체)
-     * @param brand          브랜드 필터 (null이면 전체)
-     * @param keyword        제목 검색 (null이면 전체)
-     * @param isForSale      판매 여부 필터 (null이면 전체)
-     * @param conditionGrade 상태 등급 필터 (null이면 전체)
+     * @param size 조회 개수
      */
-    List<Showcase> findAllFirstPage(int size, Category category, String brand,
-                                    String keyword, Boolean isForSale,
-                                    ConditionGrade conditionGrade);
+    List<Showcase> findAllFirstPage(int size);
 
     /**
      * 커서 기반 쇼케이스 목록을 조회한다 (createdAt DESC, id DESC).
      */
-    List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size,
-                                     Category category, String brand, String keyword,
-                                     Boolean isForSale, ConditionGrade conditionGrade);
+    List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size);
 
     // ── 내 쇼케이스 목록 조회 ──
 

@@ -34,7 +34,7 @@ Feature: 쇼케이스
     Then 응답 상태 코드는 200이다
     And 응답의 data의 "category" 필드는 "BOOTS"이다
     And 응답의 data의 "brand" 필드는 "Nike"이다
-    And 응답의 data에 "bootsSpec" 필드가 존재한다
+    And 응답의 data에 "spec" 필드가 존재한다
 
   @showcase
   Scenario: 카탈로그 없이 직접 입력으로 쇼케이스를 등록한다

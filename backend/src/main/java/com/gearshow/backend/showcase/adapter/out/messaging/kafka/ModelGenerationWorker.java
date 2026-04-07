@@ -4,6 +4,8 @@ import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRe
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
+import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
+import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.infrastructure.config.KafkaConfig;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ import org.springframework.stereotype.Component;
 public class ModelGenerationWorker {
 
     private final Showcase3dModelPort showcase3dModelPort;
+    private final ShowcasePort showcasePort;
     private final ModelGenerationClient modelGenerationClient;
 
     @KafkaListener(
@@ -76,6 +79,13 @@ public class ModelGenerationWorker {
                 Showcase3dModel completed = model.complete(
                         result.modelFileUrl(), result.previewImageUrl());
                 showcase3dModelPort.save(completed);
+
+                // 쇼케이스의 has3dModel 플래그 동기화
+                showcasePort.findById(showcaseId).ifPresent(showcase -> {
+                    Showcase updated = showcase.changeHas3dModel(true);
+                    showcasePort.save(updated);
+                });
+
                 log.info("3D 모델 생성 완료 - showcase3dModelId: {}", model.getId());
             } else {
                 Showcase3dModel failed = model.fail(result.failureReason());

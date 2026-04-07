@@ -1,9 +1,7 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
-import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
-import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -37,25 +35,17 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     }
 
     @Override
-    public List<Showcase> findAllFirstPage(int size, Category category, String brand,
-                                           String keyword, Boolean isForSale,
-                                           ConditionGrade conditionGrade) {
-        return showcaseJpaRepository.findAllFirstPage(
-                        category, brand, keyword, isForSale, conditionGrade,
-                        PageRequest.of(0, size + 1))
+    public List<Showcase> findAllFirstPage(int size) {
+        return showcaseJpaRepository.findAllFirstPage(PageRequest.of(0, size + 1))
                 .stream()
                 .map(showcaseMapper::toDomain)
                 .toList();
     }
 
     @Override
-    public List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size,
-                                            Category category, String brand, String keyword,
-                                            Boolean isForSale, ConditionGrade conditionGrade) {
+    public List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size) {
         return showcaseJpaRepository.findAllWithCursor(
-                        cursorCreatedAt, cursorId,
-                        category, brand, keyword, isForSale, conditionGrade,
-                        PageRequest.of(0, size + 1))
+                        cursorCreatedAt, cursorId, PageRequest.of(0, size + 1))
                 .stream()
                 .map(showcaseMapper::toDomain)
                 .toList();

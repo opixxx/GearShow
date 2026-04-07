@@ -133,10 +133,10 @@ class ShowcaseServiceIntegrationTest {
             // Then
             assertThat(detail.category()).isEqualTo(Category.BOOTS);
             assertThat(detail.brand()).isEqualTo("Nike");
-            assertThat(detail.bootsSpec()).isNotNull();
-            assertThat(detail.bootsSpec().studType()).isEqualTo(StudType.FG);
-            assertThat(detail.bootsSpec().siloName()).isEqualTo("Mercurial");
-            assertThat(detail.uniformSpec()).isNull();
+            assertThat(detail.spec()).isNotNull();
+            assertThat(detail.spec().specType()).isEqualTo(com.gearshow.backend.showcase.domain.vo.SpecType.BOOTS);
+            assertThat(detail.spec().specData()).contains("FG");
+            assertThat(detail.spec().specData()).contains("Mercurial");
         }
 
         @Test
@@ -158,10 +158,10 @@ class ShowcaseServiceIntegrationTest {
 
             // Then
             assertThat(detail.category()).isEqualTo(Category.UNIFORM);
-            assertThat(detail.uniformSpec()).isNotNull();
-            assertThat(detail.uniformSpec().clubName()).isEqualTo("Liverpool");
-            assertThat(detail.uniformSpec().kitType()).isEqualTo(KitType.HOME);
-            assertThat(detail.bootsSpec()).isNull();
+            assertThat(detail.spec()).isNotNull();
+            assertThat(detail.spec().specType()).isEqualTo(com.gearshow.backend.showcase.domain.vo.SpecType.UNIFORM);
+            assertThat(detail.spec().specData()).contains("Liverpool");
+            assertThat(detail.spec().specData()).contains("HOME");
         }
 
         @Test
@@ -560,8 +560,7 @@ class ShowcaseServiceIntegrationTest {
             createAndGetShowcaseId(1L);
 
             // When
-            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(
-                    null, 20, null, null, null, null, null);
+            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(null, 20);
 
             // Then
             assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);

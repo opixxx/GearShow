@@ -60,6 +60,12 @@ public class ShowcaseJpaEntity {
     @Column(name = "is_for_sale", nullable = false)
     private boolean forSale;
 
+    @Column(name = "primary_image_url")
+    private String primaryImageUrl;
+
+    @Column(name = "has_3d_model", nullable = false)
+    private boolean has3dModel;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "showcase_status", nullable = false)
     private ShowcaseStatus status;
@@ -75,6 +81,7 @@ public class ShowcaseJpaEntity {
                               Category category, String brand, String modelCode,
                               String title, String description, String userSize,
                               ConditionGrade conditionGrade, int wearCount, boolean forSale,
+                              String primaryImageUrl, boolean has3dModel,
                               ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -88,6 +95,8 @@ public class ShowcaseJpaEntity {
         this.conditionGrade = conditionGrade;
         this.wearCount = wearCount;
         this.forSale = forSale;
+        this.primaryImageUrl = primaryImageUrl;
+        this.has3dModel = has3dModel;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

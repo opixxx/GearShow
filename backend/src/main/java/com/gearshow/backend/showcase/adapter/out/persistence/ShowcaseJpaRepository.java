@@ -1,7 +1,5 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
-import com.gearshow.backend.catalog.domain.vo.Category;
-import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,26 +19,14 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
      */
     List<ShowcaseJpaEntity> findByOwnerId(Long ownerId);
 
-    // ── 공개 목록 조회 (ACTIVE) ──
+    // ── 공개 목록 조회 (ACTIVE, 최신순) ──
 
     /**
      * 첫 페이지 쇼케이스 목록 조회 (커서 없음).
-     * category, brand로 직접 필터링한다.
      */
     @Query("SELECT s FROM ShowcaseJpaEntity s WHERE s.status = 'ACTIVE'" +
-            " AND (:category IS NULL OR s.category = :category)" +
-            " AND (:brand IS NULL OR s.brand = :brand)" +
-            " AND (:keyword IS NULL OR s.title LIKE CONCAT('%', :keyword, '%'))" +
-            " AND (:isForSale IS NULL OR s.forSale = :isForSale)" +
-            " AND (:conditionGrade IS NULL OR s.conditionGrade = :conditionGrade)" +
             " ORDER BY s.createdAt DESC, s.id DESC")
-    List<ShowcaseJpaEntity> findAllFirstPage(
-            @Param("category") Category category,
-            @Param("brand") String brand,
-            @Param("keyword") String keyword,
-            @Param("isForSale") Boolean isForSale,
-            @Param("conditionGrade") ConditionGrade conditionGrade,
-            Pageable pageable);
+    List<ShowcaseJpaEntity> findAllFirstPage(Pageable pageable);
 
     /**
      * 커서 기반 쇼케이스 목록 조회 (Keyset Pagination).
@@ -49,20 +35,10 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
     @Query("SELECT s FROM ShowcaseJpaEntity s WHERE s.status = 'ACTIVE'" +
             " AND (s.createdAt < :cursorCreatedAt OR" +
             "   (s.createdAt = :cursorCreatedAt AND s.id < :cursorId))" +
-            " AND (:category IS NULL OR s.category = :category)" +
-            " AND (:brand IS NULL OR s.brand = :brand)" +
-            " AND (:keyword IS NULL OR s.title LIKE CONCAT('%', :keyword, '%'))" +
-            " AND (:isForSale IS NULL OR s.forSale = :isForSale)" +
-            " AND (:conditionGrade IS NULL OR s.conditionGrade = :conditionGrade)" +
             " ORDER BY s.createdAt DESC, s.id DESC")
     List<ShowcaseJpaEntity> findAllWithCursor(
             @Param("cursorCreatedAt") Instant cursorCreatedAt,
             @Param("cursorId") Long cursorId,
-            @Param("category") Category category,
-            @Param("brand") String brand,
-            @Param("keyword") String keyword,
-            @Param("isForSale") Boolean isForSale,
-            @Param("conditionGrade") ConditionGrade conditionGrade,
             Pageable pageable);
 
     // ── 내 쇼케이스 목록 조회 ──

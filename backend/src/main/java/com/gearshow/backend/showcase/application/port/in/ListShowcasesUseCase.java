@@ -1,8 +1,6 @@
 package com.gearshow.backend.showcase.application.port.in;
 
-import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.ShowcaseListResult;
-import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import com.gearshow.backend.common.dto.PageInfo;
 
@@ -12,11 +10,9 @@ import com.gearshow.backend.common.dto.PageInfo;
 public interface ListShowcasesUseCase {
 
     /**
-     * 쇼케이스 목록을 조회한다 (공개 목록).
+     * 쇼케이스 목록을 조회한다 (최신순, 공개 목록).
      */
-    PageInfo<ShowcaseListResult> list(String pageToken, int size,
-                                      Category category, String brand, String keyword,
-                                      Boolean isForSale, ConditionGrade conditionGrade);
+    PageInfo<ShowcaseListResult> list(String pageToken, int size);
 
     /**
      * 내 쇼케이스 목록을 조회한다.
