@@ -121,8 +121,8 @@ public class ListShowcasesService implements ListShowcasesUseCase {
                 case BOOTS -> objectMapper.readValue(spec.getSpecData(), BootsSpecSummary.class);
                 case UNIFORM -> objectMapper.readValue(spec.getSpecData(), UniformSpecSummary.class);
             };
-        } catch (Exception e) {
-            log.warn("스펙 JSON 파싱 실패 - showcaseId: {}, specType: {}",
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            log.error("스펙 JSON 파싱 실패 - showcaseId: {}, specType: {}",
                     spec.getShowcaseId(), spec.getSpecType(), e);
             return null;
         }

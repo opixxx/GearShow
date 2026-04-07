@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.domain.model;
 
+import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.SpecType;
 import lombok.Builder;
 import lombok.Getter;
@@ -42,6 +43,7 @@ public class ShowcaseSpec {
      * @return 생성된 쇼케이스 스펙
      */
     public static ShowcaseSpec create(Long showcaseId, SpecType specType, String specData) {
+        validate(showcaseId, specType, specData);
         Instant now = Instant.now();
         return ShowcaseSpec.builder()
                 .showcaseId(showcaseId)
@@ -50,5 +52,15 @@ public class ShowcaseSpec {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 필수 파라미터를 검증한다.
+     */
+    private static void validate(Long showcaseId, SpecType specType, String specData) {
+        if (showcaseId == null || specType == null
+                || specData == null || specData.isBlank()) {
+            throw new InvalidShowcaseException();
+        }
     }
 }

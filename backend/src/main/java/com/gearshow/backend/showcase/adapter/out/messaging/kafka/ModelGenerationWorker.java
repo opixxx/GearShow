@@ -80,16 +80,13 @@ public class ModelGenerationWorker {
                         result.modelFileUrl(), result.previewImageUrl());
                 showcase3dModelPort.save(completed);
 
-                // 쇼케이스의 has3dModel 플래그 동기화
-                showcasePort.findById(showcaseId).ifPresent(showcase -> {
-                    Showcase updated = showcase.changeHas3dModel(true);
-                    showcasePort.save(updated);
-                });
+                syncHas3dModel(showcaseId, true);
 
                 log.info("3D 모델 생성 완료 - showcase3dModelId: {}", model.getId());
             } else {
                 Showcase3dModel failed = model.fail(result.failureReason());
                 showcase3dModelPort.save(failed);
+                syncHas3dModel(showcaseId, false);
                 log.warn("3D 모델 생성 실패 - showcase3dModelId: {}, 사유: {}",
                         model.getId(), result.failureReason());
             }
@@ -97,7 +94,18 @@ public class ModelGenerationWorker {
             // 외부 호출 예외 시 FAILED로 전환하여 GENERATING 상태 고착 방지
             Showcase3dModel failed = model.fail("3D 모델 생성 중 예외 발생: " + e.getMessage());
             showcase3dModelPort.save(failed);
+            syncHas3dModel(showcaseId, false);
             log.error("3D 모델 생성 중 예외 발생 - showcase3dModelId: {}", model.getId(), e);
         }
+    }
+
+    /**
+     * 쇼케이스의 has3dModel 플래그를 동기화한다.
+     */
+    private void syncHas3dModel(Long showcaseId, boolean has3dModel) {
+        showcasePort.findById(showcaseId).ifPresent(showcase -> {
+            Showcase updated = showcase.changeHas3dModel(has3dModel);
+            showcasePort.save(updated);
+        });
     }
 }
