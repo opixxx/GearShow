@@ -24,6 +24,15 @@ class GearShowApiClient {
     );
   }
 
+  /// 개발용 로그인. OAuth 없이 테스트 사용자로 JWT를 발급한다.
+  Future<AuthSession> devLogin({required String baseUrl}) async {
+    final response = await http.post(
+      _uri(baseUrl, '/api/v1/auth/dev-login'),
+      headers: _jsonHeaders,
+    );
+    return AuthSession.fromJson(_extractData(response));
+  }
+
   Future<AuthSession> login({
     required String baseUrl,
     required String provider,
@@ -317,6 +326,10 @@ class GearShowApiClient {
       headers: _headers(accessToken: accessToken),
       body: jsonEncode({'files': fileInfos}),
     );
+
+    if (response.statusCode != 200) {
+      throw ApiException('Presigned URL 발급 실패: ${response.statusCode}');
+    }
 
     final List<dynamic> raw = jsonDecode(response.body)['data'] as List<dynamic>;
     return raw
