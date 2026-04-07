@@ -6,7 +6,6 @@ import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchE
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
 import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.ManageShowcaseImageUseCase;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -35,20 +34,21 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     private final ShowcaseImagePort showcaseImagePort;
     private final ImageStoragePort imageStoragePort;
 
+    /**
+     * S3 키 목록을 URL로 변환하여 이미지를 추가한다.
+     * 이미지 업로드는 클라이언트가 Presigned URL로 S3에 직접 수행한 상태이다.
+     */
     @Override
     @Transactional
-    public List<Long> addImages(Long showcaseId, Long ownerId, List<UploadFile> images) {
+    public List<Long> addImages(Long showcaseId, Long ownerId, List<String> imageKeys) {
         validateOwnership(showcaseId, ownerId);
-
-        // S3 업로드 후 이미지 저장
-        List<String> imageUrls = imageStoragePort.uploadAll(
-                "showcases/" + showcaseId, images);
 
         int currentCount = showcaseImagePort.countByShowcaseId(showcaseId);
         List<ShowcaseImage> showcaseImages = new ArrayList<>();
-        for (int i = 0; i < imageUrls.size(); i++) {
+        for (int i = 0; i < imageKeys.size(); i++) {
+            String imageUrl = imageStoragePort.toUrl(imageKeys.get(i));
             showcaseImages.add(ShowcaseImage.create(
-                    showcaseId, imageUrls.get(i),
+                    showcaseId, imageUrl,
                     currentCount + i + 1, false));
         }
 
@@ -63,7 +63,6 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
         validateOwnership(showcaseId, ownerId);
         validateMinImageCount(showcaseId);
 
-        // DB에서 이미지 조회 후 소속 검증
         ShowcaseImage image = showcaseImagePort.findById(imageId)
                 .orElseThrow(NotFoundShowcaseImageException::new);
         validateImageBelongsToShowcase(image, showcaseId);

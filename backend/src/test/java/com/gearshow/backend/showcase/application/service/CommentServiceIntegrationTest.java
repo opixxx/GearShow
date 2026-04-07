@@ -5,7 +5,6 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
-import com.gearshow.backend.showcase.application.dto.UploadFile;
 import com.gearshow.backend.showcase.application.exception.NotAuthorCommentException;
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseCommentException;
 import com.gearshow.backend.showcase.application.port.in.*;
@@ -22,7 +21,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayInputStream;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,10 +57,8 @@ class CommentServiceIntegrationTest {
                 "테스트 쇼케이스", null, null,
                 ConditionGrade.A, 0, false, 0, false,
                 null, null);
-        List<UploadFile> images = List.of(new UploadFile(
-                new ByteArrayInputStream("fake".getBytes()),
-                "image/jpeg", 4L, "test.jpg"));
-        CreateShowcaseResult result = createShowcaseUseCase.create(command, images, List.of());
+        List<String> imageKeys = List.of("showcases/images/test.jpg");
+        CreateShowcaseResult result = createShowcaseUseCase.create(command, imageKeys, List.of());
         showcaseId = result.showcaseId();
     }
 

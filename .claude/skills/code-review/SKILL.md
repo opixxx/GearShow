@@ -41,7 +41,7 @@ gh pr view {PR번호} --json commits
 
 ### Step 2: 아키텍처 검토
 
-CLAUDE.md와 architecture-pattern.md 기준으로 검토한다.
+`docs/spec/architecture-pattern.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
 
 #### 계층 의존성 방향
 
@@ -49,18 +49,23 @@ CLAUDE.md와 architecture-pattern.md 기준으로 검토한다.
 Adapter → Application → Domain (이 방향만 허용)
 ```
 
-| 체크 항목 | 확인 내용 |
-|:---------|:---------|
-| Domain 순수성 | `domain/` 패키지에 Spring, JPA 어노테이션 없는지 (Lombok @Getter, @Builder만 허용) |
-| Port/Adapter 패턴 | Port 인터페이스 없이 Adapter 직접 참조하지 않는지 |
-| DTO 분리 | Entity가 Controller에서 직접 반환되지 않는지, record 타입 사용하는지 |
-| 의존성 주입 | @Autowired 필드 주입 없이 @RequiredArgsConstructor 사용하는지 |
-| 트랜잭션 위치 | @Transactional이 Application Service에만 있는지 |
-| Cross-Aggregate | 다른 Aggregate 간 JPA 관계 매핑(@ManyToOne 등) 없이 ID 참조만 사용하는지 |
+| 체크 항목 | 참조 섹션 | 확인 내용 |
+|:---------|:---------|:---------|
+| Domain 순수성 | 섹션 1 | `domain/` 패키지에 Spring, JPA 어노테이션 없는지 (Lombok @Getter, @Builder만 허용) |
+| Port/Adapter 패턴 | 섹션 1 | Port 인터페이스 없이 Adapter 직접 참조하지 않는지 |
+| DTO 분리 | 섹션 4 | Entity가 Controller에서 직접 반환되지 않는지, record 타입 사용하는지 |
+| 의존성 주입 | 섹션 11 | @Autowired 필드 주입 없이 @RequiredArgsConstructor 사용하는지 |
+| 트랜잭션 위치 | 섹션 7 | @Transactional이 Application Service에만 있는지 |
+| 트랜잭션 범위 | 섹션 7 | 외부 API 호출(S3, Kafka, HTTP 등)이 @Transactional 범위 밖에 있는지 |
+| 소유권 검증 | 섹션 8 | 리소스 수정/삭제/하위 추가 시 Service에서 소유권 검증을 하는지 |
+| 외부 어댑터 예외 | 섹션 9 | 도메인 오류(4xx)와 인프라 오류(5xx)를 분리해서 처리하는지 |
+| Cross-Aggregate | 섹션 2 | 다른 Aggregate 간 JPA 관계 매핑(@ManyToOne 등) 없이 ID 참조만 사용하는지 |
 
 ---
 
 ### Step 3: 코드 품질 검토
+
+`docs/spec/coding-convention.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
 
 #### 도메인 모델
 
@@ -115,7 +120,7 @@ Adapter → Application → Domain (이 방향만 허용)
 
 ### Step 5: 테스트 검토
 
-test-strategy.md 기준으로 검토한다.
+`docs/spec/test-strategy.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
 
 | 체크 항목 | 확인 내용 |
 |:---------|:---------|

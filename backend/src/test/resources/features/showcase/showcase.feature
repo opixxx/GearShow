@@ -112,6 +112,35 @@ Feature: 쇼케이스
     When 등록된 쇼케이스의 3D 모델 상태를 조회한다
     Then 응답 상태 코드는 200이다
 
+  # ── Presigned URL 발급 ──
+
+  @smoke @showcase @presigned-url
+  Scenario: 쇼케이스 등록 전 SHOWCASE_IMAGE 유형의 Presigned URL을 발급받는다
+    When SHOWCASE_IMAGE 유형으로 Presigned URL 2개를 요청한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data에 Presigned URL 목록이 2개 반환된다
+    And 반환된 각 항목에 "presignedUrl" 필드가 존재한다
+    And 반환된 각 항목에 "s3Key" 필드가 존재한다
+
+  @smoke @showcase @presigned-url @model3d
+  Scenario: 쇼케이스 등록 전 MODEL_SOURCE 유형의 Presigned URL을 발급받는다
+    When MODEL_SOURCE 유형으로 Presigned URL 4개를 요청한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data에 Presigned URL 목록이 4개 반환된다
+    And 반환된 s3Key 는 "showcases/model-source/" 경로를 포함한다
+
+  @smoke @showcase @presigned-url
+  Scenario: 기존 쇼케이스에 이미지를 추가하기 위한 Presigned URL을 발급받는다
+    Given 이미지 1개로 쇼케이스가 등록되어 있다
+    When 등록된 쇼케이스의 이미지 추가용 Presigned URL 1개를 요청한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data에 Presigned URL 목록이 1개 반환된다
+
+  @edge-case @showcase @presigned-url
+  Scenario: 파일 목록이 비어있으면 Presigned URL 발급 시 400 에러가 발생한다
+    When 빈 파일 목록으로 Presigned URL을 요청한다
+    Then 응답 상태 코드는 400이다
+
   # ── 에러 케이스 ──
 
   @edge-case @showcase

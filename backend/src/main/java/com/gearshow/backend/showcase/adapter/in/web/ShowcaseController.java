@@ -5,7 +5,6 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseRequest;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseDetailResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateShowcaseRequest;
-import com.gearshow.backend.showcase.adapter.in.web.dto.UploadFileMapper;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseListResult;
@@ -21,11 +20,9 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -82,24 +79,20 @@ public class ShowcaseController {
 
     /**
      * 쇼케이스를 등록한다.
-     * 이미지는 multipart/form-data로 업로드한다.
+     * 클라이언트가 Presigned URL로 S3에 이미지를 직접 업로드한 후 S3 키 목록을 전달한다.
      */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Map<String, Object>> create(
             Authentication authentication,
-            @Valid @ModelAttribute CreateShowcaseRequest request,
-            @RequestParam("images") List<MultipartFile> images,
-            @RequestParam(value = "modelSourceImages", required = false) List<MultipartFile> modelSourceImages) {
+            @Valid @RequestBody CreateShowcaseRequest request) {
 
         Long ownerId = (Long) authentication.getPrincipal();
-        List<MultipartFile> safeModelSourceImages = modelSourceImages != null
-                ? modelSourceImages : List.of();
 
         CreateShowcaseResult result = createShowcaseUseCase.create(
-                request.toCommand(ownerId, !safeModelSourceImages.isEmpty()),
-                UploadFileMapper.toUploadFiles(images),
-                UploadFileMapper.toUploadFiles(safeModelSourceImages));
+                request.toCommand(ownerId),
+                request.imageKeys(),
+                request.modelSourceImageKeys() != null ? request.modelSourceImageKeys() : List.of());
 
         return ApiResponse.of(201, "쇼케이스 등록 성공",
                 Map.of("showcaseId", result.showcaseId(),

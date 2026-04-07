@@ -142,18 +142,20 @@ cd backend && ./gradlew build
 
 ## Phase 4: 리뷰 + 테스트 (병렬)
 
-아래 4개의 subagent를 **동시에 병렬로** 실행한다:
+아래 4개의 subagent를 **동시에 병렬로** 실행한다.
+**각 agent는 반드시 아래에 명시된 참조 문서를 먼저 Read한 뒤 리뷰를 수행한다.**
 
-| Agent | 역할 |
-|:------|:----|
-| **architecture-reviewer** | 의존 방향, BC 격리, Aggregate 설계, 포트/어댑터 검증 |
-| **code-reviewer** | SOLID, OOP 설계, 네이밍, DTO/예외 규칙, 보안 검증 |
-| **database-optimizer** | N+1 쿼리, 인덱스 전략, 트랜잭션 범위, 쿼리 최적화 |
-| **test-writer** | Cucumber 인수 테스트 + 통합 테스트 + 단위 테스트 작성 |
+| Agent | 역할 | 참조 문서 |
+|:------|:----|:---------|
+| **architecture-reviewer** | 의존 방향, BC 격리, Aggregate 설계, 포트/어댑터 검증, 소유권 검증, 트랜잭션 범위, 외부 어댑터 예외 처리 | `docs/spec/architecture-pattern.md` |
+| **code-reviewer** | SOLID, OOP 설계, 네이밍, DTO/예외 규칙, Bean Validation, 보안 검증 | `docs/spec/coding-convention.md`, `docs/spec/architecture-pattern.md` |
+| **database-optimizer** | N+1 쿼리, 인덱스 전략, 트랜잭션 범위(외부 API 호출 포함), 쿼리 최적화 | `docs/spec/architecture-pattern.md` (섹션 7: 트랜잭션 전략) |
+| **test-writer** | Cucumber 인수 테스트 + 통합 테스트 + 단위 테스트 작성 | `docs/spec/test-strategy.md` |
 
 각 agent에게 전달할 프롬프트에는 다음 정보를 포함한다:
 - 구현 대상 API 정보
 - Phase 2에서 생성/수정한 파일 목록
+- 반드시 위의 참조 문서를 Read 도구로 읽은 뒤 해당 규칙을 기준으로 리뷰할 것
 
 ### 결과 종합
 

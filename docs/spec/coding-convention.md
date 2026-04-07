@@ -205,6 +205,26 @@ public record CreateShowcaseRequest(
 ) {}
 ```
 
+### 3-4-1. 컬렉션 요소 단위 검증
+
+`@NotEmpty`는 컬렉션이 비어있지 않음만 검증한다. 요소 자체의 유효성(null, 빈 문자열 등)은 제네릭 타입에 직접 애노테이션을 붙여 검증해야 한다.
+
+```java
+// Good — 리스트 비어있음 + 각 요소 빈 문자열 모두 검증
+public record AddImagesRequest(
+    @NotEmpty(message = "이미지 키 목록은 비어있을 수 없습니다")
+    List<@NotBlank(message = "이미지 키는 비어있을 수 없습니다") String> imageKeys
+) {}
+
+// Bad — 리스트 비어있음만 검증, 빈 문자열 요소 통과
+public record AddImagesRequest(
+    @NotEmpty(message = "이미지 키 목록은 비어있을 수 없습니다")
+    List<String> imageKeys  // ["", " "] 같은 요소가 유효성 검사를 통과함
+) {}
+```
+
+요소 단위 검증이 동작하려면 Controller 또는 Service 클래스에 `@Validated`가 선언되어 있어야 한다.
+
 ### 3-5. DTO
 
 ```java

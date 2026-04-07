@@ -6,12 +6,15 @@ import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 /**
  * 쇼케이스 등록 요청 DTO.
- * multipart/form-data 요청에서 JSON 필드가 아닌 개별 파라미터로 바인딩된다.
+ * 클라이언트가 Presigned URL로 S3에 이미지를 직접 업로드한 후, S3 키 목록과 함께 JSON으로 전달한다.
  */
 public record CreateShowcaseRequest(
         Long catalogItemId,
@@ -41,6 +44,11 @@ public record CreateShowcaseRequest(
 
         Integer primaryImageIndex,
 
+        @NotEmpty(message = "이미지 키 목록은 필수입니다")
+        List<String> imageKeys,
+
+        List<String> modelSourceImageKeys,
+
         // ── 축구화 스펙 (BOOTS) ──
         StudType studType,
         String siloName,
@@ -57,11 +65,12 @@ public record CreateShowcaseRequest(
     /**
      * 요청을 커맨드로 변환한다.
      *
-     * @param ownerId              소유자 ID
-     * @param hasModelSourceImages 3D 모델 소스 이미지 포함 여부
+     * @param ownerId 소유자 ID
      * @return 등록 커맨드
      */
-    public CreateShowcaseCommand toCommand(Long ownerId, boolean hasModelSourceImages) {
+    public CreateShowcaseCommand toCommand(Long ownerId) {
+        List<String> safeModelSourceKeys = modelSourceImageKeys != null
+                ? modelSourceImageKeys : List.of();
         return new CreateShowcaseCommand(
                 ownerId,
                 catalogItemId,
@@ -75,7 +84,7 @@ public record CreateShowcaseRequest(
                 wearCount != null ? wearCount : 0,
                 isForSale != null && isForSale,
                 primaryImageIndex != null ? primaryImageIndex : 0,
-                hasModelSourceImages,
+                !safeModelSourceKeys.isEmpty(),
                 buildBootsSpec(),
                 buildUniformSpec());
     }
