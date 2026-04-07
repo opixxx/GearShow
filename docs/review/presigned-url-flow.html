@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GearShow - Presigned URL 업로드 플로우</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px; }
+        h1 { text-align: center; font-size: 28px; margin-bottom: 8px; color: #f8fafc; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 48px; font-size: 14px; }
+        .section { max-width: 1100px; margin: 0 auto 64px; }
+        .section-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; color: #f8fafc; padding-left: 16px; border-left: 4px solid #3b82f6; }
+        .section-desc { color: #94a3b8; margin-bottom: 32px; font-size: 14px; padding-left: 20px; }
+
+        /* Flow Diagram */
+        .flow { display: flex; flex-direction: column; gap: 0; position: relative; }
+        .step { display: flex; align-items: stretch; gap: 0; min-height: 80px; }
+        .step-number { width: 64px; display: flex; flex-direction: column; align-items: center; padding-top: 20px; flex-shrink: 0; }
+        .step-number .num { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0; }
+        .step-number .line { width: 2px; flex: 1; margin-top: 4px; }
+        .step:last-child .step-number .line { display: none; }
+        .step-content { flex: 1; padding: 12px 0; }
+        .step-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px 24px; position: relative; }
+        .step-card .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .step-card .title { font-size: 16px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
+        .step-card .desc { font-size: 13px; color: #94a3b8; line-height: 1.6; }
+        .step-card code { background: #0f172a; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #7dd3fc; }
+        .step-card .endpoint { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 16px; margin-top: 12px; font-family: monospace; font-size: 13px; color: #a5f3fc; }
+        .step-card .method { font-weight: 700; margin-right: 8px; }
+        .step-card .method.post { color: #4ade80; }
+        .step-card .method.put { color: #facc15; }
+        .step-card .method.get { color: #60a5fa; }
+
+        /* Actor Colors */
+        .actor-client .num { background: #8b5cf6; }
+        .actor-client .line { background: #8b5cf680; }
+        .actor-client .label { color: #a78bfa; }
+        .actor-client .step-card { border-left: 3px solid #8b5cf6; }
+
+        .actor-server .num { background: #3b82f6; }
+        .actor-server .line { background: #3b82f680; }
+        .actor-server .label { color: #60a5fa; }
+        .actor-server .step-card { border-left: 3px solid #3b82f6; }
+
+        .actor-s3 .num { background: #f97316; }
+        .actor-s3 .line { background: #f9731680; }
+        .actor-s3 .label { color: #fb923c; }
+        .actor-s3 .step-card { border-left: 3px solid #f97316; }
+
+        /* Comparison Table */
+        .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+        .compare-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; }
+        .compare-card.before { border-top: 3px solid #ef4444; }
+        .compare-card.after { border-top: 3px solid #22c55e; }
+        .compare-card h3 { font-size: 16px; margin-bottom: 16px; }
+        .compare-card.before h3 { color: #fca5a5; }
+        .compare-card.after h3 { color: #86efac; }
+        .compare-card ul { list-style: none; padding: 0; }
+        .compare-card li { padding: 8px 0; font-size: 13px; color: #cbd5e1; border-bottom: 1px solid #1e293b; display: flex; align-items: flex-start; gap: 8px; }
+        .compare-card li:last-child { border-bottom: none; }
+        .compare-card li::before { flex-shrink: 0; margin-top: 2px; }
+        .compare-card.before li::before { content: "✕"; color: #f87171; font-weight: 700; }
+        .compare-card.after li::before { content: "✓"; color: #4ade80; font-weight: 700; }
+
+        /* Data Flow */
+        .data-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px 18px; margin-top: 10px; font-size: 12px; line-height: 1.8; font-family: monospace; color: #94a3b8; }
+        .data-box .key { color: #7dd3fc; }
+        .data-box .val { color: #fbbf24; }
+
+        /* API Summary */
+        .api-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .api-table th { background: #1e293b; padding: 12px 16px; text-align: left; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155; }
+        .api-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+        .api-table tr:hover td { background: #1e293b40; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: monospace; }
+        .badge.new { background: #22c55e20; color: #4ade80; border: 1px solid #22c55e40; }
+        .badge.modify { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+        .badge.delete { background: #ef444420; color: #f87171; border: 1px solid #ef444440; }
+        .badge.keep { background: #6366f120; color: #a5b4fc; border: 1px solid #6366f140; }
+
+        /* Sequence Diagram */
+        .sequence { display: grid; grid-template-columns: 140px 1fr 140px; gap: 0; margin-top: 24px; }
+        .seq-actor { text-align: center; padding: 16px 8px; }
+        .seq-actor .icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 24px; }
+        .seq-actor .name { font-size: 13px; font-weight: 600; }
+        .seq-actor.client .icon { background: #8b5cf620; border: 1px solid #8b5cf640; }
+        .seq-actor.client .name { color: #a78bfa; }
+        .seq-actor.server .icon { background: #3b82f620; border: 1px solid #3b82f640; }
+        .seq-actor.server .name { color: #60a5fa; }
+        .seq-actor.s3 .icon { background: #f9731620; border: 1px solid #f9731640; }
+        .seq-actor.s3 .name { color: #fb923c; }
+
+        .seq-messages { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; }
+        .seq-msg { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; font-size: 12px; }
+        .seq-msg.right { background: #1e293b; flex-direction: row; }
+        .seq-msg.left { background: #1e293b; flex-direction: row-reverse; }
+        .seq-msg .arrow { font-size: 18px; flex-shrink: 0; }
+        .seq-msg.right .arrow { color: #4ade80; }
+        .seq-msg.left .arrow { color: #60a5fa; }
+        .seq-msg .text { color: #e2e8f0; }
+        .seq-msg .num-badge { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; }
+
+        /* Notes */
+        .note { background: #fbbf2410; border: 1px solid #fbbf2430; border-radius: 8px; padding: 16px 20px; margin-top: 16px; }
+        .note .note-title { font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 6px; }
+        .note .note-text { font-size: 13px; color: #fcd34d; line-height: 1.6; }
+
+        @media (max-width: 768px) {
+            .compare { grid-template-columns: 1fr; }
+            .sequence { grid-template-columns: 80px 1fr 80px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Presigned URL 업로드 전환 설계</h1>
+    <p class="subtitle">GearShow &mdash; LocalStack(서버 경유) &rarr; AWS S3(Presigned URL 직접 업로드)</p>
+
+    <!-- ==================== 현재 vs 변경 ==================== -->
+    <div class="section">
+        <div class="section-title">현재 구조 vs 변경 후 구조</div>
+        <div class="compare">
+            <div class="compare-card before">
+                <h3>현재: 서버 경유 업로드</h3>
+                <ul>
+                    <li>이미지가 서버 메모리를 거쳐 S3로 업로드</li>
+                    <li>10MB 파일 제한, 서버 대역폭 소모</li>
+                    <li>동시 업로드 시 서버 메모리 압박</li>
+                    <li>Flutter &rarr; multipart/form-data &rarr; Spring &rarr; S3</li>
+                    <li>서버가 단일 실패점 (SPOF)</li>
+                </ul>
+            </div>
+            <div class="compare-card after">
+                <h3>변경: Presigned URL 직접 업로드</h3>
+                <ul>
+                    <li>이미지가 서버를 거치지 않고 S3에 직접 업로드</li>
+                    <li>서버 메모리/대역폭 부담 제거</li>
+                    <li>대용량 파일도 안정적 처리</li>
+                    <li>Flutter &rarr; S3 직접 PUT (서버는 URL 발급만)</li>
+                    <li>S3의 높은 가용성 활용</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 쇼케이스 등록 플로우 ==================== -->
+    <div class="section">
+        <div class="section-title">쇼케이스 등록 전체 플로우</div>
+        <div class="section-desc">Flutter 앱에서 쇼케이스를 등록할 때의 전체 흐름 (이미지 + 3D 모델 소스 이미지)</div>
+
+        <div class="flow">
+            <!-- Step 1 -->
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">1</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter (Client)</div>
+                        <div class="title">Presigned URL 발급 요청</div>
+                        <div class="desc">업로드할 이미지 개수와 파일 정보(Content-Type, 파일명)를 서버에 전달한다.</div>
+                        <div class="endpoint"><span class="method post">POST</span>/api/v1/showcases/upload-urls</div>
+                        <div class="data-box">
+                            {<br>
+                            &nbsp;&nbsp;<span class="key">"files"</span>: [<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{ <span class="key">"contentType"</span>: <span class="val">"image/jpeg"</span>, <span class="key">"filename"</span>: <span class="val">"photo1.jpg"</span>, <span class="key">"type"</span>: <span class="val">"SHOWCASE_IMAGE"</span> },<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{ <span class="key">"contentType"</span>: <span class="val">"image/jpeg"</span>, <span class="key">"filename"</span>: <span class="val">"photo2.jpg"</span>, <span class="key">"type"</span>: <span class="val">"SHOWCASE_IMAGE"</span> },<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{ <span class="key">"contentType"</span>: <span class="val">"image/jpeg"</span>, <span class="key">"filename"</span>: <span class="val">"front.jpg"</span>, <span class="key">"type"</span>: <span class="val">"MODEL_SOURCE"</span> }<br>
+                            &nbsp;&nbsp;]<br>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step actor-server">
+                <div class="step-number"><div class="num">2</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Spring Boot (Server)</div>
+                        <div class="title">Presigned URL 생성 및 반환</div>
+                        <div class="desc">
+                            각 파일에 대해 UUID 기반 S3 key를 생성하고, <code>S3Presigner</code>로 PUT용 Presigned URL을 발급한다.<br>
+                            만료 시간: <strong>10분</strong>, Content-Type 고정.
+                        </div>
+                        <div class="data-box">
+                            {<br>
+                            &nbsp;&nbsp;<span class="key">"uploadUrls"</span>: [<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"presignedUrl"</span>: <span class="val">"https://s3.../showcases/uuid1.jpg?X-Amz-..."</span>,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"s3Key"</span>: <span class="val">"showcases/uuid1.jpg"</span>,<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"type"</span>: <span class="val">"SHOWCASE_IMAGE"</span><br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;},<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{ ... },<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;{ ... }<br>
+                            &nbsp;&nbsp;]<br>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">3</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter (Client)</div>
+                        <div class="title">S3에 직접 이미지 업로드</div>
+                        <div class="desc">
+                            발급받은 Presigned URL로 각 이미지를 <strong>S3에 직접 PUT</strong> 요청한다.<br>
+                            서버를 거치지 않으므로 서버 부하 없음. 병렬 업로드 가능.
+                        </div>
+                        <div class="endpoint"><span class="method put">PUT</span>https://s3.ap-northeast-2.amazonaws.com/...?X-Amz-Signature=...</div>
+                        <div class="data-box">
+                            Headers: { <span class="key">"Content-Type"</span>: <span class="val">"image/jpeg"</span> }<br>
+                            Body: <span class="val">[이미지 바이너리 데이터]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="step actor-s3">
+                <div class="step-number"><div class="num">4</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">AWS S3</div>
+                        <div class="title">이미지 저장 완료</div>
+                        <div class="desc">
+                            S3가 파일을 저장하고 <code>200 OK</code>를 반환한다.<br>
+                            이미지는 CDN URL로 접근 가능: <code>https://cdn.gearshow.com/showcases/uuid1.jpg</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">5</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter (Client)</div>
+                        <div class="title">쇼케이스 생성 요청 (업로드 완료 확인)</div>
+                        <div class="desc">
+                            모든 이미지 업로드가 완료되면, S3 key 목록과 쇼케이스 정보를 서버에 전달한다.<br>
+                            더 이상 <code>multipart/form-data</code>가 아닌 <strong>JSON</strong> 요청.
+                        </div>
+                        <div class="endpoint"><span class="method post">POST</span>/api/v1/showcases</div>
+                        <div class="data-box">
+                            {<br>
+                            &nbsp;&nbsp;<span class="key">"title"</span>: <span class="val">"머큐리얼 슈퍼플라이 10 엘리트"</span>,<br>
+                            &nbsp;&nbsp;<span class="key">"category"</span>: <span class="val">"BOOTS"</span>,<br>
+                            &nbsp;&nbsp;<span class="key">"brand"</span>: <span class="val">"Nike"</span>,<br>
+                            &nbsp;&nbsp;<span class="key">"conditionGrade"</span>: <span class="val">"A"</span>,<br>
+                            &nbsp;&nbsp;<span class="key">"imageKeys"</span>: [<span class="val">"showcases/uuid1.jpg"</span>, <span class="val">"showcases/uuid2.jpg"</span>],<br>
+                            &nbsp;&nbsp;<span class="key">"primaryImageIndex"</span>: <span class="val">0</span>,<br>
+                            &nbsp;&nbsp;<span class="key">"modelSourceImageKeys"</span>: [<span class="val">"showcases/uuid3.jpg"</span>],<br>
+                            &nbsp;&nbsp;<span class="key">"spec"</span>: { <span class="key">"studType"</span>: <span class="val">"FG"</span>, ... }<br>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6 -->
+            <div class="step actor-server">
+                <div class="step-number"><div class="num">6</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Spring Boot (Server)</div>
+                        <div class="title">S3 key 검증 및 쇼케이스 저장</div>
+                        <div class="desc">
+                            전달받은 S3 key가 실제로 S3에 존재하는지 <code>headObject</code>로 검증한다.<br>
+                            CDN URL을 조합하여 ShowcaseImage 엔티티를 생성하고 DB에 저장한다.<br>
+                            3D 모델 소스 이미지가 있으면 비동기로 3D 모델 생성을 요청한다.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 이미지 추가 플로우 ==================== -->
+    <div class="section">
+        <div class="section-title">이미지 추가 플로우 (기존 쇼케이스에 이미지 추가)</div>
+        <div class="section-desc">이미 등록된 쇼케이스에 이미지를 추가할 때</div>
+
+        <div class="flow">
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">1</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter</div>
+                        <div class="title">Presigned URL 발급 요청</div>
+                        <div class="endpoint"><span class="method post">POST</span>/api/v1/showcases/{showcaseId}/images/upload-urls</div>
+                        <div class="data-box">
+                            { <span class="key">"files"</span>: [{ <span class="key">"contentType"</span>: <span class="val">"image/jpeg"</span>, <span class="key">"filename"</span>: <span class="val">"new.jpg"</span> }] }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">2</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter</div>
+                        <div class="title">S3에 직접 업로드</div>
+                        <div class="endpoint"><span class="method put">PUT</span>Presigned URL</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">3</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Flutter</div>
+                        <div class="title">이미지 추가 확인 요청</div>
+                        <div class="endpoint"><span class="method post">POST</span>/api/v1/showcases/{showcaseId}/images</div>
+                        <div class="data-box">
+                            { <span class="key">"imageKeys"</span>: [<span class="val">"showcases/1/uuid.jpg"</span>] }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== API 변경 요약 ==================== -->
+    <div class="section">
+        <div class="section-title">API 변경 요약</div>
+        <table class="api-table">
+            <thead>
+                <tr>
+                    <th>상태</th>
+                    <th>Method</th>
+                    <th>Endpoint</th>
+                    <th>설명</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="badge new">NEW</span></td>
+                    <td>POST</td>
+                    <td><code>/api/v1/showcases/upload-urls</code></td>
+                    <td>쇼케이스 등록용 Presigned URL 발급</td>
+                </tr>
+                <tr>
+                    <td><span class="badge new">NEW</span></td>
+                    <td>POST</td>
+                    <td><code>/api/v1/showcases/{id}/images/upload-urls</code></td>
+                    <td>이미지 추가용 Presigned URL 발급</td>
+                </tr>
+                <tr>
+                    <td><span class="badge modify">MODIFY</span></td>
+                    <td>POST</td>
+                    <td><code>/api/v1/showcases</code></td>
+                    <td>multipart &rarr; JSON 변경 (S3 key 전달)</td>
+                </tr>
+                <tr>
+                    <td><span class="badge modify">MODIFY</span></td>
+                    <td>POST</td>
+                    <td><code>/api/v1/showcases/{id}/images</code></td>
+                    <td>multipart &rarr; JSON 변경 (S3 key 전달)</td>
+                </tr>
+                <tr>
+                    <td><span class="badge modify">MODIFY</span></td>
+                    <td>POST</td>
+                    <td><code>/api/v1/showcases/{id}/3d-model</code></td>
+                    <td>multipart &rarr; JSON 변경 (S3 key 전달)</td>
+                </tr>
+                <tr>
+                    <td><span class="badge keep">KEEP</span></td>
+                    <td>DELETE</td>
+                    <td><code>/api/v1/showcases/{id}/images/{imgId}</code></td>
+                    <td>변경 없음 (서버에서 S3 삭제)</td>
+                </tr>
+                <tr>
+                    <td><span class="badge keep">KEEP</span></td>
+                    <td>PATCH</td>
+                    <td><code>/api/v1/showcases/{id}/images/order</code></td>
+                    <td>변경 없음</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ==================== 보안 ==================== -->
+    <div class="section">
+        <div class="section-title">보안 설정</div>
+        <div class="flow">
+            <div class="step actor-server">
+                <div class="step-number"><div class="num">!</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">Presigned URL 설정</div>
+                        <div class="title">보안 제약 조건</div>
+                        <div class="desc">
+                            <strong>만료 시간:</strong> 10분 (업로드 충분, 악용 방지)<br>
+                            <strong>Content-Type 고정:</strong> image/jpeg, image/png, image/webp만 허용<br>
+                            <strong>파일 크기:</strong> S3 버킷 정책으로 10MB 제한<br>
+                            <strong>인증 필수:</strong> Presigned URL 발급 API는 로그인 사용자만 접근 가능<br>
+                            <strong>S3 key 검증:</strong> 쇼케이스 생성 시 headObject로 파일 존재 여부 확인
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="step actor-s3">
+                <div class="step-number"><div class="num">!</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">S3 버킷 정책</div>
+                        <div class="title">버킷 보안 설정</div>
+                        <div class="desc">
+                            <strong>Public Access:</strong> 차단 (Block all public access)<br>
+                            <strong>IAM 권한:</strong> 서버에 s3:PutObject, s3:GetObject, s3:DeleteObject만 부여<br>
+                            <strong>CDN 연동:</strong> CloudFront를 통해서만 읽기 접근 허용 (OAI/OAC)<br>
+                            <strong>CORS:</strong> Flutter 웹에서 직접 PUT 가능하도록 S3 CORS 설정 필요
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 백엔드 변경 범위 ==================== -->
+    <div class="section">
+        <div class="section-title">백엔드 변경 범위</div>
+        <table class="api-table">
+            <thead>
+                <tr>
+                    <th>계층</th>
+                    <th>파일</th>
+                    <th>변경</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Infrastructure</td>
+                    <td><code>S3Config.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> S3Presigner 빈 추가</td>
+                </tr>
+                <tr>
+                    <td>Port</td>
+                    <td><code>ImageStoragePort.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> generatePresignedUrl(), verifyExists() 메서드 추가</td>
+                </tr>
+                <tr>
+                    <td>Adapter</td>
+                    <td><code>S3ImageStorageAdapter.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> Presigner 구현, headObject 검증 구현</td>
+                </tr>
+                <tr>
+                    <td>Application</td>
+                    <td><code>UploadFile.java</code></td>
+                    <td><span class="badge delete">DELETE</span> InputStream 불필요 (서버가 파일을 안 받으므로)</td>
+                </tr>
+                <tr>
+                    <td>Adapter</td>
+                    <td><code>UploadFileMapper.java</code></td>
+                    <td><span class="badge delete">DELETE</span> MultipartFile 변환 불필요</td>
+                </tr>
+                <tr>
+                    <td>Application</td>
+                    <td><code>CreateShowcaseFacade.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> S3 업로드 단계 제거, S3 key 검증으로 변경</td>
+                </tr>
+                <tr>
+                    <td>Controller</td>
+                    <td><code>ShowcaseController.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> multipart &rarr; JSON, URL 발급 엔드포인트 추가</td>
+                </tr>
+                <tr>
+                    <td>Controller</td>
+                    <td><code>ShowcaseImageController.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> multipart &rarr; JSON, URL 발급 엔드포인트 추가</td>
+                </tr>
+                <tr>
+                    <td>Controller</td>
+                    <td><code>ShowcaseModel3dController.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> multipart &rarr; JSON 변경</td>
+                </tr>
+                <tr>
+                    <td>DTO</td>
+                    <td><code>CreateShowcaseRequest.java</code></td>
+                    <td><span class="badge modify">MODIFY</span> imageKeys, modelSourceImageKeys 필드로 변경</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            <div class="note-title">S3 Key 경로 전략</div>
+            <div class="note-text">
+                <code>showcases/{uuid}.{ext}</code> &mdash; 쇼케이스 이미지<br>
+                <code>showcases/model-source/{uuid}.{ext}</code> &mdash; 3D 모델 소스 이미지<br>
+                CDN URL 조합: <code>https://cdn.gearshow.com/{s3Key}</code>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 프론트엔드 변경 범위 ==================== -->
+    <div class="section">
+        <div class="section-title">프론트엔드 (Flutter) 변경 범위</div>
+        <div class="flow">
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">1</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">변경 필요</div>
+                        <div class="title">이미지 업로드 로직 변경</div>
+                        <div class="desc">
+                            <strong>Before:</strong> multipart/form-data로 이미지를 서버에 직접 전송<br>
+                            <strong>After:</strong> 3단계 호출<br>
+                            &nbsp;&nbsp;1) 서버에서 Presigned URL 발급받기<br>
+                            &nbsp;&nbsp;2) 각 URL로 S3에 직접 PUT 업로드 (병렬 가능)<br>
+                            &nbsp;&nbsp;3) S3 key 목록을 서버에 전달하여 쇼케이스 생성
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="step actor-client">
+                <div class="step-number"><div class="num">2</div><div class="line"></div></div>
+                <div class="step-content">
+                    <div class="step-card">
+                        <div class="label">변경 필요</div>
+                        <div class="title">쇼케이스 생성 API 호출 변경</div>
+                        <div class="desc">
+                            <strong>Before:</strong> <code>multipart/form-data</code> (이미지 + 폼 데이터 함께)<br>
+                            <strong>After:</strong> <code>application/json</code> (S3 key 목록 + 폼 데이터)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
