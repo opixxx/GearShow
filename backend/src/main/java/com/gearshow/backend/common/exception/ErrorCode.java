@@ -50,6 +50,7 @@ public enum ErrorCode {
     SHOWCASE_COMMENT_NOT_FOUND(404, "댓글을 찾을 수 없습니다"),
     SHOWCASE_COMMENT_NOT_AUTHOR(403, "댓글 작성자만 수정 또는 삭제할 수 있습니다"),
     SHOWCASE_COMMENT_INVALID(400, "유효하지 않은 댓글입니다"),
+    SHOWCASE_SPEC_SERIALIZATION_FAILED(500, "스펙 JSON 직렬화에 실패했습니다"),
 
     // STORAGE
     STORAGE_UPLOAD_FAILED(500, "이미지 업로드에 실패했습니다"),

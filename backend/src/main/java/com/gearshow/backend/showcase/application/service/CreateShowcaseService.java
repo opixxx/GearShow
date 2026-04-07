@@ -5,6 +5,7 @@ import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
+import com.gearshow.backend.showcase.application.exception.ShowcaseSpecSerializationException;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseSpecPort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
@@ -78,8 +79,8 @@ public class CreateShowcaseService {
                 String specData = objectMapper.writeValueAsString(command.uniformSpec());
                 showcaseSpecPort.save(ShowcaseSpec.create(showcaseId, SpecType.UNIFORM, specData));
             }
-        } catch (Exception e) {
-            throw new IllegalStateException("스펙 JSON 직렬화 실패", e);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new ShowcaseSpecSerializationException();
         }
     }
 }
