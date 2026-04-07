@@ -86,14 +86,33 @@ public class TripoApiClient {
      * @return Task 상태 응답
      */
     public TripoTaskStatusResponse getTaskStatus(String taskId) {
-        TripoTaskStatusResponse response = tripoRestClient.get()
+        // 원본 JSON 로깅 (디버깅용)
+        String rawJson = tripoRestClient.get()
                 .uri("/task/{taskId}", taskId)
                 .retrieve()
-                .body(TripoTaskStatusResponse.class);
+                .body(String.class);
+        log.info("Tripo Task 원본 응답 - taskId: {}, json: {}", taskId, rawJson);
+
+        TripoTaskStatusResponse response;
+        try {
+            response = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .readValue(rawJson, TripoTaskStatusResponse.class);
+        } catch (Exception e) {
+            throw new TripoApiException("Tripo Task 응답 JSON 파싱 실패 - taskId: " + taskId + ", json: " + rawJson, e);
+        }
 
         if (response == null || response.data() == null) {
             throw new TripoApiException("Tripo Task 상태 조회 실패 - taskId: " + taskId);
         }
+
+        // 파싱된 결과 상세 로깅
+        var data = response.data();
+        log.info("Tripo Task 파싱 결과 - taskId: {}, status: {}, progress: {}, output: {}, model: {}, rendered_image: {}",
+                data.task_id(), data.status(), data.progress(),
+                data.output() != null ? "존재" : "null",
+                data.output() != null ? data.output().model() : "N/A",
+                data.output() != null ? data.output().rendered_image() : "N/A");
 
         return response;
     }

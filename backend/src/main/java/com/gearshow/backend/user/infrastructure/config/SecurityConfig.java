@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 인증 없이 접근 가능한 엔드포인트
                         .requestMatchers("/api/v1/auth/login/**").permitAll()
+                        .requestMatchers("/api/v1/auth/dev-login").permitAll()
                         .requestMatchers("/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/catalogs/**").permitAll()

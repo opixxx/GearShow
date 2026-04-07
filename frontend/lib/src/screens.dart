@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
+import 'package:model_viewer_plus/model_viewer_plus.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import 'app.dart';
 import 'models.dart';
@@ -1158,53 +1160,128 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
   }
 }
 
-class Viewer3dScreen extends StatelessWidget {
+class Viewer3dScreen extends StatefulWidget {
   const Viewer3dScreen({super.key, required this.args});
 
   final Viewer3dArgs args;
 
   @override
+  State<Viewer3dScreen> createState() => _Viewer3dScreenState();
+}
+
+class _Viewer3dScreenState extends State<Viewer3dScreen> {
+  late final WebViewController _webViewController;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final model = widget.args.model;
+    final hasModel = model.modelFileUrl?.isNotEmpty == true
+        && model.modelStatus == 'COMPLETED';
+
+    if (hasModel) {
+      final modelUrl = model.modelFileUrl!;
+      // Google model-viewer 웹 컴포넌트를 직접 HTML로 로드
+      final html = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+<style>
+  body { margin: 0; padding: 0; background: #0a0a0a; overflow: hidden; }
+  model-viewer { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<model-viewer
+  src="$modelUrl"
+  camera-controls
+  auto-rotate
+  shadow-intensity="1"
+  style="background-color: #0a0a0a;"
+></model-viewer>
+</body>
+</html>
+''';
+
+      _webViewController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(NavigationDelegate(
+          onPageFinished: (_) => setState(() => _loading = false),
+        ))
+        ..loadHtmlString(html);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final model = args.model;
+    final model = widget.args.model;
+    final hasModel = model.modelFileUrl?.isNotEmpty == true
+        && model.modelStatus == 'COMPLETED';
+
     return Scaffold(
-      appBar: AppBar(title: Text('${args.title} 3D')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _ImageFrame(
-                imageUrl: model.previewImageUrl,
-                size: double.infinity,
-                emoji: '✨',
-                borderRadius: 24,
+      backgroundColor: const Color(0xFF0A0A0A),
+      appBar: AppBar(
+        title: Text('${widget.args.title} 3D'),
+        actions: [
+          if (hasModel)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Chip(
+                label: const Text('COMPLETED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                backgroundColor: const Color(0xFF14532D),
+                labelStyle: const TextStyle(color: Color(0xFF4ADE80)),
+                side: BorderSide.none,
               ),
             ),
-            const SizedBox(height: 20),
-            _SectionCard(
-              title: '3D 모델 상태',
+        ],
+      ),
+      body: hasModel
+          ? Stack(
+              children: [
+                WebViewWidget(controller: _webViewController),
+                if (_loading)
+                  const Center(child: CircularProgressIndicator()),
+              ],
+            )
+          : Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _LabeledValue(label: 'Status', value: model.modelStatus),
-                  const SizedBox(height: 12),
-                  _LabeledValue(
-                    label: 'Model URL',
-                    value: model.modelFileUrl?.isNotEmpty == true ? model.modelFileUrl! : '아직 생성되지 않았습니다.',
+                  if (model.previewImageUrl?.isNotEmpty == true) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        model.previewImageUrl!,
+                        width: 200,
+                        height: 200,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => const Icon(Icons.view_in_ar, size: 80, color: Color(0xFF475569)),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ] else
+                    const Icon(Icons.view_in_ar, size: 80, color: Color(0xFF475569)),
+                  const SizedBox(height: 16),
+                  Text(
+                    _statusText(model.modelStatus),
+                    style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 16),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              '현재 앱은 backend의 3D 모델 상태/URL 조회까지 연결했습니다. 실제 3D 렌더러는 추가 패키지 없이 제외했습니다.',
-              style: TextStyle(color: Color(0xFFA1A1AA)),
-            ),
-          ],
-        ),
-      ),
     );
+  }
+
+  String _statusText(String status) {
+    return switch (status) {
+      'REQUESTED' => '3D 모델 생성 요청됨',
+      'GENERATING' => '3D 모델 생성 중...',
+      'FAILED' => '3D 모델 생성 실패',
+      _ => '상태: $status',
+    };
   }
 }
 

@@ -132,9 +132,13 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
      */
     private GenerationResult handleSuccess(TripoTaskStatusResponse status, Long showcaseId) {
         var output = status.data().output();
+        // Tripo는 multiview 시 model이 null이고 pbr_model에 GLB를 반환한다
+        String tripoModelUrl = output.model() != null ? output.model() : output.pbr_model();
+        log.info("Tripo 출력 URL - model: {}, pbr_model: {}, rendered_image: {}",
+                output.model(), output.pbr_model(), output.rendered_image());
 
         // Tripo에서 GLB 모델 다운로드
-        byte[] modelBytes = downloadFromUrl(output.model());
+        byte[] modelBytes = downloadFromUrl(tripoModelUrl);
         String modelS3Key = "models/" + showcaseId + "/model.glb";
         String modelUrl = imageStoragePort.upload(modelS3Key, modelBytes, "model/gltf-binary");
 
@@ -155,8 +159,14 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
      * Tripo의 임시 다운로드 URL(5분 만료)에서 파일을 가져온다.
      */
     private byte[] downloadFromUrl(String url) {
+        if (url == null || url.isBlank()) {
+            throw new TripoApiException("다운로드 URL이 비어있습니다");
+        }
+        // Tripo가 scheme 없는 URL을 반환할 수 있으므로 보정
+        String resolvedUrl = url.startsWith("http") ? url : "https://" + url;
+        log.info("Tripo 파일 다운로드 시작 - URL: {}", resolvedUrl);
         return RestClient.create().get()
-                .uri(url)
+                .uri(java.net.URI.create(resolvedUrl))
                 .retrieve()
                 .body(byte[].class);
     }
