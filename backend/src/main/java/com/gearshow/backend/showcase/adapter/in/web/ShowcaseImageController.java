@@ -27,14 +27,9 @@ public class ShowcaseImageController {
      * 이미지를 추가한다.
      * 클라이언트가 Presigned URL로 S3에 이미지를 직접 업로드한 후 S3 키 목록을 전달한다.
      */
-<<<<<<< HEAD
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Map<String, List<Long>>> addImages(
-=======
-    @PostMapping
-    public ResponseEntity<ApiResponse<Map<String, List<Long>>>> addImages(
->>>>>>> 7205c15 (feat: S3 Presigned URL 업로드로 전환)
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody AddImagesRequest request) {

@@ -6,7 +6,6 @@ import com.gearshow.backend.showcase.adapter.in.web.dto.GeneratePresignedUrlResp
 import com.gearshow.backend.showcase.application.port.in.GeneratePresignedUrlUseCase;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,7 +25,7 @@ public class ShowcasePresignedUrlController {
      * SHOWCASE_IMAGE, MODEL_SOURCE 유형 모두 허용된다.
      */
     @PostMapping("/api/v1/showcases/upload-urls")
-    public ResponseEntity<ApiResponse<List<GeneratePresignedUrlResponse>>> generateUploadUrls(
+    public ApiResponse<List<GeneratePresignedUrlResponse>> generateUploadUrls(
             @Valid @RequestBody GeneratePresignedUrlRequest request) {
 
         List<GeneratePresignedUrlResponse> result = generatePresignedUrlUseCase
@@ -35,15 +34,14 @@ public class ShowcasePresignedUrlController {
                 .map(GeneratePresignedUrlResponse::from)
                 .toList();
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "Presigned URL 발급 성공", result));
+        return ApiResponse.of(200, "Presigned URL 발급 성공", result);
     }
 
     /**
      * 기존 쇼케이스 이미지 추가용 Presigned URL을 발급한다.
      */
     @PostMapping("/api/v1/showcases/{showcaseId}/images/upload-urls")
-    public ResponseEntity<ApiResponse<List<GeneratePresignedUrlResponse>>> generateImagesUploadUrls(
+    public ApiResponse<List<GeneratePresignedUrlResponse>> generateImagesUploadUrls(
             @PathVariable Long showcaseId,
             @Valid @RequestBody GeneratePresignedUrlRequest request) {
 
@@ -53,7 +51,6 @@ public class ShowcasePresignedUrlController {
                 .map(GeneratePresignedUrlResponse::from)
                 .toList();
 
-        return ResponseEntity.ok(
-                ApiResponse.of(200, "Presigned URL 발급 성공", result));
+        return ApiResponse.of(200, "Presigned URL 발급 성공", result);
     }
 }
