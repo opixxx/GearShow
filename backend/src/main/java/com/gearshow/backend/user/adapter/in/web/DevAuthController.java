@@ -1,14 +1,15 @@
 package com.gearshow.backend.user.adapter.in.web;
 
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.user.adapter.in.web.dto.LoginResponse;
 import com.gearshow.backend.user.application.dto.LoginResult;
 import com.gearshow.backend.user.application.port.in.DevLoginUseCase;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 개발 환경 전용 인증 컨트롤러.

@@ -596,7 +596,6 @@ class ShowcaseServiceIntegrationTest {
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
                     command, createFakeImageKeys(2), List.of());
-            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(result.showcaseId());
 
             // Then - 첫 번째 이미지(primaryImageIndex=0)의 URL이 설정되어야 함
             ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
