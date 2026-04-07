@@ -120,6 +120,13 @@ public class AuthStepDefinitions {
         assertThat(data.get(fieldName)).isNotNull();
     }
 
+    @And("응답의 data의 {string} 필드는 null이다")
+    public void 응답_data_필드_null_확인(String fieldName) {
+        Map<String, Object> data = extractData(context.getLastResponse());
+        assertThat(data).containsKey(fieldName);
+        assertThat(data.get(fieldName)).isNull();
+    }
+
     @And("응답의 data의 {string} 필드는 {string}이다")
     public void 응답_data_필드_값_확인(String fieldName, String expectedValue) {
         Map<String, Object> data = extractData(context.getLastResponse());

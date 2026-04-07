@@ -12,7 +12,7 @@ Feature: 쇼케이스
     When 일반 이미지만으로 쇼케이스를 등록한다
     Then 응답 상태 코드는 201이다
     And 응답의 data에 "showcaseId" 필드가 존재한다
-    And 응답의 data의 "model3dStatus" 필드는 "null"이다
+    And 응답의 data의 "model3dStatus" 필드는 null이다
 
   @smoke @showcase @model3d
   Scenario: 3D 모델 소스 이미지와 함께 쇼케이스를 등록한다

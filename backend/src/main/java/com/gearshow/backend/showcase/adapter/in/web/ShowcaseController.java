@@ -3,7 +3,9 @@ package com.gearshow.backend.showcase.adapter.in.web;
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseDetailResponse;
+import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseIdResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateShowcaseRequest;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
@@ -25,7 +27,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 쇼케이스 관련 API 컨트롤러.
@@ -83,7 +84,7 @@ public class ShowcaseController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Map<String, Object>> create(
+    public ApiResponse<CreateShowcaseResponse> create(
             Authentication authentication,
             @Valid @RequestBody CreateShowcaseRequest request) {
 
@@ -94,17 +95,14 @@ public class ShowcaseController {
                 request.imageKeys(),
                 request.modelSourceImageKeys() != null ? request.modelSourceImageKeys() : List.of());
 
-        return ApiResponse.of(201, "쇼케이스 등록 성공",
-                Map.of("showcaseId", result.showcaseId(),
-                        "model3dStatus", result.model3dStatus() != null
-                                ? result.model3dStatus().name() : "null"));
+        return ApiResponse.of(201, "쇼케이스 등록 성공", CreateShowcaseResponse.from(result));
     }
 
     /**
      * 쇼케이스를 수정한다.
      */
     @PatchMapping("/{showcaseId}")
-    public ApiResponse<Map<String, Long>> update(
+    public ApiResponse<ShowcaseIdResponse> update(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody UpdateShowcaseRequest request) {
@@ -112,8 +110,7 @@ public class ShowcaseController {
         Long ownerId = (Long) authentication.getPrincipal();
         updateShowcaseUseCase.update(showcaseId, ownerId, request.toCommand());
 
-        return ApiResponse.of(200, "쇼케이스 수정 성공",
-                Map.of("showcaseId", showcaseId));
+        return ApiResponse.of(200, "쇼케이스 수정 성공", new ShowcaseIdResponse(showcaseId));
     }
 
     /**

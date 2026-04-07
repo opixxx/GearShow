@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.common.dto.PageInfo;
+import com.gearshow.backend.showcase.adapter.in.web.dto.CommentIdResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateCommentRequest;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateCommentRequest;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
@@ -17,8 +18,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /**
  * 쇼케이스 댓글 관련 API 컨트롤러.
@@ -56,7 +55,7 @@ public class ShowcaseCommentController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Map<String, Long>> create(
+    public ApiResponse<CommentIdResponse> create(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody CreateCommentRequest request) {
@@ -64,15 +63,14 @@ public class ShowcaseCommentController {
         Long authorId = (Long) authentication.getPrincipal();
         Long commentId = createCommentUseCase.create(showcaseId, authorId, request.content());
 
-        return ApiResponse.of(201, "댓글 작성 성공",
-                Map.of("showcaseCommentId", commentId));
+        return ApiResponse.of(201, "댓글 작성 성공", new CommentIdResponse(commentId));
     }
 
     /**
      * 댓글을 수정한다.
      */
     @PatchMapping("/{commentId}")
-    public ApiResponse<Map<String, Long>> update(
+    public ApiResponse<CommentIdResponse> update(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @PathVariable Long commentId,
@@ -81,8 +79,7 @@ public class ShowcaseCommentController {
         Long authorId = (Long) authentication.getPrincipal();
         updateCommentUseCase.update(showcaseId, commentId, authorId, request.content());
 
-        return ApiResponse.of(200, "댓글 수정 성공",
-                Map.of("showcaseCommentId", commentId));
+        return ApiResponse.of(200, "댓글 수정 성공", new CommentIdResponse(commentId));
     }
 
     /**
