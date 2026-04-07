@@ -85,9 +85,10 @@ class GeneratePresignedUrlServiceIntegrationTest {
             List<PresignedUrlResult> results = generatePresignedUrlUseCase.generate(files);
 
             // Then - 경로 규칙: showcases/{uuid}.ext  (model-source 하위가 아님)
-            String s3Key = results.get(0).s3Key();
-            assertThat(s3Key).startsWith("showcases/");
-            assertThat(s3Key).doesNotContain("model-source");
+            String s3Key = results.getFirst().s3Key();
+            assertThat(s3Key)
+                .startsWith("showcases/")
+                .doesNotContain("model-source");
         }
 
         @Test

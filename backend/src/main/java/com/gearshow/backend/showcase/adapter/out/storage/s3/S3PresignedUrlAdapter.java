@@ -38,13 +38,12 @@ public class S3PresignedUrlAdapter implements PresignedUrlPort {
     public String generatePutUrl(String s3Key, String contentType) {
         try {
             PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofMinutes(EXPIRATION_MINUTES))
-                    .putObjectRequest(PutObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(s3Key)
-                            .contentType(contentType)
-                            .build())
-                    .build();
+                .signatureDuration(Duration.ofMinutes(EXPIRATION_MINUTES))
+                .putObjectRequest(por -> por
+                    .bucket(bucket)
+                    .key(s3Key)
+                    .contentType(contentType))
+                .build();
 
             String presignedUrl = s3Presigner.presignPutObject(presignRequest).url().toString();
             log.debug("Presigned URL 생성 완료: key={}", s3Key);

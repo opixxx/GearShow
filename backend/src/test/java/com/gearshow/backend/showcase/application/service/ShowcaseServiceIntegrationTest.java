@@ -311,8 +311,9 @@ class ShowcaseServiceIntegrationTest {
             CreateShowcaseCommand command = createCommand(1L);
 
             // When & Then
-            assertThatThrownBy(() -> createShowcaseUseCase.create(
-                    command, List.of(), List.of()))
+            List<String> emptyImageKeys = List.of();
+            List<String> emptyModelKeys = List.of();
+            assertThatThrownBy(() -> createShowcaseUseCase.create(command, emptyImageKeys, emptyModelKeys))
                     .isInstanceOf(MinImageRequiredException.class);
         }
 
@@ -328,7 +329,8 @@ class ShowcaseServiceIntegrationTest {
 
             // When & Then
             List<String> imageKeys = createFakeImageKeys(1);
-            assertThatThrownBy(() -> createShowcaseUseCase.create(command, imageKeys, List.of()))
+            List<String> emptyModelKeys = List.of();
+            assertThatThrownBy(() -> createShowcaseUseCase.create(command, imageKeys, emptyModelKeys))
                     .isInstanceOf(PrimaryImageRequiredException.class);
         }
     }
@@ -368,8 +370,6 @@ class ShowcaseServiceIntegrationTest {
         void reorderImages_success() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
-            List<Long> addedIds = manageShowcaseImageUseCase.addImages(
-                    showcaseId, 1L, createFakeImageKeys(2));
 
             ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
             List<ManageShowcaseImageUseCase.ImageOrder> orders = detail.images().stream()

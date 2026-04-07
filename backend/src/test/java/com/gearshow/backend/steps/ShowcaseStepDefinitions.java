@@ -1,24 +1,24 @@
 package com.gearshow.backend.steps;
 
-import com.gearshow.backend.support.ScenarioContext;
-import com.gearshow.backend.support.TestApiClient;
-import com.gearshow.backend.support.TestResponse;
-import io.cucumber.java.en.And;
-import io.cucumber.java.en.Given;
-import io.cucumber.java.en.Then;
-import io.cucumber.java.en.When;
+import static org.assertj.core.api.Assertions.*;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.gearshow.backend.support.ScenarioContext;
+import com.gearshow.backend.support.TestApiClient;
+import com.gearshow.backend.support.TestResponse;
+
+import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
+import io.cucumber.java.en.When;
 
 /**
  * 쇼케이스 관련 Cucumber Step Definitions.
- * Given: 사전 조건 (쇼케이스가 이미 존재하는 상태)
+ * Given: 사전 조건
+ * (쇼케이스가 이미 존재하는 상태)
  * When: 테스트 대상 행위
  * Then: AuthStepDefinitions의 공통 Then 재사용
  */
@@ -313,8 +313,10 @@ public class ShowcaseStepDefinitions {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> data =
                 (List<Map<String, Object>>) context.getLastResponse().body().get("data");
-        assertThat(data).allSatisfy(item ->
-                assertThat(item).containsKey(fieldName));
+        assertThat(data)
+            .isNotEmpty()
+            .allSatisfy(item ->
+            assertThat(item).containsKey(fieldName));
     }
 
     @Then("반환된 s3Key 는 {string} 경로를 포함한다")
@@ -322,7 +324,9 @@ public class ShowcaseStepDefinitions {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> data =
                 (List<Map<String, Object>>) context.getLastResponse().body().get("data");
-        assertThat(data).allSatisfy(item -> {
+        assertThat(data)
+            .isNotEmpty()
+            .allSatisfy(item -> {
             String s3Key = (String) item.get("s3Key");
             assertThat(s3Key).contains(expectedPath);
         });
