@@ -13,8 +13,6 @@ import com.gearshow.backend.showcase.application.port.in.DeleteShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.in.ListShowcasesUseCase;
 import com.gearshow.backend.showcase.application.port.in.UpdateShowcaseUseCase;
-import com.gearshow.backend.catalog.domain.vo.Category;
-import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -43,23 +41,17 @@ public class ShowcaseController {
     private final DeleteShowcaseUseCase deleteShowcaseUseCase;
 
     /**
-     * 쇼케이스 목록을 조회한다.
+     * 쇼케이스 목록을 조회한다 (최신순).
      */
     @GetMapping
     public ApiResponse<PageInfo<ShowcaseListResult>> list(
-            @RequestParam(required = false) Category category,
-            @RequestParam(required = false) String brand,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Boolean isForSale,
-            @RequestParam(required = false) ConditionGrade conditionGrade,
             @RequestParam(required = false) String pageToken,
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다")
             @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다")
             int size) {
 
-        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(
-                pageToken, size, category, brand, keyword, isForSale, conditionGrade);
+        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(pageToken, size);
 
         return ApiResponse.of(200, "쇼케이스 목록 조회 성공", result);
     }

@@ -79,8 +79,7 @@ class ShowcasePersistenceAdapterIntegrationTest {
             adapter.save(createShowcase("쇼케이스3"));
 
             // When
-            List<Showcase> result = adapter.findAllFirstPage(
-                    2, null, null, null, null, null);
+            List<Showcase> result = adapter.findAllFirstPage(2);
 
             // Then - size+1 조회이므로 3개가 반환될 수 있음 (hasNext 판단용)
             assertThat(result).hasSizeGreaterThanOrEqualTo(2);
@@ -97,8 +96,7 @@ class ShowcasePersistenceAdapterIntegrationTest {
 
             // When - 가장 최신(third) 이후의 데이터를 조회
             List<Showcase> result = adapter.findAllWithCursor(
-                    third.getCreatedAt(), third.getId(), 10,
-                    null, null, null, null, null);
+                    third.getCreatedAt(), third.getId(), 10);
 
             // Then - third보다 이전 데이터만 반환
             assertThat(result)

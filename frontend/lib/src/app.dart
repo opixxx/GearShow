@@ -4,10 +4,23 @@ import 'api.dart';
 import 'models.dart';
 import 'screens.dart';
 
+/// 앱 실행 환경.
+enum AppEnvironment {
+  /// 개발 환경 — OAuth 없이 개발자 로그인으로 API 테스트 (웹 가능).
+  dev,
+
+  /// 운영 환경 — 카카오 SDK 소셜 로그인 (앱 전용).
+  prod,
+}
+
 class AppController extends ChangeNotifier {
-  AppController(this.api);
+  AppController(this.api, {this.environment = AppEnvironment.prod});
 
   final GearShowApiClient api;
+  final AppEnvironment environment;
+
+  /// 개발 환경 여부.
+  bool get isDev => environment == AppEnvironment.dev;
 
   String baseUrl = 'http://localhost:8080';
   AuthSession? session;
@@ -26,6 +39,17 @@ class AppController extends ChangeNotifier {
 
   void updateBaseUrl(String value) {
     baseUrl = value.trim().isEmpty ? baseUrl : value.trim();
+    notifyListeners();
+  }
+
+  /// 개발용 로그인. OAuth 없이 테스트 사용자로 인증한다.
+  Future<void> devLogin() async {
+    final nextSession = await api.devLogin(baseUrl: baseUrl);
+    session = nextSession;
+    profile = await api.getMyProfile(
+      baseUrl: baseUrl,
+      accessToken: nextSession.accessToken,
+    );
     notifyListeners();
   }
 
@@ -106,7 +130,9 @@ class AppController extends ChangeNotifier {
 }
 
 class GearShowApp extends StatefulWidget {
-  const GearShowApp({super.key});
+  const GearShowApp({super.key, this.environment = AppEnvironment.prod});
+
+  final AppEnvironment environment;
 
   @override
   State<GearShowApp> createState() => _GearShowAppState();
@@ -118,7 +144,10 @@ class _GearShowAppState extends State<GearShowApp> {
   @override
   void initState() {
     super.initState();
-    controller = AppController(GearShowApiClient());
+    controller = AppController(
+      GearShowApiClient(),
+      environment: widget.environment,
+    );
   }
 
   @override

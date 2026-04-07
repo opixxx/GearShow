@@ -444,23 +444,16 @@ GET /api/v1/showcases
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |:--------|:-----|:----|:-----|
-| category | string | N | 카테고리 필터 (`BOOTS`, `UNIFORM`) |
-| brand | string | N | 브랜드 필터 |
-| keyword | string | N | 제목 검색 |
-| isForSale | boolean | N | 판매 여부 필터 |
-| conditionGrade | string | N | 상태 등급 필터 (`S`, `A`, `B`, `C`) |
-| studType | string | N | (BOOTS) 스터드 타입 필터 |
-| siloName | string | N | (BOOTS) 사일로 필터 |
-| clubName | string | N | (UNIFORM) 클럽명 필터 |
-| league | string | N | (UNIFORM) 리그 필터 |
-| cursor | string | N | 커서 값 |
-| size | int | N | 페이지 크기 |
+| pageToken | string | N | 커서 기반 페이지 토큰 |
+| size | int | N | 페이지 크기 (기본 20, 최대 100) |
+
+> **참고**: 필터링(카테고리, 브랜드, 키워드 등)은 추후 Elasticsearch 도입 시 별도 검색 API로 제공 예정
 
 **Response** `200 OK`
 ```json
 {
   "status": 200,
-  "message": "Showcases retrieved successfully",
+  "message": "쇼케이스 목록 조회 성공",
   "data": {
     "pageToken": "eyJpZCI6MjB9",
     "data": [
@@ -469,13 +462,18 @@ GET /api/v1/showcases
         "title": "머큐리얼 슈퍼플라이 10 엘리트 착용 후기",
         "category": "BOOTS",
         "brand": "Nike",
-        "ownerNickname": "축구매니아",
+        "userSize": "275",
         "primaryImageUrl": "https://cdn.gearshow.com/showcases/1/primary.jpg",
         "conditionGrade": "A",
         "isForSale": true,
         "wearCount": 5,
         "commentCount": 12,
         "has3dModel": true,
+        "spec": {
+          "studType": "FG",
+          "siloName": "Mercurial",
+          "surfaceType": "천연잔디"
+        },
         "createdAt": "2026-03-20T14:30:00"
       }
     ],
@@ -521,10 +519,8 @@ GET /api/v1/showcases/{showcaseId}
     "isForSale": true,
     "showcaseStatus": "ACTIVE",
     "spec": {
-      "studType": "FG",
-      "siloName": "Mercurial",
-      "releaseYear": "2025",
-      "surfaceType": "천연잔디"
+      "specType": "BOOTS",
+      "specData": "{\"studType\":\"FG\",\"siloName\":\"Mercurial\",\"releaseYear\":\"2025\",\"surfaceType\":\"천연잔디\"}"
     },
     "images": [
       {

@@ -41,7 +41,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     @Override
     @Transactional
     public List<Long> addImages(Long showcaseId, Long ownerId, List<String> imageKeys) {
-        validateOwnership(showcaseId, ownerId);
+        validateOwnershipAndGet(showcaseId, ownerId);
 
         int currentCount = showcaseImagePort.countByShowcaseId(showcaseId);
         List<ShowcaseImage> showcaseImages = new ArrayList<>();
@@ -60,7 +60,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     @Override
     @Transactional
     public void deleteImage(Long showcaseId, Long imageId, Long ownerId) {
-        validateOwnership(showcaseId, ownerId);
+        Showcase showcase = validateOwnershipAndGet(showcaseId, ownerId);
         validateMinImageCount(showcaseId);
 
         ShowcaseImage image = showcaseImagePort.findById(imageId)
@@ -69,6 +69,16 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
 
         showcaseImagePort.deleteById(imageId);
 
+        // 대표 이미지가 삭제된 경우 다른 이미지를 대표로 승격
+        if (image.isPrimary()) {
+            showcaseImagePort.findByShowcaseId(showcaseId).stream()
+                    .findFirst()
+                    .ifPresent(next -> {
+                        Showcase updated = showcase.changePrimaryImageUrl(next.getImageUrl());
+                        showcasePort.save(updated);
+                    });
+        }
+
         // S3에서 이미지 파일 삭제
         imageStoragePort.delete(image.getImageUrl());
     }
@@ -76,7 +86,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     @Override
     @Transactional
     public void reorderImages(Long showcaseId, Long ownerId, List<ImageOrder> imageOrders) {
-        validateOwnership(showcaseId, ownerId);
+        Showcase showcase = validateOwnershipAndGet(showcaseId, ownerId);
         validateReorderInput(imageOrders);
 
         List<ShowcaseImage> existing = showcaseImagePort.findByShowcaseId(showcaseId);
@@ -84,6 +94,9 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
 
         List<ShowcaseImage> updated = buildReorderedImages(existing, imageOrders);
         showcaseImagePort.saveAll(updated);
+
+        // 대표 이미지 URL 동기화
+        syncPrimaryImageUrl(showcase, existing, imageOrders);
     }
 
     /**
@@ -117,12 +130,35 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
         return updated;
     }
 
-    private void validateOwnership(Long showcaseId, Long ownerId) {
+    /**
+     * 소유권을 검증하고 쇼케이스를 반환한다.
+     */
+    private Showcase validateOwnershipAndGet(Long showcaseId, Long ownerId) {
         Showcase showcase = showcasePort.findById(showcaseId)
                 .orElseThrow(NotFoundShowcaseException::new);
         if (!showcase.getOwnerId().equals(ownerId)) {
             throw new NotOwnerShowcaseException();
         }
+        return showcase;
+    }
+
+    /**
+     * 이미지 재정렬 시 대표 이미지 URL을 쇼케이스에 동기화한다.
+     */
+    private void syncPrimaryImageUrl(Showcase showcase,
+                                      List<ShowcaseImage> existing,
+                                      List<ImageOrder> imageOrders) {
+        Map<Long, ShowcaseImage> existingMap = existing.stream()
+                .collect(Collectors.toMap(ShowcaseImage::getId, img -> img));
+
+        imageOrders.stream()
+                .filter(ImageOrder::isPrimary)
+                .findFirst()
+                .map(order -> existingMap.get(order.showcaseImageId()))
+                .ifPresent(primaryImage -> {
+                    Showcase updated = showcase.changePrimaryImageUrl(primaryImage.getImageUrl());
+                    showcasePort.save(updated);
+                });
     }
 
     /**

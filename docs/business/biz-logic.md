@@ -85,8 +85,13 @@ ACTIVE → WITHDRAWN             (본인 탈퇴)
 - 일반 이미지는 최소 1개 이상 첨부해야 한다.
 - 대표 이미지(`isPrimary`)는 반드시 1개만 존재해야 한다.
 - 카테고리에 따라 쇼케이스 스펙을 입력할 수 있다. (선택사항)
-  - `BOOTS` → `SHOWCASE_BOOTS_SPEC` (스터드 타입, 사일로, 출시 연도 등)
-  - `UNIFORM` → `SHOWCASE_UNIFORM_SPEC` (클럽명, 시즌, 리그, 킷 타입 등)
+  - `SHOWCASE_SPEC` 단일 테이블에 `specType`과 `specData`(JSON)로 저장된다.
+  - `BOOTS` → `{"studType":"FG","siloName":"Mercurial","releaseYear":"2025","surfaceType":"천연잔디"}`
+  - `UNIFORM` → `{"clubName":"Liverpool","season":"24-25","league":"EPL","kitType":"HOME"}`
+  - 새 카테고리 추가 시 테이블 스키마 변경 없이 specType 값과 JSON 구조만 추가한다.
+- 대표 이미지 URL(`primaryImageUrl`)과 3D 모델 보유 여부(`has3dModel`)는 `SHOWCASE` 테이블에 비정규화하여 저장한다.
+  - 이미지 등록/변경/삭제 시 `primaryImageUrl`을 동기화한다.
+  - 3D 모델 생성 완료 시 `has3dModel`을 동기화한다.
 
 ### 3-2. 상태 등급 기준
 

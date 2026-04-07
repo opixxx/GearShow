@@ -133,10 +133,10 @@ class ShowcaseServiceIntegrationTest {
             // Then
             assertThat(detail.category()).isEqualTo(Category.BOOTS);
             assertThat(detail.brand()).isEqualTo("Nike");
-            assertThat(detail.bootsSpec()).isNotNull();
-            assertThat(detail.bootsSpec().studType()).isEqualTo(StudType.FG);
-            assertThat(detail.bootsSpec().siloName()).isEqualTo("Mercurial");
-            assertThat(detail.uniformSpec()).isNull();
+            assertThat(detail.spec()).isNotNull();
+            assertThat(detail.spec().specType()).isEqualTo(com.gearshow.backend.showcase.domain.vo.SpecType.BOOTS);
+            assertThat(detail.spec().specData()).contains("FG");
+            assertThat(detail.spec().specData()).contains("Mercurial");
         }
 
         @Test
@@ -158,10 +158,10 @@ class ShowcaseServiceIntegrationTest {
 
             // Then
             assertThat(detail.category()).isEqualTo(Category.UNIFORM);
-            assertThat(detail.uniformSpec()).isNotNull();
-            assertThat(detail.uniformSpec().clubName()).isEqualTo("Liverpool");
-            assertThat(detail.uniformSpec().kitType()).isEqualTo(KitType.HOME);
-            assertThat(detail.bootsSpec()).isNull();
+            assertThat(detail.spec()).isNotNull();
+            assertThat(detail.spec().specType()).isEqualTo(com.gearshow.backend.showcase.domain.vo.SpecType.UNIFORM);
+            assertThat(detail.spec().specData()).contains("Liverpool");
+            assertThat(detail.spec().specData()).contains("HOME");
         }
 
         @Test
@@ -560,8 +560,7 @@ class ShowcaseServiceIntegrationTest {
             createAndGetShowcaseId(1L);
 
             // When
-            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(
-                    null, 20, null, null, null, null, null);
+            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(null, 20);
 
             // Then
             assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);
@@ -581,6 +580,77 @@ class ShowcaseServiceIntegrationTest {
 
             // Then
             assertThat(result.data()).isNotEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("비정규화 동기화")
+    class DenormalizationSync {
+
+        @Test
+        @DisplayName("쇼케이스 생성 시 primaryImageUrl이 대표 이미지 URL로 설정된다")
+        void create_primaryImageUrl_synced() {
+            // Given
+            CreateShowcaseCommand command = createCommand(1L);
+
+            // When
+            CreateShowcaseResult result = createShowcaseUseCase.create(
+                    command, createFakeImageKeys(2), List.of());
+
+            // Then - 첫 번째 이미지(primaryImageIndex=0)의 URL이 설정되어야 함
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+                    .data().stream()
+                    .filter(s -> s.showcaseId().equals(result.showcaseId()))
+                    .findFirst().orElseThrow();
+            assertThat(listItem.primaryImageUrl()).isNotNull();
+            assertThat(listItem.primaryImageUrl()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("이미지 재정렬로 대표 이미지를 변경하면 primaryImageUrl이 동기화된다")
+        void reorderImages_primaryImageUrl_synced() {
+            // Given - 이미지 2개로 쇼케이스 생성
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
+
+            ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(showcaseId);
+            assertThat(detail.images()).hasSizeGreaterThanOrEqualTo(2);
+
+            // When - 두 번째 이미지를 대표로 변경
+            var secondImage = detail.images().stream()
+                    .filter(img -> !img.isPrimary())
+                    .findFirst().orElseThrow();
+            var firstImage = detail.images().stream()
+                    .filter(ShowcaseDetailResult.ImageResult::isPrimary)
+                    .findFirst().orElseThrow();
+
+            List<ManageShowcaseImageUseCase.ImageOrder> orders = List.of(
+                    new ManageShowcaseImageUseCase.ImageOrder(firstImage.showcaseImageId(), 1, false),
+                    new ManageShowcaseImageUseCase.ImageOrder(secondImage.showcaseImageId(), 2, true)
+            );
+            manageShowcaseImageUseCase.reorderImages(showcaseId, 1L, orders);
+
+            // Then - primaryImageUrl이 두 번째 이미지의 URL로 변경
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+                    .data().stream()
+                    .filter(s -> s.showcaseId().equals(showcaseId))
+                    .findFirst().orElseThrow();
+            assertThat(listItem.primaryImageUrl()).isEqualTo(secondImage.imageUrl());
+        }
+
+        @Test
+        @DisplayName("쇼케이스 생성 시 has3dModel은 false이다")
+        void create_has3dModel_isFalse() {
+            // Given & When
+            CreateShowcaseResult result = createShowcaseUseCase.create(
+                    createCommand(1L), createFakeImageKeys(1), List.of());
+
+            // Then
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+                    .data().stream()
+                    .filter(s -> s.showcaseId().equals(result.showcaseId()))
+                    .findFirst().orElseThrow();
+            assertThat(listItem.has3dModel()).isFalse();
         }
     }
 }

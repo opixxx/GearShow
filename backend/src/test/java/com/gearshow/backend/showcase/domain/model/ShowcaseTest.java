@@ -16,7 +16,7 @@ class ShowcaseTest {
 
     private Showcase createShowcase() {
         return Showcase.create(1L, null, Category.BOOTS, "Nike", "DJ2839",
-                "테스트 쇼케이스", null, null, ConditionGrade.A, 0, false);
+                "테스트 쇼케이스", null, null, ConditionGrade.A, 0, false, null);
     }
 
     @Nested
@@ -42,7 +42,7 @@ class ShowcaseTest {
         void create_withoutCatalogItem_success() {
             // Given & When
             Showcase showcase = Showcase.create(1L, null, Category.UNIFORM, "Adidas", null,
-                    "유니폼 쇼케이스", null, null, ConditionGrade.S, 0, false);
+                    "유니폼 쇼케이스", null, null, ConditionGrade.S, 0, false, null);
 
             // Then
             assertThat(showcase.getCatalogItemId()).isNull();
@@ -55,7 +55,7 @@ class ShowcaseTest {
         void create_withCatalogItem_success() {
             // Given & When
             Showcase showcase = Showcase.create(1L, 100L, Category.BOOTS, "Nike", "DJ2839",
-                    "테스트", null, null, ConditionGrade.A, 0, false);
+                    "테스트", null, null, ConditionGrade.A, 0, false, null);
 
             // Then
             assertThat(showcase.getCatalogItemId()).isEqualTo(100L);
@@ -66,7 +66,7 @@ class ShowcaseTest {
         void create_withNullOwnerId_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> Showcase.create(null, null, Category.BOOTS, "Nike", null,
-                    "테스트", null, null, ConditionGrade.A, 0, false))
+                    "테스트", null, null, ConditionGrade.A, 0, false, null))
                     .isInstanceOf(InvalidShowcaseException.class);
         }
 
@@ -75,7 +75,7 @@ class ShowcaseTest {
         void create_withNullCategory_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> Showcase.create(1L, null, null, "Nike", null,
-                    "테스트", null, null, ConditionGrade.A, 0, false))
+                    "테스트", null, null, ConditionGrade.A, 0, false, null))
                     .isInstanceOf(InvalidShowcaseException.class);
         }
 
@@ -84,7 +84,7 @@ class ShowcaseTest {
         void create_withBlankBrand_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> Showcase.create(1L, null, Category.BOOTS, "  ", null,
-                    "테스트", null, null, ConditionGrade.A, 0, false))
+                    "테스트", null, null, ConditionGrade.A, 0, false, null))
                     .isInstanceOf(InvalidShowcaseException.class);
         }
 
@@ -93,7 +93,7 @@ class ShowcaseTest {
         void create_withBlankTitle_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> Showcase.create(1L, null, Category.BOOTS, "Nike", null,
-                    "  ", null, null, ConditionGrade.A, 0, false))
+                    "  ", null, null, ConditionGrade.A, 0, false, null))
                     .isInstanceOf(InvalidShowcaseException.class);
         }
 
@@ -102,7 +102,7 @@ class ShowcaseTest {
         void create_withNullConditionGrade_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> Showcase.create(1L, null, Category.BOOTS, "Nike", null,
-                    "테스트", null, null, null, 0, false))
+                    "테스트", null, null, null, 0, false, null))
                     .isInstanceOf(InvalidShowcaseException.class);
         }
     }

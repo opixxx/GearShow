@@ -11,7 +11,7 @@
 |:--------------|:-----------|:---------|
 | USER | AUTH_ACCOUNT | FK |
 | CATALOG_ITEM | BOOTS_SPEC, UNIFORM_SPEC | FK |
-| SHOWCASE | SHOWCASE_IMAGE, SHOWCASE_BOOTS_SPEC, SHOWCASE_UNIFORM_SPEC, SHOWCASE_3D_MODEL, MODEL_SOURCE_IMAGE, SHOWCASE_COMMENT | FK |
+| SHOWCASE | SHOWCASE_IMAGE, SHOWCASE_SPEC, SHOWCASE_3D_MODEL, MODEL_SOURCE_IMAGE, SHOWCASE_COMMENT | FK |
 | CHAT_ROOM | CHAT_MESSAGE | FK |
 | TRANSACTION | PAYMENT | FK |
 
@@ -90,31 +90,18 @@ erDiagram
         enum conditionGrade
         int wearCount
         boolean isForSale
+        string primaryImageUrl "비정규화: 대표 이미지 URL"
+        boolean has3dModel "비정규화: 3D 모델 보유 여부"
         enum showcaseStatus
         timestamp createdAt
         timestamp updatedAt
     }
 
-    SHOWCASE_BOOTS_SPEC {
-        bigint showcaseBootsSpecId PK
-        bigint showcaseId FK "FK → SHOWCASE (같은 Aggregate)"
-        enum studType "스터드 타입 (FG, SG, AG, TF, IC)"
-        string siloName "사일로 (Mercurial, Predator 등)"
-        string releaseYear "출시 연도"
-        string surfaceType "적합 표면"
-        json extraSpecJson "추가 스펙"
-        timestamp createdAt
-        timestamp updatedAt
-    }
-
-    SHOWCASE_UNIFORM_SPEC {
-        bigint showcaseUniformSpecId PK
-        bigint showcaseId FK "FK → SHOWCASE (같은 Aggregate)"
-        string clubName "클럽 이름"
-        string season "시즌 (2024-25 등)"
-        string league "리그"
-        enum kitType "킷 타입 (HOME, AWAY, THIRD)"
-        json extraSpecJson "추가 스펙"
+    SHOWCASE_SPEC {
+        bigint showcaseSpecId PK
+        bigint showcaseId FK "FK → SHOWCASE (같은 Aggregate), UNIQUE"
+        enum specType "스펙 타입 (BOOTS, UNIFORM)"
+        json specData "카테고리별 스펙 JSON 데이터"
         timestamp createdAt
         timestamp updatedAt
     }
@@ -213,8 +200,7 @@ erDiagram
     CATALOG_ITEM ||--o| UNIFORM_SPEC : has
     CATALOG_ITEM ||--o{ SHOWCASE : referenced_by
     USER ||--o{ SHOWCASE : owns
-    SHOWCASE ||--o| SHOWCASE_BOOTS_SPEC : has
-    SHOWCASE ||--o| SHOWCASE_UNIFORM_SPEC : has
+    SHOWCASE ||--o| SHOWCASE_SPEC : has
     SHOWCASE ||--|{ SHOWCASE_IMAGE : contains
     SHOWCASE ||--o| SHOWCASE_3D_MODEL : has
     SHOWCASE_3D_MODEL ||--|{ MODEL_SOURCE_IMAGE : contains
@@ -321,41 +307,29 @@ erDiagram
 | conditionGrade | enum | NOT NULL | 상태 등급 (S, A, B, C 등) |
 | wearCount | int | DEFAULT 0 | 착용 횟수 |
 | isForSale | boolean | NOT NULL, DEFAULT false | 판매 여부 |
+| primaryImageUrl | string | | 대표 이미지 URL (비정규화, 목록 조회 최적화) |
+| has3dModel | boolean | NOT NULL, DEFAULT false | 3D 모델 보유 여부 (비정규화, 목록 조회 최적화) |
 | showcaseStatus | enum | NOT NULL | 쇼케이스 상태 (ACTIVE, HIDDEN, SOLD, DELETED) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
 
-### SHOWCASE_BOOTS_SPEC (쇼케이스 축구화 스펙)
+### SHOWCASE_SPEC (쇼케이스 스펙)
 
 > Aggregate: **SHOWCASE** (FK로 연결)
+> 카테고리별 스펙을 단일 테이블에서 JSON으로 관리한다. 새 카테고리 추가 시 스키마 변경 없이 specType enum 값과 JSON 구조만 추가하면 된다.
 
 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |:------|:-----|:--------|:-----|
-| showcaseBootsSpecId | bigint | PK | 쇼케이스 축구화 스펙 고유 식별자 |
+| showcaseSpecId | bigint | PK | 쇼케이스 스펙 고유 식별자 |
 | showcaseId | bigint | NOT NULL, FK → SHOWCASE, UNIQUE | 쇼케이스 ID |
-| studType | enum | NOT NULL | 스터드 타입 (FG, SG, AG, TF, IC 등) |
-| siloName | string | | 사일로 이름 (Mercurial, Predator 등) |
-| releaseYear | string | | 출시 연도 |
-| surfaceType | string | | 적합 표면 (천연잔디, 인조잔디 등) |
-| extraSpecJson | json | | 추가 스펙 (무게, 갑피 소재 등) |
+| specType | enum | NOT NULL | 스펙 타입 (BOOTS, UNIFORM) |
+| specData | json | NOT NULL | 카테고리별 스펙 JSON 데이터 |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
 
-### SHOWCASE_UNIFORM_SPEC (쇼케이스 유니폼 스펙)
-
-> Aggregate: **SHOWCASE** (FK로 연결)
-
-| 컬럼명 | 타입 | 제약조건 | 설명 |
-|:------|:-----|:--------|:-----|
-| showcaseUniformSpecId | bigint | PK | 쇼케이스 유니폼 스펙 고유 식별자 |
-| showcaseId | bigint | NOT NULL, FK → SHOWCASE, UNIQUE | 쇼케이스 ID |
-| clubName | string | NOT NULL | 클럽 이름 |
-| season | string | NOT NULL | 시즌 (2024-25 등) |
-| league | string | | 리그 (EPL, LaLiga 등) |
-| kitType | enum | NOT NULL | 킷 타입 (HOME, AWAY, THIRD) |
-| extraSpecJson | json | | 추가 스펙 (소재, 핏 등) |
-| createdAt | timestamp | NOT NULL | 생성일시 |
-| updatedAt | timestamp | NOT NULL | 수정일시 |
+> **specData 예시**
+> - BOOTS: `{"studType":"FG","siloName":"Mercurial","releaseYear":"2025","surfaceType":"천연잔디"}`
+> - UNIFORM: `{"clubName":"Liverpool","season":"24-25","league":"EPL","kitType":"HOME"}`
 
 ### SHOWCASE_IMAGE (쇼케이스 이미지)
 
@@ -485,8 +459,7 @@ erDiagram
 | USER → AUTH_ACCOUNT | 1:N (필수) | 사용자는 1개 이상의 인증 계정을 가짐 |
 | CATALOG_ITEM → BOOTS_SPEC | 1:0..1 | 축구화 카탈로그는 축구화 스펙을 가질 수 있음 |
 | CATALOG_ITEM → UNIFORM_SPEC | 1:0..1 | 유니폼 카탈로그는 유니폼 스펙을 가질 수 있음 |
-| SHOWCASE → SHOWCASE_BOOTS_SPEC | 1:0..1 | 축구화 쇼케이스는 축구화 스펙을 가질 수 있음 |
-| SHOWCASE → SHOWCASE_UNIFORM_SPEC | 1:0..1 | 유니폼 쇼케이스는 유니폼 스펙을 가질 수 있음 |
+| SHOWCASE → SHOWCASE_SPEC | 1:0..1 | 쇼케이스는 카테고리별 스펙을 가질 수 있음 (JSON) |
 | SHOWCASE → SHOWCASE_IMAGE | 1:N (필수) | 쇼케이스는 1개 이상의 이미지를 가짐 |
 | SHOWCASE → SHOWCASE_3D_MODEL | 1:0..1 | 쇼케이스는 3D 모델을 가질 수 있음 |
 | SHOWCASE_3D_MODEL → MODEL_SOURCE_IMAGE | 1:N (필수) | 3D 모델은 1개 이상의 소스 이미지를 가짐 (앞/뒤/좌/우 기본 4장) |

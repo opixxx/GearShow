@@ -1,19 +1,16 @@
 package com.gearshow.backend.showcase.application.service;
 
-import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
-import com.gearshow.backend.showcase.application.port.out.ShowcaseBootsSpecPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
-import com.gearshow.backend.showcase.application.port.out.ShowcaseUniformSpecPort;
+import com.gearshow.backend.showcase.application.port.out.ShowcaseSpecPort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
-import com.gearshow.backend.showcase.domain.model.ShowcaseBootsSpec;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
-import com.gearshow.backend.showcase.domain.model.ShowcaseUniformSpec;
+import com.gearshow.backend.showcase.domain.model.ShowcaseSpec;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,8 +33,7 @@ public class GetShowcaseService implements GetShowcaseUseCase {
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
     private final Showcase3dModelPort showcase3dModelPort;
-    private final ShowcaseBootsSpecPort showcaseBootsSpecPort;
-    private final ShowcaseUniformSpecPort showcaseUniformSpecPort;
+    private final ShowcaseSpecPort showcaseSpecPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -46,27 +42,10 @@ public class GetShowcaseService implements GetShowcaseUseCase {
         List<ShowcaseImage> images = showcaseImagePort.findByShowcaseId(showcaseId);
         Showcase3dModel model3d = showcase3dModelPort.findByShowcaseId(showcaseId)
                 .orElse(null);
+        ShowcaseSpec spec = showcaseSpecPort.findByShowcaseId(showcaseId)
+                .orElse(null);
 
-        ShowcaseBootsSpec bootsSpec = loadBootsSpec(showcase);
-        ShowcaseUniformSpec uniformSpec = loadUniformSpec(showcase);
-
-        return ShowcaseDetailResult.of(showcase, images, model3d, bootsSpec, uniformSpec);
-    }
-
-    /** 카테고리가 BOOTS인 경우 축구화 스펙을 조회한다. */
-    private ShowcaseBootsSpec loadBootsSpec(Showcase showcase) {
-        if (showcase.getCategory() == Category.BOOTS) {
-            return showcaseBootsSpecPort.findByShowcaseId(showcase.getId()).orElse(null);
-        }
-        return null;
-    }
-
-    /** 카테고리가 UNIFORM인 경우 유니폼 스펙을 조회한다. */
-    private ShowcaseUniformSpec loadUniformSpec(Showcase showcase) {
-        if (showcase.getCategory() == Category.UNIFORM) {
-            return showcaseUniformSpecPort.findByShowcaseId(showcase.getId()).orElse(null);
-        }
-        return null;
+        return ShowcaseDetailResult.of(showcase, images, model3d, spec);
     }
 
     /**

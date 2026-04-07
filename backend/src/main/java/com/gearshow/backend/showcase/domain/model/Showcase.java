@@ -20,7 +20,6 @@ public class Showcase {
 
     private final Long id;
     private final Long ownerId;
-    /** 카탈로그 아이템 ID (선택사항, 카탈로그를 연결한 경우에만 존재) */
     private final Long catalogItemId;
     private final Category category;
     private final String brand;
@@ -31,6 +30,8 @@ public class Showcase {
     private final ConditionGrade conditionGrade;
     private final int wearCount;
     private final boolean forSale;
+    private final String primaryImageUrl;
+    private final boolean has3dModel;
     private final ShowcaseStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -40,6 +41,7 @@ public class Showcase {
                      Category category, String brand, String modelCode,
                      String title, String description, String userSize,
                      ConditionGrade conditionGrade, int wearCount, boolean forSale,
+                     String primaryImageUrl, boolean has3dModel,
                      ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -53,6 +55,8 @@ public class Showcase {
         this.conditionGrade = conditionGrade;
         this.wearCount = wearCount;
         this.forSale = forSale;
+        this.primaryImageUrl = primaryImageUrl;
+        this.has3dModel = has3dModel;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -80,7 +84,8 @@ public class Showcase {
                                   Category category, String brand, String modelCode,
                                   String title, String description,
                                   String userSize, ConditionGrade conditionGrade,
-                                  int wearCount, boolean forSale) {
+                                  int wearCount, boolean forSale,
+                                  String primaryImageUrl) {
         validate(ownerId, category, brand, title, conditionGrade);
 
         Instant now = Instant.now();
@@ -96,6 +101,8 @@ public class Showcase {
                 .conditionGrade(conditionGrade)
                 .wearCount(wearCount)
                 .forSale(forSale)
+                .primaryImageUrl(primaryImageUrl)
+                .has3dModel(false)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)
@@ -164,6 +171,30 @@ public class Showcase {
                 .build();
     }
 
+    /**
+     * 대표 이미지 URL을 변경한다.
+     *
+     * @param primaryImageUrl 새 대표 이미지 URL
+     * @return 변경된 쇼케이스
+     */
+    public Showcase changePrimaryImageUrl(String primaryImageUrl) {
+        return toBuilder()
+                .primaryImageUrl(primaryImageUrl)
+                .build();
+    }
+
+    /**
+     * 3D 모델 보유 여부를 변경한다.
+     *
+     * @param has3dModel 3D 모델 보유 여부
+     * @return 변경된 쇼케이스
+     */
+    public Showcase changeHas3dModel(boolean has3dModel) {
+        return toBuilder()
+                .has3dModel(has3dModel)
+                .build();
+    }
+
     private void validateStatusTransition(ShowcaseStatus target) {
         boolean valid = switch (this.status) {
             case ACTIVE -> target == ShowcaseStatus.HIDDEN
@@ -193,6 +224,8 @@ public class Showcase {
                 .conditionGrade(this.conditionGrade)
                 .wearCount(this.wearCount)
                 .forSale(this.forSale)
+                .primaryImageUrl(this.primaryImageUrl)
+                .has3dModel(this.has3dModel)
                 .status(this.status)
                 .createdAt(this.createdAt)
                 .updatedAt(Instant.now());

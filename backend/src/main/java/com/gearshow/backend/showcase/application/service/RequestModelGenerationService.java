@@ -1,18 +1,9 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
-import com.gearshow.backend.showcase.application.exception.InsufficientModelSourceImagesException;
-import com.gearshow.backend.showcase.application.exception.ModelAlreadyGeneratingException;
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
-import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
-import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
-import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
-import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
-import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
-import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.AngleType;
 import lombok.RequiredArgsConstructor;
@@ -23,72 +14,35 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 3D 모델 생성 요청 유스케이스 구현체.
+ * 3D 모델 생성 요청 트랜잭션 서비스.
+ *
+ * <p>DB 저장만 담당한다. 외부 I/O(S3, Kafka)는 {@link RequestModelGenerationFacade}에서 수행한다.</p>
  */
 @Service
 @RequiredArgsConstructor
-public class RequestModelGenerationService implements RequestModelGenerationUseCase {
+public class RequestModelGenerationService {
 
-    private static final int MIN_SOURCE_IMAGES = 4;
     private static final String GENERATION_PROVIDER = "fake-tripo";
     private static final AngleType[] ANGLE_TYPES = AngleType.values();
 
-    private final ShowcasePort showcasePort;
     private final Showcase3dModelPort showcase3dModelPort;
     private final ModelSourceImagePort modelSourceImagePort;
-    private final ModelGenerationPort modelGenerationPort;
-    private final ImageStoragePort imageStoragePort;
 
-    @Override
-    public ModelGenerationResult requestOnCreate(Long showcaseId, List<String> modelSourceImageKeys) {
-        // 1. 검증
-        validateSourceImageCount(modelSourceImageKeys);
-
-        // 2. S3 키 → URL 변환
-        List<String> imageUrls = modelSourceImageKeys.stream()
-                .map(imageStoragePort::toUrl)
-                .toList();
-
-        // 3. DB 저장 (트랜잭션)
-        Showcase3dModel model = saveModelAndSourceImages(showcaseId, imageUrls);
-
-        // 4. Kafka 발행 (트랜잭션 밖)
-        modelGenerationPort.requestGeneration(model.getId(), showcaseId);
-
-        return new ModelGenerationResult(model.getId(), model.getModelStatus());
-    }
-
-    @Override
-    public ModelGenerationResult requestRetry(Long showcaseId, Long ownerId,
-                                               List<String> modelSourceImageKeys) {
-        // 1. 검증
-        validateOwner(showcaseId, ownerId);
-        validateSourceImageCount(modelSourceImageKeys);
-        validateNotAlreadyGenerating(showcaseId);
-
-        // 2. S3 키 → URL 변환
-        List<String> imageUrls = modelSourceImageKeys.stream()
-                .map(imageStoragePort::toUrl)
-                .toList();
-
-        // 3. DB 저장 (트랜잭션)
-        Showcase3dModel model = resetOrCreateModelAndSaveSourceImages(showcaseId, imageUrls);
-
-        // 4. Kafka 발행 (트랜잭션 밖)
-        modelGenerationPort.requestGeneration(model.getId(), showcaseId);
-
-        return new ModelGenerationResult(model.getId(), model.getModelStatus());
-    }
-
+    /**
+     * 신규 3D 모델과 소스 이미지를 저장한다.
+     */
     @Transactional
-    protected Showcase3dModel saveModelAndSourceImages(Long showcaseId, List<String> imageUrls) {
+    public Showcase3dModel saveModelAndSourceImages(Long showcaseId, List<String> imageUrls) {
         Showcase3dModel model = createAndSaveModel(showcaseId);
         saveSourceImages(model.getId(), imageUrls);
         return model;
     }
 
+    /**
+     * 기존 3D 모델을 REQUESTED 상태로 재설정하거나, 없으면 새로 생성하고 소스 이미지를 저장한다.
+     */
     @Transactional
-    protected Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
+    public Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
         Showcase3dModel model = showcase3dModelPort.findByShowcaseId(showcaseId)
                 .map(this::resetToRequested)
                 .orElseGet(() -> createAndSaveModel(showcaseId));
@@ -126,28 +80,5 @@ public class RequestModelGenerationService implements RequestModelGenerationUseC
                     showcase3dModelId, imageUrls.get(i), angleType, i + 1));
         }
         modelSourceImagePort.saveAll(sourceImages);
-    }
-
-    private void validateSourceImageCount(List<String> keys) {
-        if (keys == null || keys.size() < MIN_SOURCE_IMAGES) {
-            throw new InsufficientModelSourceImagesException();
-        }
-    }
-
-    private void validateOwner(Long showcaseId, Long ownerId) {
-        Showcase showcase = showcasePort.findById(showcaseId)
-                .orElseThrow(NotFoundShowcaseException::new);
-        if (!showcase.getOwnerId().equals(ownerId)) {
-            throw new NotOwnerShowcaseException();
-        }
-    }
-
-    private void validateNotAlreadyGenerating(Long showcaseId) {
-        showcase3dModelPort.findByShowcaseId(showcaseId)
-                .ifPresent(model -> {
-                    if (model.isGenerating()) {
-                        throw new ModelAlreadyGeneratingException();
-                    }
-                });
     }
 }

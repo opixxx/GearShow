@@ -1,16 +1,14 @@
 package com.gearshow.backend.showcase.application.dto;
 
 import com.gearshow.backend.catalog.domain.vo.Category;
-import com.gearshow.backend.catalog.domain.vo.KitType;
-import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
-import com.gearshow.backend.showcase.domain.model.ShowcaseBootsSpec;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
-import com.gearshow.backend.showcase.domain.model.ShowcaseUniformSpec;
+import com.gearshow.backend.showcase.domain.model.ShowcaseSpec;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
+import com.gearshow.backend.showcase.domain.vo.SpecType;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,8 +32,7 @@ public record ShowcaseDetailResult(
         ShowcaseStatus showcaseStatus,
         List<ImageResult> images,
         Model3dResult model3d,
-        BootsSpecResult bootsSpec,
-        UniformSpecResult uniformSpec,
+        SpecResult spec,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -68,35 +65,13 @@ public record ShowcaseDetailResult(
         }
     }
 
-    /** 축구화 스펙 결과. */
-    public record BootsSpecResult(
-            StudType studType,
-            String siloName,
-            String releaseYear,
-            String surfaceType,
-            String extraSpecJson
+    /** 스펙 결과 (카테고리별 JSON 데이터 포함). */
+    public record SpecResult(
+            SpecType specType,
+            String specData
     ) {
-        public static BootsSpecResult from(ShowcaseBootsSpec spec) {
-            return new BootsSpecResult(
-                    spec.getStudType(), spec.getSiloName(),
-                    spec.getReleaseYear(), spec.getSurfaceType(),
-                    spec.getExtraSpecJson());
-        }
-    }
-
-    /** 유니폼 스펙 결과. */
-    public record UniformSpecResult(
-            String clubName,
-            String season,
-            String league,
-            KitType kitType,
-            String extraSpecJson
-    ) {
-        public static UniformSpecResult from(ShowcaseUniformSpec spec) {
-            return new UniformSpecResult(
-                    spec.getClubName(), spec.getSeason(),
-                    spec.getLeague(), spec.getKitType(),
-                    spec.getExtraSpecJson());
+        public static SpecResult from(ShowcaseSpec spec) {
+            return new SpecResult(spec.getSpecType(), spec.getSpecData());
         }
     }
 
@@ -106,8 +81,7 @@ public record ShowcaseDetailResult(
     public static ShowcaseDetailResult of(Showcase showcase,
                                            List<ShowcaseImage> images,
                                            Showcase3dModel model3d,
-                                           ShowcaseBootsSpec bootsSpec,
-                                           ShowcaseUniformSpec uniformSpec) {
+                                           ShowcaseSpec spec) {
         return new ShowcaseDetailResult(
                 showcase.getId(),
                 showcase.getOwnerId(),
@@ -124,8 +98,7 @@ public record ShowcaseDetailResult(
                 showcase.getStatus(),
                 images.stream().map(ImageResult::from).toList(),
                 model3d != null ? Model3dResult.from(model3d) : null,
-                bootsSpec != null ? BootsSpecResult.from(bootsSpec) : null,
-                uniformSpec != null ? UniformSpecResult.from(uniformSpec) : null,
+                spec != null ? SpecResult.from(spec) : null,
                 showcase.getCreatedAt(),
                 showcase.getUpdatedAt());
     }
