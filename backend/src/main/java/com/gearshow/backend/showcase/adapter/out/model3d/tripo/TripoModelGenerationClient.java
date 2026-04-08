@@ -41,6 +41,7 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     private final TripoConfig tripoConfig;
     private final ModelSourceImagePort modelSourceImagePort;
     private final ImageStoragePort imageStoragePort;
+    private final RestClient downloadRestClient = RestClient.create();
 
     @Override
     public GenerationResult generate(Long showcase3dModelId, Long showcaseId) {
@@ -132,10 +133,15 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
      */
     private GenerationResult handleSuccess(TripoTaskStatusResponse status, Long showcaseId) {
         var output = status.data().output();
+
+        if (output == null) {
+            return GenerationResult.failure("Tripo 모델 output이 없습니다");
+        }
+
         // multiview → pbr_model, image_to_model → model에 GLB URL이 반환된다
         String tripoModelUrl = output.pbr_model() != null ? output.pbr_model() : output.model();
-        log.info("Tripo 출력 URL - model: {}, pbr_model: {}, rendered_image: {}",
-                output.model(), output.pbr_model(), output.rendered_image());
+        log.info("Tripo 출력 확인 - model 존재: {}, pbr_model 존재: {}, rendered_image 존재: {}",
+                output.model() != null, output.pbr_model() != null, output.rendered_image() != null);
 
         if (tripoModelUrl == null) {
             return GenerationResult.failure("Tripo 모델 URL이 없습니다 - model과 pbr_model 모두 null");
@@ -168,11 +174,23 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
         }
         // Tripo가 scheme 없는 URL을 반환할 수 있으므로 보정
         String resolvedUrl = url.startsWith("http") ? url : "https://" + url;
-        log.info("Tripo 파일 다운로드 시작 - URL: {}", resolvedUrl);
-        return RestClient.create().get()
-                .uri(java.net.URI.create(resolvedUrl))
-                .retrieve()
-                .body(byte[].class);
+        String safeUrl = resolvedUrl.contains("?") ? resolvedUrl.substring(0, resolvedUrl.indexOf("?")) : resolvedUrl;
+        log.info("Tripo 파일 다운로드 시작 - URL: {}", safeUrl);
+        try {
+            byte[] body = downloadRestClient.get()
+                    .uri(java.net.URI.create(resolvedUrl))
+                    .retrieve()
+                    .body(byte[].class);
+            if (body == null) {
+                throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
+            }
+            return body;
+        } catch (TripoApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Tripo 파일 다운로드 실패 - URL: {}", safeUrl, e);
+            throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
+        }
     }
 
     private void sleep(long ms) {

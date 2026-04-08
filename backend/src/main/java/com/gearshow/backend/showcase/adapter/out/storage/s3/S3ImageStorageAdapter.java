@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3DownloadFailedException;
+import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3UploadFailedException;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 
 import lombok.RequiredArgsConstructor;
@@ -102,15 +103,20 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
      */
     @Override
     public String upload(String s3Key, byte[] data, String contentType) {
-        s3Client.putObject(
-                PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(s3Key)
-                        .contentType(contentType)
-                        .build(),
-                RequestBody.fromBytes(data));
-        log.info("S3 업로드 완료: key={}, size={}bytes", s3Key, data.length);
-        return toUrl(s3Key);
+        try {
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(s3Key)
+                            .contentType(contentType)
+                            .build(),
+                    RequestBody.fromBytes(data));
+            log.info("S3 업로드 완료: key={}, size={}bytes", s3Key, data.length);
+            return toUrl(s3Key);
+        } catch (Exception e) {
+            log.error("S3 업로드 실패: key={}", s3Key, e);
+            throw new S3UploadFailedException();
+        }
     }
 
     /**

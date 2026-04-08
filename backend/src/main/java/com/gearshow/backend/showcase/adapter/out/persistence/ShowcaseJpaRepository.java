@@ -75,7 +75,7 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
     /**
      * has3dModel 플래그만 업데이트한다.
      */
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE ShowcaseJpaEntity s SET s.has3dModel = :has3dModel WHERE s.id = :showcaseId")
     void updateHas3dModel(@Param("showcaseId") Long showcaseId, @Param("has3dModel") boolean has3dModel);
 }

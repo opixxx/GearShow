@@ -50,7 +50,9 @@ public class TripoApiClient {
             throw new TripoApiException(ErrorCode.TRIPO_UPLOAD_FAILED);
         }
 
-        log.info("Tripo 이미지 업로드 성공 - filename: {}, token: {}", filename, response.data().image_token());
+        String token = response.data().image_token();
+        log.info("Tripo 이미지 업로드 성공 - filename: {}, token: {}...{}",
+                filename, token.substring(0, 4), token.substring(token.length() - 4));
         return response.data().image_token();
     }
 
