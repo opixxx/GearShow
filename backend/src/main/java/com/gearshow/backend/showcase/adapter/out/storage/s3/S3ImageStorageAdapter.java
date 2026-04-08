@@ -1,10 +1,13 @@
 package com.gearshow.backend.showcase.adapter.out.storage.s3;
 
-import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3DownloadFailedException;
+import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -90,7 +93,7 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
                     .asByteArray();
         } catch (Exception e) {
             log.error("S3 이미지 다운로드 실패: key={}", key, e);
-            throw new RuntimeException("S3 이미지 다운로드 실패: " + key, e);
+            throw new S3DownloadFailedException();
         }
     }
 

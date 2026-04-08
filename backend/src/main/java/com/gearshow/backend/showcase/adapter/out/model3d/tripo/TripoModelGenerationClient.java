@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.model3d.tripo;
 
+import com.gearshow.backend.common.exception.ErrorCode;
 import com.gearshow.backend.showcase.adapter.out.model3d.tripo.dto.TripoTaskRequest;
 import com.gearshow.backend.showcase.adapter.out.model3d.tripo.dto.TripoTaskStatusResponse;
 import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoApiException;
@@ -116,8 +117,7 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
             // 타임아웃 확인
             long elapsed = System.currentTimeMillis() - startTime;
             if (elapsed > timeoutMs) {
-                throw new TripoApiException(
-                        "Tripo Task 타임아웃 - taskId: " + taskId + ", 경과시간: " + elapsed + "ms");
+                throw new TripoApiException(ErrorCode.TRIPO_TASK_TIMEOUT);
             }
 
             log.debug("Tripo Task 진행 중 - taskId: {}, status: {}, progress: {}%",
@@ -160,7 +160,7 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
      */
     private byte[] downloadFromUrl(String url) {
         if (url == null || url.isBlank()) {
-            throw new TripoApiException("다운로드 URL이 비어있습니다");
+            throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
         }
         // Tripo가 scheme 없는 URL을 반환할 수 있으므로 보정
         String resolvedUrl = url.startsWith("http") ? url : "https://" + url;
@@ -176,7 +176,7 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new TripoApiException("Tripo 폴링 중 인터럽트 발생");
+            throw new TripoApiException(ErrorCode.TRIPO_TASK_TIMEOUT);
         }
     }
 }

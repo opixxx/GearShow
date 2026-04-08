@@ -54,9 +54,17 @@ public enum ErrorCode {
 
     // STORAGE
     STORAGE_UPLOAD_FAILED(500, "이미지 업로드에 실패했습니다"),
+    STORAGE_DOWNLOAD_FAILED(500, "이미지 다운로드에 실패했습니다"),
     STORAGE_FILE_READ_FAILED(500, "파일 스트림 읽기에 실패했습니다"),
     STORAGE_PRESIGN_FAILED(500, "Presigned URL 생성에 실패했습니다"),
-    STORAGE_KEY_NOT_FOUND(400, "S3에 존재하지 않는 이미지 키입니다. 이미지를 먼저 업로드해 주세요");
+    STORAGE_KEY_NOT_FOUND(400, "S3에 존재하지 않는 이미지 키입니다. 이미지를 먼저 업로드해 주세요"),
+
+    // TRIPO (3D 모델 생성)
+    TRIPO_UPLOAD_FAILED(500, "Tripo 이미지 업로드에 실패했습니다"),
+    TRIPO_TASK_CREATION_FAILED(500, "Tripo 3D 모델 생성 요청에 실패했습니다"),
+    TRIPO_TASK_STATUS_FAILED(500, "Tripo Task 상태 조회에 실패했습니다"),
+    TRIPO_TASK_TIMEOUT(500, "Tripo 3D 모델 생성 시간이 초과되었습니다"),
+    TRIPO_DOWNLOAD_FAILED(500, "Tripo 3D 모델 다운로드에 실패했습니다");
 
     private final int status;
     private final String message;
