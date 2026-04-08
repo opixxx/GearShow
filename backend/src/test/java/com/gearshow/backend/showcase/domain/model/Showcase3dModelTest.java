@@ -115,6 +115,53 @@ class Showcase3dModelTest {
     }
 
     @Nested
+    @DisplayName("resetRequest")
+    class ResetRequest {
+
+        @Test
+        @DisplayName("FAILED 상태에서 REQUESTED로 재설정한다")
+        void resetRequest_fromFailed_returnsRequested() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .startGenerating()
+                    .fail("이미지 품질 부족");
+
+            // When
+            Showcase3dModel reset = model.resetRequest("tripo-v2");
+
+            // Then
+            assertThat(reset.getModelStatus()).isEqualTo(ModelStatus.REQUESTED);
+            assertThat(reset.getGenerationProvider()).isEqualTo("tripo-v2");
+            assertThat(reset.getRequestedAt()).isNotNull();
+            assertThat(reset.getId()).isEqualTo(model.getId());
+        }
+
+        @Test
+        @DisplayName("REQUESTED 상태에서 재설정하면 예외가 발생한다")
+        void resetRequest_fromRequested_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+
+            // When & Then
+            assertThatThrownBy(() -> model.resetRequest("tripo-v2"))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("COMPLETED 상태에서 재설정하면 예외가 발생한다")
+        void resetRequest_fromCompleted_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .startGenerating()
+                    .complete("url", "preview");
+
+            // When & Then
+            assertThatThrownBy(() -> model.resetRequest("tripo-v2"))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("isGenerating")
     class IsGenerating {
 
