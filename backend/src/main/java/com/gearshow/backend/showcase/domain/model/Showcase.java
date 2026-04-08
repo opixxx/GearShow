@@ -136,6 +136,10 @@ public class Showcase {
      */
     public Showcase update(String title, String description, String userSize,
                            ConditionGrade conditionGrade, Integer wearCount, Boolean forSale) {
+        if (title != null && title.isBlank()) {
+            throw new InvalidShowcaseException();
+        }
+
         return toBuilder()
                 .title(title != null ? title : this.title)
                 .description(description != null ? description : this.description)

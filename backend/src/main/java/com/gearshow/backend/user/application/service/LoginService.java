@@ -11,6 +11,7 @@ import com.gearshow.backend.user.application.port.out.AuthAccountPort;
 import com.gearshow.backend.user.application.port.out.OAuthUserInfoResolver;
 import com.gearshow.backend.user.application.port.out.TokenIssuer;
 import com.gearshow.backend.user.application.port.out.UserPort;
+import com.gearshow.backend.user.domain.exception.NotFoundUserException;
 import com.gearshow.backend.user.domain.model.AuthAccount;
 import com.gearshow.backend.user.domain.model.User;
 import com.gearshow.backend.user.domain.vo.ProviderType;
@@ -56,7 +57,8 @@ public class LoginService implements LoginUseCase {
 
     private User updateLastLoginAndFindUser(AuthAccount authAccount) {
         authAccountPort.save(authAccount.updateLastLogin());
-        return userPort.findById(authAccount.getUserId()).orElseThrow();
+        return userPort.findById(authAccount.getUserId())
+                .orElseThrow(NotFoundUserException::new);
     }
 
     private User registerNewUser(ProviderType providerType, OAuthUserInfo userInfo) {

@@ -16,4 +16,12 @@ public interface TokenIssuer {
      * @return 발급된 토큰 정보
      */
     LoginResult issue(Long userId);
+
+    /**
+     * 토큰의 유효성을 검증한다.
+     *
+     * @param token 검증할 토큰
+     * @return 유효 여부
+     */
+    boolean validateToken(String token);
 }

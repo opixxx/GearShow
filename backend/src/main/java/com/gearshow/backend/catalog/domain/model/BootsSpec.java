@@ -1,5 +1,6 @@
 package com.gearshow.backend.catalog.domain.model;
 
+import com.gearshow.backend.catalog.domain.exception.InvalidCatalogItemException;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import lombok.Builder;
 import lombok.Getter;
@@ -54,6 +55,7 @@ public class BootsSpec {
     public static BootsSpec create(Long catalogItemId, StudType studType,
                                    String siloName, String releaseYear,
                                    String surfaceType, String extraSpecJson) {
+        validate(catalogItemId, studType);
         Instant now = Instant.now();
         return BootsSpec.builder()
                 .catalogItemId(catalogItemId)
@@ -65,5 +67,14 @@ public class BootsSpec {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 축구화 스펙 필수값을 검증한다.
+     */
+    private static void validate(Long catalogItemId, StudType studType) {
+        if (catalogItemId == null || studType == null) {
+            throw new InvalidCatalogItemException();
+        }
     }
 }

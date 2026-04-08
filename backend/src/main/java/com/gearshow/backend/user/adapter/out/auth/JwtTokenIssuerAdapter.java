@@ -27,6 +27,11 @@ public class JwtTokenIssuerAdapter implements TokenIssuer {
     private final RefreshTokenPort refreshTokenPort;
 
     @Override
+    public boolean validateToken(String token) {
+        return jwtTokenProvider.validateToken(token);
+    }
+
+    @Override
     public LoginResult issue(Long userId) {
         String accessToken = jwtTokenProvider.generateAccessToken(userId);
         String refreshToken = jwtTokenProvider.generateRefreshToken(userId);

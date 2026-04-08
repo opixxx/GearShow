@@ -97,6 +97,10 @@ public class CatalogItem {
      * @return 수정된 카탈로그 아이템
      */
     public CatalogItem update(String brand, String modelCode, String officialImageUrl) {
+        if (brand != null && brand.isBlank()) {
+            throw new InvalidCatalogItemException();
+        }
+
         return CatalogItem.builder()
                 .id(this.id)
                 .category(this.category)

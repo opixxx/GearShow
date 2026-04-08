@@ -24,6 +24,9 @@ public enum ProviderType {
      * @throws UnsupportedProviderException 지원하지 않는 제공자인 경우
      */
     public static ProviderType from(String provider) {
+        if (provider == null || provider.isBlank()) {
+            throw new UnsupportedProviderException();
+        }
         return switch (provider.toLowerCase()) {
             case "kakao" -> KAKAO;
             case "apple" -> APPLE;

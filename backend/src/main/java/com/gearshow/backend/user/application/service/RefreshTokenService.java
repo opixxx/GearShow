@@ -6,7 +6,6 @@ import com.gearshow.backend.user.application.exception.InvalidTokenException;
 import com.gearshow.backend.user.application.port.in.RefreshTokenUseCase;
 import com.gearshow.backend.user.application.port.out.RefreshTokenPort;
 import com.gearshow.backend.user.application.port.out.TokenIssuer;
-import com.gearshow.backend.user.infrastructure.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class RefreshTokenService implements RefreshTokenUseCase {
 
     private final RefreshTokenPort refreshTokenPort;
-    private final JwtTokenProvider jwtTokenProvider;
     private final TokenIssuer tokenIssuer;
 
     @Override
@@ -30,7 +28,7 @@ public class RefreshTokenService implements RefreshTokenUseCase {
                 .findUserIdByToken(command.refreshToken())
                 .orElseThrow(InvalidTokenException::new);
 
-        if (!jwtTokenProvider.validateToken(command.refreshToken())) {
+        if (!tokenIssuer.validateToken(command.refreshToken())) {
             refreshTokenPort.deleteByUserId(userId);
             throw new InvalidTokenException();
         }

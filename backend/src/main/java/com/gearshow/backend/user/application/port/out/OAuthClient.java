@@ -38,6 +38,6 @@ public interface OAuthClient {
      * @return 지원 여부
      */
     default boolean supports(String provider) {
-        return getProvider().equals(provider);
+        return provider != null && getProvider().equalsIgnoreCase(provider);
     }
 }
