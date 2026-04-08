@@ -6,7 +6,7 @@ import com.gearshow.backend.user.adapter.out.persistence.AuthAccountJpaRepositor
 import com.gearshow.backend.user.application.dto.LoginCommand;
 import com.gearshow.backend.user.application.dto.LoginResult;
 import com.gearshow.backend.user.application.exception.InvalidAuthCodeException;
-import com.gearshow.backend.user.application.exception.UnsupportedProviderException;
+import com.gearshow.backend.user.domain.exception.UnsupportedProviderException;
 import com.gearshow.backend.user.application.port.in.LoginUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

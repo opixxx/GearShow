@@ -30,4 +30,14 @@ public interface OAuthClient {
      * @return 제공자 이름 (kakao, apple)
      */
     String getProvider();
+
+    /**
+     * 주어진 제공자명을 이 클라이언트가 지원하는지 확인한다.
+     *
+     * @param provider 소셜 제공자명
+     * @return 지원 여부
+     */
+    default boolean supports(String provider) {
+        return getProvider().equals(provider);
+    }
 }

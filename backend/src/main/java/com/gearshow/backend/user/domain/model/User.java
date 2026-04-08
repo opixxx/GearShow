@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * 사용자 도메인 엔티티.
@@ -57,6 +58,18 @@ public class User {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 임시 닉네임으로 신규 사용자를 생성한다.
+     * 소셜 로그인을 통한 자동 가입 시 사용되며,
+     * "사용자_"로 시작하는 닉네임은 닉네임 미설정 상태를 의미한다.
+     *
+     * @return 임시 닉네임이 부여된 신규 사용자
+     */
+    public static User createWithTempNickname() {
+        String tempNickname = "사용자_" + UUID.randomUUID().toString().substring(0, 8);
+        return create(tempNickname);
     }
 
     /**

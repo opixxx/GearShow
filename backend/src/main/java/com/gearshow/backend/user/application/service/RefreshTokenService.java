@@ -5,13 +5,11 @@ import com.gearshow.backend.user.application.dto.RefreshTokenCommand;
 import com.gearshow.backend.user.application.exception.InvalidTokenException;
 import com.gearshow.backend.user.application.port.in.RefreshTokenUseCase;
 import com.gearshow.backend.user.application.port.out.RefreshTokenPort;
+import com.gearshow.backend.user.application.port.out.TokenIssuer;
 import com.gearshow.backend.user.infrastructure.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
-import java.time.Instant;
 
 /**
  * 토큰 갱신 유스케이스 구현체.
@@ -23,6 +21,7 @@ public class RefreshTokenService implements RefreshTokenUseCase {
 
     private final RefreshTokenPort refreshTokenPort;
     private final JwtTokenProvider jwtTokenProvider;
+    private final TokenIssuer tokenIssuer;
 
     @Override
     @Transactional
@@ -36,25 +35,6 @@ public class RefreshTokenService implements RefreshTokenUseCase {
             throw new InvalidTokenException();
         }
 
-        return generateNewTokens(userId);
-    }
-
-    /**
-     * 기존 Refresh Token을 삭제하고 새로운 토큰 쌍을 발급한다.
-     */
-    private LoginResult generateNewTokens(Long userId) {
-        String accessToken = jwtTokenProvider.generateAccessToken(userId);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
-
-        refreshTokenPort.deleteByUserId(userId);
-        refreshTokenPort.save(userId, refreshToken,
-                Instant.now().plus(Duration.ofDays(14)));
-
-        return new LoginResult(
-                accessToken,
-                refreshToken,
-                "Bearer",
-                jwtTokenProvider.getAccessTokenExpirationSeconds()
-        );
+        return tokenIssuer.issue(userId);
     }
 }
