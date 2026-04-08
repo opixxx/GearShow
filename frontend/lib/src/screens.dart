@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -132,6 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  bool get _isDev => widget.controller.isDev;
+
   bool get _supportsNativeKakaoLogin =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -146,6 +149,21 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.of(context).pushReplacementNamed('/nickname');
     } else {
       Navigator.of(context).pushReplacementNamed('/shell');
+    }
+  }
+
+  /// 개발용 로그인. OAuth 없이 테스트 사용자로 인증한다.
+  Future<void> _devLogin() async {
+    setState(() => _loading = true);
+    widget.controller.updateBaseUrl(_baseUrlController.text);
+    try {
+      await widget.controller.devLogin();
+      if (!mounted) return;
+      _navigateAfterLogin();
+    } on ApiException catch (error) {
+      _showSnack(context, error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -277,61 +295,89 @@ class _LoginScreenState extends State<LoginScreen> {
                       hintText: 'http://localhost:8080',
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _codeController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      labelText: 'Apple 테스트용 인가 코드',
-                      hintText: '현재 Apple은 인가 코드 수동 입력 방식',
-                    ),
-                    minLines: 2,
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF111111),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFF27272A)),
-                    ),
-                    child: const Text(
-                      '카카오는 SDK 로그인으로 연결됩니다. Android/iOS에서는 카카오톡 또는 카카오 계정 로그인 후 '
-                      'SDK 액세스 토큰을 backend에 전달해 앱 JWT를 발급받습니다.',
-                      style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 12),
-                    ),
-                  ),
-                  if (!_supportsNativeKakaoLogin) ...[
-                    const SizedBox(height: 10),
-                    const Text(
-                      '현재 실행 중인 macOS/web 환경에서는 카카오 SDK 자동 로그인을 테스트할 수 없습니다.',
-                      style: TextStyle(color: Color(0xFFFB7185), fontSize: 12),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
                   const SizedBox(height: 16),
-                  _SocialButton(
-                    backgroundColor: const Color(0xFFFEE500),
-                    foregroundColor: Colors.black,
-                    icon: '💬',
-                    label: '카카오로 시작하기',
-                    loading: _loading,
-                    onPressed: _loginWithKakaoSdk,
-                  ),
-                  const SizedBox(height: 12),
-                  _SocialButton(
-                    backgroundColor: const Color(0xFF09090B),
-                    foregroundColor: Colors.white,
-                    icon: '',
-                    label: 'Apple로 시작하기',
-                    loading: _loading,
-                    borderColor: const Color(0xFF3F3F46),
-                    onPressed: () => _login('apple'),
-                  ),
-                  const SizedBox(height: 12),
-                  const _DisabledSocialButton(label: 'Google은 현재 backend 미지원'),
+                  if (_isDev) ...[
+                    // ── 개발 환경: 개발자 로그인 ──
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A2E),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF3B82F6)),
+                      ),
+                      child: const Text(
+                        'DEV 모드: OAuth 없이 테스트 사용자로 로그인합니다.\n'
+                        '백엔드를 --spring.profiles.active=dev 로 실행하세요.',
+                        style: TextStyle(color: Color(0xFF93C5FD), fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SocialButton(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      foregroundColor: Colors.white,
+                      icon: '',
+                      label: '개발자 로그인',
+                      loading: _loading,
+                      onPressed: _devLogin,
+                    ),
+                  ] else ...[
+                    // ── 운영 환경: 카카오/애플 소셜 로그인 ──
+                    TextField(
+                      controller: _codeController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        labelText: 'Apple 테스트용 인가 코드',
+                        hintText: '현재 Apple은 인가 코드 수동 입력 방식',
+                      ),
+                      minLines: 2,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF111111),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF27272A)),
+                      ),
+                      child: const Text(
+                        '카카오는 SDK 로그인으로 연결됩니다. Android/iOS에서는 카카오톡 또는 카카오 계정 로그인 후 '
+                        'SDK 액세스 토큰을 backend에 전달해 앱 JWT를 발급받습니다.',
+                        style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 12),
+                      ),
+                    ),
+                    if (!_supportsNativeKakaoLogin) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        '현재 실행 중인 macOS/web 환경에서는 카카오 SDK 자동 로그인을 테스트할 수 없습니다.',
+                        style: TextStyle(color: Color(0xFFFB7185), fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    _SocialButton(
+                      backgroundColor: const Color(0xFFFEE500),
+                      foregroundColor: Colors.black,
+                      icon: '💬',
+                      label: '카카오로 시작하기',
+                      loading: _loading,
+                      onPressed: _loginWithKakaoSdk,
+                    ),
+                    const SizedBox(height: 12),
+                    _SocialButton(
+                      backgroundColor: const Color(0xFF09090B),
+                      foregroundColor: Colors.white,
+                      icon: '',
+                      label: 'Apple로 시작하기',
+                      loading: _loading,
+                      borderColor: const Color(0xFF3F3F46),
+                      onPressed: () => _login('apple'),
+                    ),
+                    const SizedBox(height: 12),
+                    const _DisabledSocialButton(label: 'Google은 현재 backend 미지원'),
+                  ],
                   const SizedBox(height: 24),
                 ],
               ),
@@ -501,22 +547,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     message: '표시할 쇼케이스가 없습니다.',
                   );
                 }
-                return GridView.builder(
+                return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.72,
-                  ),
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    return _ShowcaseCard(
-                      item: item,
-                      onTap: () => Navigator.of(context).pushNamed(
-                        '/showcase/detail',
-                        arguments: ShowcaseDetailArgs(item.showcaseId),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ShowcaseCard(
+                        item: item,
+                        onTap: () => Navigator.of(context).pushNamed(
+                          '/showcase/detail',
+                          arguments: ShowcaseDetailArgs(item.showcaseId),
+                        ),
                       ),
                     );
                   },
@@ -860,6 +903,13 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
   final PageController _pageController = PageController();
   int _pageIndex = 0;
   bool _submittingComment = false;
+  late Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments})> _loadFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFuture = _load();
+  }
 
   @override
   void dispose() {
@@ -909,7 +959,9 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
       );
       _commentController.clear();
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _loadFuture = _load();
+        });
       }
     } on ApiException catch (error) {
       if (!mounted) {
@@ -928,7 +980,7 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
     return Scaffold(
       appBar: AppBar(),
       body: FutureBuilder<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments})>(
-        future: _load(),
+        future: _loadFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -936,7 +988,9 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
           if (snapshot.hasError) {
             return _ErrorState(
               message: _errorText(snapshot.error),
-              onRetry: () => setState(() {}),
+              onRetry: () => setState(() {
+                _loadFuture = _load();
+              }),
             );
           }
           final detail = snapshot.data!.detail;
@@ -1065,14 +1119,14 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                                 SizedBox(width: 100, child: _LabeledValue(label: '브랜드', value: detail.brand)),
                                 // 축구화 전용 필드
                                 if (detail.category == 'BOOTS') ...[
-                                  SizedBox(width: 100, child: _LabeledValue(label: '사일로', value: detail.bootsSpec?.siloName ?? '-')),
-                                  SizedBox(width: 100, child: _LabeledValue(label: '스터드', value: detail.bootsSpec?.studType ?? '-')),
+                                  SizedBox(width: 100, child: _LabeledValue(label: '사일로', value: detail.spec?.siloName ?? '-')),
+                                  SizedBox(width: 100, child: _LabeledValue(label: '스터드', value: detail.spec?.studType ?? '-')),
                                 ],
                                 // 유니폼 전용 필드
                                 if (detail.category == 'UNIFORM') ...[
-                                  SizedBox(width: 100, child: _LabeledValue(label: '클럽', value: detail.uniformSpec?.clubName ?? '-')),
-                                  SizedBox(width: 100, child: _LabeledValue(label: '시즌', value: detail.uniformSpec?.season ?? '-')),
-                                  SizedBox(width: 100, child: _LabeledValue(label: '킷 타입', value: detail.uniformSpec?.kitType ?? '-')),
+                                  SizedBox(width: 100, child: _LabeledValue(label: '클럽', value: detail.spec?.clubName ?? '-')),
+                                  SizedBox(width: 100, child: _LabeledValue(label: '시즌', value: detail.spec?.season ?? '-')),
+                                  SizedBox(width: 100, child: _LabeledValue(label: '킷 타입', value: detail.spec?.kitType ?? '-')),
                                 ],
                                 SizedBox(width: 100, child: _LabeledValue(label: '사이즈', value: detail.userSize?.isNotEmpty == true ? detail.userSize! : '-')),
                                 SizedBox(width: 100, child: _LabeledValue(label: '착용횟수', value: '${detail.wearCount}회')),
@@ -2452,7 +2506,10 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: () => Navigator.of(context).pushNamed('/mypage/profile'),
+                      onPressed: () async {
+                        await Navigator.of(context).pushNamed('/mypage/profile');
+                        if (mounted) setState(() => _future = _loadProfile());
+                      },
                       child: const Text('프로필 수정'),
                     ),
                   ],
@@ -2676,23 +2733,20 @@ class _MyShowcasesScreenState extends State<MyShowcasesScreen> {
                     message: '등록된 쇼케이스가 없습니다.',
                   );
                 }
-                return GridView.builder(
+                return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: items.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.72,
-                  ),
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    return _ShowcaseCard(
-                      item: item,
-                      statusText: _tab == '공개' ? '공개' : '비공개',
-                      onTap: () => Navigator.of(context).pushNamed(
-                        '/showcase/detail',
-                        arguments: ShowcaseDetailArgs(item.showcaseId),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ShowcaseCard(
+                        item: item,
+                        statusText: _tab == '공개' ? '공개' : '비공개',
+                        onTap: () => Navigator.of(context).pushNamed(
+                          '/showcase/detail',
+                          arguments: ShowcaseDetailArgs(item.showcaseId),
+                        ),
                       ),
                     );
                   },
@@ -2757,89 +2811,123 @@ class _ShowcaseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final specLabel = item.specLabel;
+
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Ink(
         decoration: BoxDecoration(
           color: const Color(0xFF111111),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF27272A)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: 1,
-                  child: _ImageFrame(
-                    imageUrl: item.primaryImageUrl,
-                    size: double.infinity,
-                    emoji: '⚽',
-                    borderRadius: 20,
-                  ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // 왼쪽: 대표 이미지
+              SizedBox(
+                width: 130,
+                height: 130,
+                child: Stack(
+                  children: [
+                    _ImageFrame(
+                      imageUrl: item.primaryImageUrl,
+                      size: 130,
+                      emoji: item.category == 'BOOTS' ? '🥾' : '👕',
+                      borderRadius: 16,
+                    ),
+                    // 왼쪽 상단: 3D 뱃지
+                    if (item.has3dModel)
+                      const Positioned(
+                        top: 6,
+                        left: 6,
+                        child: _MiniBadge(
+                          text: '3D',
+                          backgroundColor: Color(0xCC0F172A),
+                          foregroundColor: Color(0xFF22D3EE),
+                        ),
+                      ),
+                    // 오른쪽 상단: 판매중 / 자랑글
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: item.isForSale
+                          ? const _MiniBadge(
+                              text: '판매중',
+                              backgroundColor: Color(0xFFDC2626),
+                              foregroundColor: Colors.white,
+                            )
+                          : const _MiniBadge(
+                              text: '자랑글',
+                              backgroundColor: Color(0xCC0F172A),
+                              foregroundColor: Color(0xFF34D399),
+                            ),
+                    ),
+                    if (statusText != null)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: _MiniBadge(
+                          text: statusText!,
+                          backgroundColor: const Color(0xFF52525B),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                  ],
                 ),
-                if (item.has3dModel)
-                  const Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _MiniBadge(
-                      text: '3D',
-                      backgroundColor: Color(0xCC0F172A),
-                      foregroundColor: Color(0xFF22D3EE),
-                    ),
-                  ),
-                if (item.isForSale)
-                  const Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _MiniBadge(
-                      text: '판매중',
-                      backgroundColor: Color(0xFFDC2626),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                if (statusText != null)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _MiniBadge(
-                      text: statusText!,
-                      backgroundColor: const Color(0xFF52525B),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _GradePill(grade: item.conditionGrade),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
+              ),
+              // 오른쪽: 상품 정보
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.chat_bubble_outline, size: 14, color: Color(0xFF71717A)),
-                      const SizedBox(width: 4),
+                      // 제목
                       Text(
-                        '${item.commentCount}',
-                        style: const TextStyle(color: Color(0xFF71717A), fontSize: 12),
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // 스펙 정보
+                      Text(
+                        specLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 13),
+                      ),
+                      const Spacer(),
+                      // 하단: 등급 + 댓글
+                      Row(
+                        children: [
+                          _GradePill(grade: item.conditionGrade),
+                          const SizedBox(width: 8),
+                          Text(
+                            '착용 ${item.wearCount}회',
+                            style: const TextStyle(color: Color(0xFF71717A), fontSize: 12),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.chat_bubble_outline, size: 13, color: Color(0xFF71717A)),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${item.commentCount}',
+                            style: const TextStyle(color: Color(0xFF71717A), fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2900,15 +2988,18 @@ class _ImageFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     // LocalStack의 localhost URL을 실기기에서 접근 가능하도록 변환
     final resolvedUrl = imageUrl?.replaceAll('localhost', '192.168.68.105');
+    final emojiWidget = Center(
+      child: Text(emoji, style: TextStyle(fontSize: size.isFinite ? size / 3 : 56)),
+    );
     final child = resolvedUrl?.isNotEmpty == true
-        ? Image.network(
-            resolvedUrl!,
+        ? CachedNetworkImage(
+            imageUrl: resolvedUrl!,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Center(
-              child: Text(emoji, style: TextStyle(fontSize: size.isFinite ? size / 3 : 56)),
-            ),
+            fadeInDuration: const Duration(milliseconds: 150),
+            placeholder: (_, _) => const Center(child: CircularProgressIndicator()),
+            errorWidget: (_, _, _) => emojiWidget,
           )
-        : Center(child: Text(emoji, style: TextStyle(fontSize: size.isFinite ? size / 3 : 56)));
+        : emojiWidget;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:image_picker/image_picker.dart';
 
 class ApiException implements Exception {
@@ -196,33 +198,105 @@ class ShowcaseSummary {
   const ShowcaseSummary({
     required this.showcaseId,
     required this.title,
+    required this.category,
+    required this.brand,
+    this.userSize,
     required this.conditionGrade,
     required this.isForSale,
     required this.wearCount,
     required this.primaryImageUrl,
     required this.commentCount,
     required this.has3dModel,
+    this.spec,
   });
 
   final int showcaseId;
   final String title;
+  final String category;
+  final String brand;
+  final String? userSize;
   final String conditionGrade;
   final bool isForSale;
   final int wearCount;
   final String? primaryImageUrl;
   final int commentCount;
   final bool has3dModel;
+  final SpecSummary? spec;
+
+  /// 목록 카드에 표시할 스펙 정보 텍스트.
+  /// 축구화: 브랜드 · 사일로 · 스터드 · 사이즈
+  /// 유니폼: 시즌 · 클럽 · 사이즈
+  String get specLabel {
+    final s = spec;
+    if (category == 'BOOTS') {
+      final parts = <String>[
+        brand,
+        if (s?.siloName != null) s!.siloName!,
+        if (s?.studType != null) s!.studType!,
+        if (userSize != null && userSize!.isNotEmpty) userSize!,
+      ];
+      return parts.join(' · ');
+    }
+    if (category == 'UNIFORM') {
+      final parts = <String>[
+        if (s?.season != null) s!.season!,
+        if (s?.clubName != null) s!.clubName!,
+        if (userSize != null && userSize!.isNotEmpty) userSize!,
+      ];
+      return parts.join(' · ');
+    }
+    return brand;
+  }
 
   factory ShowcaseSummary.fromJson(Map<String, dynamic> json) {
     return ShowcaseSummary(
       showcaseId: (json['showcaseId'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      brand: json['brand'] as String? ?? '',
+      userSize: json['userSize'] as String?,
       conditionGrade: json['conditionGrade'] as String? ?? 'A',
       isForSale: json['isForSale'] as bool? ?? false,
       wearCount: (json['wearCount'] as num?)?.toInt() ?? 0,
       primaryImageUrl: json['primaryImageUrl'] as String?,
       commentCount: (json['commentCount'] as num?)?.toInt() ?? 0,
       has3dModel: json['has3dModel'] as bool? ?? false,
+      spec: json['spec'] != null
+          ? SpecSummary.fromJson(json['spec'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+/// 카테고리별 스펙 요약 (단일 모델, specType으로 구분).
+class SpecSummary {
+  const SpecSummary({
+    required this.specType,
+    this.studType, this.siloName, this.surfaceType,
+    this.clubName, this.season, this.league, this.kitType,
+  });
+
+  final String specType;
+  // BOOTS
+  final String? studType;
+  final String? siloName;
+  final String? surfaceType;
+  // UNIFORM
+  final String? clubName;
+  final String? season;
+  final String? league;
+  final String? kitType;
+
+  factory SpecSummary.fromJson(Map<String, dynamic> json) {
+    return SpecSummary(
+      specType: json['specType'] as String? ?? '',
+      studType: json['studType'] as String?,
+      siloName: json['siloName'] as String?,
+      surfaceType: json['surfaceType'] as String?,
+      clubName: json['clubName'] as String?,
+      season: json['season'] as String?,
+      league: json['league'] as String?,
+      kitType: json['kitType'] as String?,
     );
   }
 }
@@ -244,8 +318,7 @@ class ShowcaseDetail {
     required this.showcaseStatus,
     required this.images,
     required this.model3d,
-    this.bootsSpec,
-    this.uniformSpec,
+    this.spec,
   });
 
   final int showcaseId;
@@ -263,8 +336,7 @@ class ShowcaseDetail {
   final String showcaseStatus;
   final List<ShowcaseImage> images;
   final ShowcaseModel3d? model3d;
-  final BootsSpecInfo? bootsSpec;
-  final UniformSpecInfo? uniformSpec;
+  final ShowcaseSpecDetail? spec;
 
   factory ShowcaseDetail.fromJson(Map<String, dynamic> json) {
     return ShowcaseDetail(
@@ -288,46 +360,54 @@ class ShowcaseDetail {
       model3d: json['model3d'] is Map<String, dynamic>
           ? ShowcaseModel3d.fromJson(json['model3d'] as Map<String, dynamic>)
           : null,
-      bootsSpec: json['bootsSpec'] is Map<String, dynamic>
-          ? BootsSpecInfo.fromJson(json['bootsSpec'] as Map<String, dynamic>)
-          : null,
-      uniformSpec: json['uniformSpec'] is Map<String, dynamic>
-          ? UniformSpecInfo.fromJson(json['uniformSpec'] as Map<String, dynamic>)
+      spec: json['spec'] is Map<String, dynamic>
+          ? ShowcaseSpecDetail.fromJson(json['spec'] as Map<String, dynamic>)
           : null,
     );
   }
 }
 
-class BootsSpecInfo {
-  const BootsSpecInfo({this.studType, this.siloName, this.releaseYear, this.surfaceType});
+/// 상세 조회용 스펙 (specData JSON을 파싱하여 필드로 제공).
+class ShowcaseSpecDetail {
+  const ShowcaseSpecDetail({
+    required this.specType,
+    // BOOTS
+    this.studType, this.siloName, this.releaseYear, this.surfaceType,
+    // UNIFORM
+    this.clubName, this.season, this.league, this.kitType,
+  });
+
+  final String specType;
   final String? studType;
   final String? siloName;
   final String? releaseYear;
   final String? surfaceType;
-
-  factory BootsSpecInfo.fromJson(Map<String, dynamic> json) {
-    return BootsSpecInfo(
-      studType: json['studType'] as String?,
-      siloName: json['siloName'] as String?,
-      releaseYear: json['releaseYear'] as String?,
-      surfaceType: json['surfaceType'] as String?,
-    );
-  }
-}
-
-class UniformSpecInfo {
-  const UniformSpecInfo({this.clubName, this.season, this.league, this.kitType});
   final String? clubName;
   final String? season;
   final String? league;
   final String? kitType;
 
-  factory UniformSpecInfo.fromJson(Map<String, dynamic> json) {
-    return UniformSpecInfo(
-      clubName: json['clubName'] as String?,
-      season: json['season'] as String?,
-      league: json['league'] as String?,
-      kitType: json['kitType'] as String?,
+  factory ShowcaseSpecDetail.fromJson(Map<String, dynamic> json) {
+    final specType = json['specType'] as String? ?? '';
+    // specData는 JSON 문자열 → 파싱하여 필드 추출
+    Map<String, dynamic> data = {};
+    if (json['specData'] is String) {
+      try {
+        data = Map<String, dynamic>.from(
+          const JsonDecoder().convert(json['specData'] as String) as Map,
+        );
+      } catch (_) {}
+    }
+    return ShowcaseSpecDetail(
+      specType: specType,
+      studType: (data['studType'] ?? json['studType']) as String?,
+      siloName: (data['siloName'] ?? json['siloName']) as String?,
+      releaseYear: (data['releaseYear'] ?? json['releaseYear']) as String?,
+      surfaceType: (data['surfaceType'] ?? json['surfaceType']) as String?,
+      clubName: (data['clubName'] ?? json['clubName']) as String?,
+      season: (data['season'] ?? json['season']) as String?,
+      league: (data['league'] ?? json['league']) as String?,
+      kitType: (data['kitType'] ?? json['kitType']) as String?,
     );
   }
 }
