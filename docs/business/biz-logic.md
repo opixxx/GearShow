@@ -185,6 +185,42 @@ FAILED → REQUESTED  (재요청)
 - `[TBD]` 3D 모델 생성 실패 시 자동 재시도 횟수
 - `[TBD]` 사용자당 3D 모델 생성 일일 요청 제한
 
+### 5-4. 외부 서비스 (Tripo API)
+
+3D 모델 생성은 [Tripo AI](https://platform.tripo3d.ai) API를 사용한다.
+
+**API 흐름**:
+```
+1. 소스 이미지 4장을 Tripo에 업로드 → image_token 획득
+2. multiview_to_model Task 생성 → task_id 획득
+3. Task 상태 폴링 (3초 간격, 최대 5분) → queued → running → success/failed
+4. 성공 시 GLB/프리뷰 다운로드 → S3에 영구 저장
+```
+
+**Task 생성 파라미터**:
+
+| 파라미터 | 현재 값 | 설명 |
+|:--------|:------|:-----|
+| `type` | `multiview_to_model` | 다중 이미지 → 3D |
+| `model_version` | `v2.5-20250123` | AI 모델 버전 |
+| `texture` | 기본값 `true` | 텍스처 생성 여부 |
+| `pbr` | 기본값 `true` | PBR 머티리얼 생성 |
+| `texture_quality` | 기본값 `standard` | 텍스처 품질 (`standard` / `detailed`) |
+| `face_limit` | 미설정 | 최대 폴리곤 수 (모바일 렌더링 시 5000~10000 권장) |
+
+**출력 형식**:
+
+| 필드 | 형식 | 설명 |
+|:----|:----|:-----|
+| `output.pbr_model` | GLB URL | PBR 모델 (**multiview의 메인 출력**, `output.model`은 null) |
+| `output.rendered_image` | WebP URL | 미리보기 이미지 |
+
+> 다운로드 URL은 단시간 내 만료되므로 즉시 S3에 저장해야 한다.
+
+**크레딧 소모**: multiview 1회당 약 30~60 크레딧
+
+**환경변수**: `TRIPO_ENABLED`, `TRIPO_API_KEY`, `TRIPO_BASE_URL`, `TRIPO_POLL_INTERVAL_MS`, `TRIPO_TIMEOUT_MS`, `TRIPO_MODEL_VERSION`
+
 ---
 
 ## 6. SHOWCASE COMMENT (댓글)

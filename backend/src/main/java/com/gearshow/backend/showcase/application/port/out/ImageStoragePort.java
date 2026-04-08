@@ -30,4 +30,22 @@ public interface ImageStoragePort {
      * @param imageUrl 삭제할 이미지 URL
      */
     void delete(String imageUrl);
+
+    /**
+     * 이미지 URL에서 바이트 데이터를 다운로드한다.
+     *
+     * @param imageUrl 다운로드할 이미지 URL
+     * @return 이미지 바이트 데이터
+     */
+    byte[] download(String imageUrl);
+
+    /**
+     * 바이트 데이터를 S3에 업로드하고 URL을 반환한다.
+     *
+     * @param s3Key       S3 객체 키
+     * @param data        업로드할 바이트 데이터
+     * @param contentType MIME 타입
+     * @return 업로드된 이미지 URL
+     */
+    String upload(String s3Key, byte[] data, String contentType);
 }

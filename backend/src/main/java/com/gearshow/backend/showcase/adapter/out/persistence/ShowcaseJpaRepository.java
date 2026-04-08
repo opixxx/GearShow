@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.adapter.out.persistence;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -70,4 +71,11 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
             @Param("cursorId") Long cursorId,
             @Param("showcaseStatus") ShowcaseStatus showcaseStatus,
             Pageable pageable);
+
+    /**
+     * has3dModel 플래그만 업데이트한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE ShowcaseJpaEntity s SET s.has3dModel = :has3dModel WHERE s.id = :showcaseId")
+    void updateHas3dModel(@Param("showcaseId") Long showcaseId, @Param("has3dModel") boolean has3dModel);
 }

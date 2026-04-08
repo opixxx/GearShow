@@ -1,14 +1,21 @@
 package com.gearshow.backend.showcase.adapter.out.storage.s3;
 
-import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3DownloadFailedException;
+import com.gearshow.backend.showcase.adapter.out.storage.s3.exception.S3UploadFailedException;
+import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * AWS S3 이미지 저장소 어댑터.
@@ -71,6 +78,45 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
                 .key(key)
                 .build());
         log.info("S3 이미지 삭제 완료: key={}", key);
+    }
+
+    /**
+     * S3에서 이미지 바이트 데이터를 다운로드한다.
+     */
+    @Override
+    public byte[] download(String imageUrl) {
+        String key = extractKeyFromUrl(imageUrl);
+        try {
+            return s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .build())
+                    .asByteArray();
+        } catch (Exception e) {
+            log.error("S3 이미지 다운로드 실패: key={}", key, e);
+            throw new S3DownloadFailedException();
+        }
+    }
+
+    /**
+     * 바이트 데이터를 S3에 업로드하고 CDN URL을 반환한다.
+     */
+    @Override
+    public String upload(String s3Key, byte[] data, String contentType) {
+        try {
+            s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(s3Key)
+                            .contentType(contentType)
+                            .build(),
+                    RequestBody.fromBytes(data));
+            log.info("S3 업로드 완료: key={}, size={}bytes", s3Key, data.length);
+            return toUrl(s3Key);
+        } catch (Exception e) {
+            log.error("S3 업로드 실패: key={}", s3Key, e);
+            throw new S3UploadFailedException();
+        }
     }
 
     /**

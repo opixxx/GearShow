@@ -38,6 +38,8 @@ dependencies:
   kakao_flutter_sdk_user: ^1.10.0
   image_picker: ^1.2.1
   cached_network_image: ^3.4.1
+  model_viewer_plus: ^1.10.0
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_test:

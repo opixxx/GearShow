@@ -39,6 +39,15 @@ cloud:
       cdn-url: ${AWS_S3_CDN_URL}
       endpoint: ${AWS_S3_ENDPOINT:}
 
+# Tripo 3D 모델 생성 API 설정
+tripo:
+  enabled: ${TRIPO_ENABLED:false}
+  api-key: ${TRIPO_API_KEY:}
+  base-url: ${TRIPO_BASE_URL:https://api.tripo3d.ai/v2/openapi}
+  poll-interval-ms: ${TRIPO_POLL_INTERVAL_MS:3000}
+  timeout-ms: ${TRIPO_TIMEOUT_MS:300000}
+  model-version: ${TRIPO_MODEL_VERSION:v2.5-20250123}
+
 # JWT 설정
 jwt:
   secret: ${JWT_SECRET}

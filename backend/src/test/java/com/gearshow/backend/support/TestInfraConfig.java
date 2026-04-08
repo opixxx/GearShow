@@ -50,6 +50,17 @@ public class TestInfraConfig {
             public void delete(String imageUrl) {
                 // 테스트에서는 삭제 무시
             }
+
+            @Override
+            public byte[] download(String imageUrl) {
+                // 테스트에서는 빈 바이트 반환
+                return new byte[0];
+            }
+
+            @Override
+            public String upload(String s3Key, byte[] data, String contentType) {
+                return "https://test-cdn.gearshow.com/" + s3Key;
+            }
         };
     }
 

@@ -1,6 +1,5 @@
 package com.gearshow.backend.showcase.infrastructure.config;
 
-import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,14 +25,4 @@ public class NoOpKafkaConfig {
                         showcase3dModelId, showcaseId);
     }
 
-    /**
-     * 3D 모델 생성을 항상 실패 처리하는 No-op 구현체.
-     */
-    @Bean
-    public ModelGenerationClient noOpModelGenerationClient() {
-        return (showcase3dModelId, showcaseId) -> {
-            log.warn("Kafka가 비활성화되어 3D 모델 생성을 수행할 수 없습니다");
-            return ModelGenerationClient.GenerationResult.failure("Kafka가 비활성화되어 3D 모델 생성 불가");
-        };
-    }
 }

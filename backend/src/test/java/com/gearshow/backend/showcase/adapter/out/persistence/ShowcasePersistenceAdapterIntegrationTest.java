@@ -122,6 +122,41 @@ class ShowcasePersistenceAdapterIntegrationTest {
         }
     }
 
+    @Nested
+    @DisplayName("3D 모델 보유 여부 갱신")
+    class UpdateHas3dModel {
+
+        @Test
+        @DisplayName("has3dModel을 true로 갱신한다")
+        void updateHas3dModel_setsTrue() {
+            // Given
+            Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
+            assertThat(saved.isHas3dModel()).isFalse();
+
+            // When
+            adapter.updateHas3dModel(saved.getId(), true);
+
+            // Then
+            Showcase found = adapter.findById(saved.getId()).orElseThrow();
+            assertThat(found.isHas3dModel()).isTrue();
+        }
+
+        @Test
+        @DisplayName("has3dModel을 false로 갱신한다")
+        void updateHas3dModel_setsFalse() {
+            // Given
+            Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
+            adapter.updateHas3dModel(saved.getId(), true);
+
+            // When
+            adapter.updateHas3dModel(saved.getId(), false);
+
+            // Then
+            Showcase found = adapter.findById(saved.getId()).orElseThrow();
+            assertThat(found.isHas3dModel()).isFalse();
+        }
+    }
+
     // ===== Helper =====
 
     private static final Instant FIXED_TIME = Instant.parse("2026-01-01T12:00:00Z");

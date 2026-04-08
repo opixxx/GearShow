@@ -15,7 +15,7 @@ import java.util.Random;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "tripo.enabled", havingValue = "false", matchIfMissing = true)
 public class FakeModelGenerationClient implements ModelGenerationClient {
 
     private static final int FAKE_DELAY_MS = 2000;

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GearShow - Tripo 3D 모델 생성 흐름</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px; }
+  h1 { text-align: center; font-size: 28px; margin-bottom: 8px; color: #f1f5f9; }
+  .subtitle { text-align: center; color: #94a3b8; margin-bottom: 40px; font-size: 14px; }
+
+  /* 시퀀스 다이어그램 */
+  .sequence { max-width: 960px; margin: 0 auto 60px; }
+  .section-title { font-size: 20px; font-weight: 700; color: #38bdf8; margin: 40px 0 20px; padding-left: 12px; border-left: 4px solid #38bdf8; }
+
+  .actors { display: flex; justify-content: space-between; margin-bottom: 0; position: relative; }
+  .actor { text-align: center; width: 130px; flex-shrink: 0; }
+  .actor-box { background: #1e293b; border: 2px solid #475569; border-radius: 10px; padding: 10px 8px; font-weight: 700; font-size: 13px; }
+  .actor-box.highlight { border-color: #38bdf8; color: #38bdf8; }
+  .lifeline { width: 2px; background: #334155; margin: 0 auto; }
+
+  .flow { position: relative; padding: 0 65px; }
+  .step { display: flex; align-items: flex-start; margin: 0; position: relative; min-height: 56px; }
+  .step .line-left, .step .line-right, .step .line-mid1, .step .line-mid2, .step .line-mid3 {
+    position: absolute; top: 0; bottom: 0; width: 2px; background: #334155;
+  }
+  .step .line-left { left: 0; }
+  .step .line-mid1 { left: calc(25% - 1px); }
+  .step .line-mid2 { left: calc(50% - 1px); }
+  .step .line-mid3 { left: calc(75% - 1px); }
+  .step .line-right { right: 0; }
+
+  .arrow { position: absolute; display: flex; align-items: center; height: 56px; }
+  .arrow-line { height: 2px; flex: 1; }
+  .arrow-line.solid { background: #38bdf8; }
+  .arrow-line.dashed { background: repeating-linear-gradient(90deg, #f59e0b 0, #f59e0b 6px, transparent 6px, transparent 12px); }
+  .arrow-line.return { background: repeating-linear-gradient(90deg, #22c55e 0, #22c55e 6px, transparent 6px, transparent 12px); }
+  .arrow-head { width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; flex-shrink: 0; }
+  .arrow-head.right { border-left: 10px solid #38bdf8; }
+  .arrow-head.right.dashed { border-left-color: #f59e0b; }
+  .arrow-head.right.return { border-left-color: #22c55e; }
+  .arrow-head.left { border-right: 10px solid #22c55e; }
+
+  .arrow-label { position: absolute; top: 4px; font-size: 12px; white-space: nowrap; padding: 2px 8px; border-radius: 4px; }
+  .arrow-label.above { background: #1e293b; color: #e2e8f0; }
+  .arrow-label code { color: #38bdf8; font-size: 11px; }
+  .arrow-label .method { color: #a78bfa; font-weight: 600; }
+  .arrow-label .note { color: #94a3b8; font-size: 11px; }
+
+  /* 단순화된 카드 기반 시퀀스 */
+  .seq-container { max-width: 960px; margin: 0 auto; }
+  .seq-header { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 4px; position: sticky; top: 0; background: #0f172a; z-index: 10; padding: 8px 0; }
+  .seq-actor { text-align: center; padding: 10px 4px; background: #1e293b; border: 2px solid #475569; border-radius: 10px; font-weight: 700; font-size: 12px; }
+  .seq-actor.a1 { border-color: #22d3ee; color: #22d3ee; }
+  .seq-actor.a2 { border-color: #a78bfa; color: #a78bfa; }
+  .seq-actor.a3 { border-color: #f59e0b; color: #f59e0b; }
+  .seq-actor.a4 { border-color: #f472b6; color: #f472b6; }
+  .seq-actor.a5 { border-color: #34d399; color: #34d399; }
+
+  .seq-lines { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .seq-line { display: flex; justify-content: center; }
+  .seq-line .vline { width: 2px; background: #334155; }
+
+  .seq-row { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; min-height: 20px; }
+  .seq-row .vline { position: absolute; top: 0; bottom: 0; width: 2px; background: #1e293b; }
+  .seq-row .vl1 { left: calc(10% - 1px); }
+  .seq-row .vl2 { left: calc(30% - 1px); }
+  .seq-row .vl3 { left: calc(50% - 1px); }
+  .seq-row .vl4 { left: calc(70% - 1px); }
+  .seq-row .vl5 { left: calc(90% - 1px); }
+
+  /* 메시지 카드 방식 */
+  .msg-list { max-width: 960px; margin: 0 auto; }
+  .msg { display: flex; align-items: stretch; margin-bottom: 2px; min-height: 48px; }
+  .msg-num { width: 36px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #475569; flex-shrink: 0; }
+  .msg-card { flex: 1; display: flex; align-items: center; padding: 10px 16px; border-radius: 8px; gap: 12px; }
+  .msg-card.req { background: #172554; border-left: 3px solid #38bdf8; }
+  .msg-card.res { background: #14532d; border-left: 3px solid #22c55e; }
+  .msg-card.async { background: #451a03; border-left: 3px solid #f59e0b; }
+  .msg-card.internal { background: #1e1b4b; border-left: 3px solid #a78bfa; }
+  .msg-card.poll { background: #1c1917; border-left: 3px solid #78716c; }
+  .msg-card.fail { background: #450a0a; border-left: 3px solid #ef4444; }
+
+  .msg-from, .msg-to { font-size: 11px; font-weight: 700; width: 80px; text-align: center; flex-shrink: 0; border-radius: 6px; padding: 3px 6px; }
+  .msg-from.client { background: #164e63; color: #22d3ee; }
+  .msg-from.worker { background: #3b0764; color: #c084fc; }
+  .msg-from.tripo { background: #78350f; color: #fbbf24; }
+  .msg-from.kafka { background: #831843; color: #f9a8d4; }
+  .msg-from.s3 { background: #064e3b; color: #6ee7b7; }
+  .msg-from.server { background: #1e3a5f; color: #7dd3fc; }
+
+  .msg-arrow { color: #475569; font-size: 18px; flex-shrink: 0; }
+  .msg-body { flex: 1; }
+  .msg-title { font-weight: 600; font-size: 13px; }
+  .msg-desc { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .msg-desc code { background: #334155; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #e2e8f0; }
+
+  .phase-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; padding: 0 48px; }
+  .phase-divider .line { flex: 1; height: 1px; background: #334155; }
+  .phase-divider .label { font-size: 13px; font-weight: 700; color: #64748b; white-space: nowrap; }
+
+  /* 상태 다이어그램 */
+  .state-diagram { max-width: 700px; margin: 0 auto 60px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .state-row { display: flex; align-items: center; gap: 16px; }
+  .state { padding: 12px 24px; border-radius: 12px; font-weight: 700; font-size: 14px; text-align: center; min-width: 140px; }
+  .state.requested { background: #172554; border: 2px solid #3b82f6; color: #60a5fa; }
+  .state.generating { background: #451a03; border: 2px solid #f59e0b; color: #fbbf24; }
+  .state.success { background: #14532d; border: 2px solid #22c55e; color: #4ade80; }
+  .state.failed { background: #450a0a; border: 2px solid #ef4444; color: #f87171; }
+  .state-arrow { color: #64748b; font-size: 24px; }
+  .state-label { font-size: 11px; color: #94a3b8; margin-top: -8px; }
+
+  /* 정보 테이블 */
+  .info-grid { max-width: 960px; margin: 0 auto 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .info-card { background: #1e293b; border-radius: 12px; padding: 20px; }
+  .info-card h3 { font-size: 15px; color: #38bdf8; margin-bottom: 12px; }
+  .info-card table { width: 100%; border-collapse: collapse; }
+  .info-card th, .info-card td { text-align: left; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #334155; }
+  .info-card th { color: #94a3b8; font-weight: 600; }
+  .info-card td { color: #e2e8f0; }
+  .info-card td code { background: #334155; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .info-card.full { grid-column: 1 / -1; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tag.get { background: #14532d; color: #4ade80; }
+  .tag.post { background: #172554; color: #60a5fa; }
+  .tag.async { background: #451a03; color: #fbbf24; }
+  .tag.poll { background: #1c1917; color: #a8a29e; }
+</style>
+</head>
+<body>
+
+<h1>Tripo 3D 모델 생성 흐름</h1>
+<p class="subtitle">GearShow - Showcase 3D Model Generation Sequence Diagram</p>
+
+<!-- 상태 머신 -->
+<div class="seq-container">
+  <div class="section-title">Task 상태 머신</div>
+</div>
+<div class="state-diagram">
+  <div class="state-row">
+    <div class="state requested">REQUESTED</div>
+    <div class="state-arrow">&rarr;</div>
+    <div class="state generating">GENERATING<br><span style="font-size:11px;font-weight:400">(queued &rarr; running)</span></div>
+    <div class="state-arrow">&rarr;</div>
+    <div class="state success">COMPLETED</div>
+  </div>
+  <div style="margin-left: 260px; color: #64748b;">&darr; 실패 시</div>
+  <div class="state-row">
+    <div style="width:156px"></div>
+    <div style="width:16px"></div>
+    <div class="state failed">FAILED</div>
+    <div class="state-arrow" style="transform: scaleX(-1);">&rarr;</div>
+    <div class="state requested">REQUESTED<br><span style="font-size:11px;font-weight:400">(재시도)</span></div>
+  </div>
+</div>
+
+<!-- Phase 1: 쇼케이스 등록 -->
+<div class="seq-container">
+  <div class="section-title">Phase 1 &mdash; 쇼케이스 등록 (사용자 요청)</div>
+</div>
+<div class="msg-list">
+  <div class="msg">
+    <div class="msg-num">1</div>
+    <div class="msg-card req">
+      <div class="msg-from client">Client</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from server">Server</div>
+      <div class="msg-body">
+        <div class="msg-title">쇼케이스 등록 요청</div>
+        <div class="msg-desc"><code>POST /api/v1/showcases</code> &mdash; 이미지 S3 키 + 3D 소스 이미지 S3 키 (4장)</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">2</div>
+    <div class="msg-card internal">
+      <div class="msg-from server">Server</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from server">DB</div>
+      <div class="msg-body">
+        <div class="msg-title">Showcase + ShowcaseSpec + ShowcaseImage + Showcase3dModel 저장</div>
+        <div class="msg-desc">Showcase3dModel 상태: <code>REQUESTED</code>, provider: <code>tripo</code></div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">3</div>
+    <div class="msg-card async">
+      <div class="msg-from server">Server</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from kafka">Kafka</div>
+      <div class="msg-body">
+        <div class="msg-title">3D 모델 생성 요청 메시지 발행</div>
+        <div class="msg-desc">토픽: <code>showcase.model-generation.request</code> &mdash; 트랜잭션 밖에서 비동기 발행</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">4</div>
+    <div class="msg-card res">
+      <div class="msg-from server">Server</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from client">Client</div>
+      <div class="msg-body">
+        <div class="msg-title">즉시 응답 (201 Created)</div>
+        <div class="msg-desc"><code>{ "showcaseId": 1, "model3dStatus": "REQUESTED" }</code> &mdash; 사용자는 기다리지 않음</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 2: 3D 모델 생성 (비동기) -->
+<div class="seq-container">
+  <div class="section-title">Phase 2 &mdash; 3D 모델 생성 (비동기, Kafka Worker)</div>
+</div>
+<div class="msg-list">
+  <div class="msg">
+    <div class="msg-num">5</div>
+    <div class="msg-card async">
+      <div class="msg-from kafka">Kafka</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-body">
+        <div class="msg-title">메시지 소비 &mdash; ModelGenerationWorker</div>
+        <div class="msg-desc">Showcase3dModel 상태를 <code>GENERATING</code>으로 변경 후 저장</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-divider"><div class="line"></div><div class="label">Tripo API 호출 시작</div><div class="line"></div></div>
+
+  <div class="msg">
+    <div class="msg-num">6</div>
+    <div class="msg-card req">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from tripo">Tripo</div>
+      <div class="msg-body">
+        <div class="msg-title">소스 이미지 4장 업로드</div>
+        <div class="msg-desc"><code>POST /upload</code> &times; 4 &mdash; S3에서 이미지 다운로드 후 Tripo에 업로드, <code>image_token</code> 4개 획득</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">7</div>
+    <div class="msg-card req">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from tripo">Tripo</div>
+      <div class="msg-body">
+        <div class="msg-title">Multiview 3D 생성 Task 요청</div>
+        <div class="msg-desc"><code>POST /task</code> &mdash; <code>type: "multiview_to_model"</code>, files: [front, back, left, right] &rarr; <code>task_id</code> 반환</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">8</div>
+    <div class="msg-card poll">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&harr;</div>
+      <div class="msg-from tripo">Tripo</div>
+      <div class="msg-body">
+        <div class="msg-title">Task 상태 폴링 (3초 간격, 최대 5분)</div>
+        <div class="msg-desc"><code>GET /task/{task_id}</code> &mdash; <code>queued</code> &rarr; <code>running</code> (progress 0~99%) &rarr; <code>success</code> / <code>failed</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-divider"><div class="line"></div><div class="label">성공 시 (success)</div><div class="line"></div></div>
+
+  <div class="msg">
+    <div class="msg-num">9</div>
+    <div class="msg-card req">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from tripo">Tripo</div>
+      <div class="msg-body">
+        <div class="msg-title">GLB 모델 + 프리뷰 이미지 다운로드</div>
+        <div class="msg-desc"><code>output.model</code> (GLB), <code>output.rendered_image</code> (PNG) &mdash; URL 5분 후 만료!</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">10</div>
+    <div class="msg-card internal">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from s3">S3</div>
+      <div class="msg-body">
+        <div class="msg-title">GLB + 프리뷰를 S3에 영구 저장</div>
+        <div class="msg-desc"><code>models/{showcaseId}/model.glb</code>, <code>models/{showcaseId}/preview.png</code> &rarr; 자체 CDN URL 생성</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">11</div>
+    <div class="msg-card res">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from server">DB</div>
+      <div class="msg-body">
+        <div class="msg-title">DB 업데이트 &mdash; COMPLETED</div>
+        <div class="msg-desc">Showcase3dModel: <code>modelFileUrl</code>, <code>previewImageUrl</code> 저장 / Showcase: <code>has3dModel = true</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-divider"><div class="line"></div><div class="label">실패 시 (failed)</div><div class="line"></div></div>
+
+  <div class="msg">
+    <div class="msg-num">11'</div>
+    <div class="msg-card fail">
+      <div class="msg-from worker">Worker</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from server">DB</div>
+      <div class="msg-body">
+        <div class="msg-title">DB 업데이트 &mdash; FAILED</div>
+        <div class="msg-desc">Showcase3dModel: <code>failureReason</code> 저장 / Showcase: <code>has3dModel = false</code></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Phase 3: 사용자 조회 -->
+<div class="seq-container">
+  <div class="section-title">Phase 3 &mdash; 사용자 상태 조회 / 3D 뷰어</div>
+</div>
+<div class="msg-list">
+  <div class="msg">
+    <div class="msg-num">12</div>
+    <div class="msg-card req">
+      <div class="msg-from client">Client</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from server">Server</div>
+      <div class="msg-body">
+        <div class="msg-title">3D 모델 상태 조회</div>
+        <div class="msg-desc"><code>GET /api/v1/showcases/{id}/3d-model</code> &mdash; modelStatus, modelFileUrl, previewImageUrl 반환</div>
+      </div>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="msg-num">13</div>
+    <div class="msg-card res">
+      <div class="msg-from client">Client</div>
+      <div class="msg-arrow">&rarr;</div>
+      <div class="msg-from client">Viewer</div>
+      <div class="msg-body">
+        <div class="msg-title">3D 뷰어에서 GLB 렌더링</div>
+        <div class="msg-desc">Flutter <code>model_viewer_plus</code> &mdash; modelFileUrl(GLB)을 로드하여 터치 회전/줌 지원</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API 정보 테이블 -->
+<div class="seq-container">
+  <div class="section-title">Tripo API 상세</div>
+</div>
+<div class="info-grid">
+  <div class="info-card">
+    <h3>API 기본 정보</h3>
+    <table>
+      <tr><th>Base URL</th><td><code>https://api.tripo3d.ai/v2/openapi</code></td></tr>
+      <tr><th>인증</th><td><code>Authorization: Bearer tsk_***</code></td></tr>
+      <tr><th>응답 형식</th><td>JSON (<code>code: 0</code> = 성공)</td></tr>
+      <tr><th>Java SDK</th><td>없음 (RestClient로 직접 구현)</td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h3>크레딧 비용</h3>
+    <table>
+      <tr><th>작업</th><th>크레딧</th></tr>
+      <tr><td>Image-to-3D (단일)</td><td>~30~50</td></tr>
+      <tr><td>Multiview-to-3D (다중)</td><td>~60~80</td></tr>
+      <tr><td>+ Detailed texture</td><td>+20</td></tr>
+      <tr><td>Free 플랜</td><td>300 크레딧/월</td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h3>엔드포인트</h3>
+    <table>
+      <tr><td><span class="tag post">POST</span></td><td><code>/upload</code></td><td>이미지 업로드 &rarr; image_token</td></tr>
+      <tr><td><span class="tag post">POST</span></td><td><code>/task</code></td><td>3D 생성 Task 요청 &rarr; task_id</td></tr>
+      <tr><td><span class="tag get">GET</span></td><td><code>/task/{id}</code></td><td>Task 상태 폴링</td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h3>출력 파일</h3>
+    <table>
+      <tr><th>필드</th><th>형식</th><th>용도</th></tr>
+      <tr><td><code>output.model</code></td><td>GLB</td><td>3D 모델</td></tr>
+      <tr><td><code>output.pbr_model</code></td><td>GLB</td><td>PBR 텍스처 포함</td></tr>
+      <tr><td><code>output.rendered_image</code></td><td>PNG</td><td>프리뷰 이미지</td></tr>
+    </table>
+    <p style="margin-top:8px;font-size:12px;color:#f59e0b;">&#9888; 다운로드 URL은 5분 후 만료 &mdash; 즉시 S3에 저장 필수</p>
+  </div>
+
+  <div class="info-card full">
+    <h3>GearShow 신규 파일 구조</h3>
+    <table>
+      <tr><th>파일</th><th>역할</th></tr>
+      <tr><td><code>adapter/out/model3d/tripo/TripoModelGenerationClient.java</code></td><td>ModelGenerationClient 구현체 (업로드 &rarr; 생성 &rarr; 폴링 &rarr; S3 저장)</td></tr>
+      <tr><td><code>adapter/out/model3d/tripo/TripoApiClient.java</code></td><td>Tripo REST API HTTP 클라이언트</td></tr>
+      <tr><td><code>adapter/out/model3d/tripo/dto/TripoUploadResponse.java</code></td><td>업로드 응답 (image_token)</td></tr>
+      <tr><td><code>adapter/out/model3d/tripo/dto/TripoTaskRequest.java</code></td><td>Task 생성 요청</td></tr>
+      <tr><td><code>adapter/out/model3d/tripo/dto/TripoTaskStatusResponse.java</code></td><td>Task 폴링 응답 (status, output)</td></tr>
+      <tr><td><code>adapter/out/model3d/tripo/exception/TripoApiException.java</code></td><td>Tripo API 호출 실패 예외</td></tr>
+      <tr><td><code>infrastructure/config/TripoConfig.java</code></td><td>API Key, Base URL, 폴링 설정</td></tr>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

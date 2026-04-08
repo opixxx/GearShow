@@ -72,4 +72,9 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
                 .map(showcaseMapper::toDomain)
                 .toList();
     }
+
+    @Override
+    public void updateHas3dModel(Long showcaseId, boolean has3dModel) {
+        showcaseJpaRepository.updateHas3dModel(showcaseId, has3dModel);
+    }
 }
