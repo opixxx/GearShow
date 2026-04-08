@@ -132,10 +132,14 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
      */
     private GenerationResult handleSuccess(TripoTaskStatusResponse status, Long showcaseId) {
         var output = status.data().output();
-        // Tripo는 multiview 시 model이 null이고 pbr_model에 GLB를 반환한다
-        String tripoModelUrl = output.model() != null ? output.model() : output.pbr_model();
+        // multiview → pbr_model, image_to_model → model에 GLB URL이 반환된다
+        String tripoModelUrl = output.pbr_model() != null ? output.pbr_model() : output.model();
         log.info("Tripo 출력 URL - model: {}, pbr_model: {}, rendered_image: {}",
                 output.model(), output.pbr_model(), output.rendered_image());
+
+        if (tripoModelUrl == null) {
+            return GenerationResult.failure("Tripo 모델 URL이 없습니다 - model과 pbr_model 모두 null");
+        }
 
         // Tripo에서 GLB 모델 다운로드
         byte[] modelBytes = downloadFromUrl(tripoModelUrl);

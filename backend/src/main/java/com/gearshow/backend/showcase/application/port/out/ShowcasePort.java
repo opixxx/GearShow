@@ -43,4 +43,10 @@ public interface ShowcasePort {
      */
     List<Showcase> findByOwnerIdWithCursor(Long ownerId, Instant cursorCreatedAt, Long cursorId,
                                            int size, ShowcaseStatus showcaseStatus);
+
+    /**
+     * 쇼케이스의 has3dModel 플래그만 업데이트한다.
+     * 다른 필드를 건드리지 않아 동시 수정 시 lost update를 방지한다.
+     */
+    void updateHas3dModel(Long showcaseId, boolean has3dModel);
 }

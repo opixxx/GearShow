@@ -5,7 +5,6 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
-import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.infrastructure.config.KafkaConfig;
 import lombok.RequiredArgsConstructor;
@@ -101,11 +100,9 @@ public class ModelGenerationWorker {
 
     /**
      * 쇼케이스의 has3dModel 플래그를 동기화한다.
+     * 단일 UPDATE 쿼리로 다른 필드를 건드리지 않아 lost update를 방지한다.
      */
     private void syncHas3dModel(Long showcaseId, boolean has3dModel) {
-        showcasePort.findById(showcaseId).ifPresent(showcase -> {
-            Showcase updated = showcase.changeHas3dModel(has3dModel);
-            showcasePort.save(updated);
-        });
+        showcasePort.updateHas3dModel(showcaseId, has3dModel);
     }
 }
