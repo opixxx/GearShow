@@ -3,7 +3,6 @@ package com.gearshow.backend.showcase.application.service;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.exception.InsufficientModelSourceImagesException;
 import com.gearshow.backend.showcase.application.exception.ModelAlreadyGeneratingException;
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
@@ -88,9 +87,7 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     private void validateOwner(Long showcaseId, Long ownerId) {
         Showcase showcase = showcasePort.findById(showcaseId)
                 .orElseThrow(NotFoundShowcaseException::new);
-        if (!showcase.getOwnerId().equals(ownerId)) {
-            throw new NotOwnerShowcaseException();
-        }
+        showcase.validateOwner(ownerId);
     }
 
     private void validateNotAlreadyGenerating(Long showcaseId) {

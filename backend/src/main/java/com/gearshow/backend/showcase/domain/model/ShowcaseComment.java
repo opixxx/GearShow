@@ -1,6 +1,8 @@
 package com.gearshow.backend.showcase.domain.model;
 
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseCommentException;
+import com.gearshow.backend.showcase.domain.exception.NotAuthorCommentException;
+import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseCommentException;
 import com.gearshow.backend.showcase.domain.vo.CommentStatus;
 import lombok.Builder;
 import lombok.Getter;
@@ -56,6 +58,28 @@ public class ShowcaseComment {
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
+    }
+
+    /**
+     * 댓글이 해당 쇼케이스에 소속되어 있는지 검증한다.
+     *
+     * @param showcaseId 검증할 쇼케이스 ID
+     */
+    public void validateBelongsTo(Long showcaseId) {
+        if (!this.showcaseId.equals(showcaseId)) {
+            throw new NotFoundShowcaseCommentException();
+        }
+    }
+
+    /**
+     * 작성자인지 검증한다.
+     *
+     * @param userId 검증할 사용자 ID
+     */
+    public void validateAuthor(Long userId) {
+        if (!this.authorId.equals(userId)) {
+            throw new NotAuthorCommentException();
+        }
     }
 
     /**

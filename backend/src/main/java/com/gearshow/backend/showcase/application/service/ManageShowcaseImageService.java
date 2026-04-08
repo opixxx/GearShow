@@ -4,7 +4,6 @@ import com.gearshow.backend.showcase.application.exception.DuplicateSortOrderExc
 import com.gearshow.backend.showcase.application.exception.ImageNotBelongToShowcaseException;
 import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchException;
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.ManageShowcaseImageUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
@@ -136,9 +135,7 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
     private Showcase validateOwnershipAndGet(Long showcaseId, Long ownerId) {
         Showcase showcase = showcasePort.findById(showcaseId)
                 .orElseThrow(NotFoundShowcaseException::new);
-        if (!showcase.getOwnerId().equals(ownerId)) {
-            throw new NotOwnerShowcaseException();
-        }
+        showcase.validateOwner(ownerId);
         return showcase;
     }
 

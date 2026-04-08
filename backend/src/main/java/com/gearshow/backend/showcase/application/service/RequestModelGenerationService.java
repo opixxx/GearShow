@@ -44,7 +44,8 @@ public class RequestModelGenerationService {
     @Transactional
     public Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
         Showcase3dModel model = showcase3dModelPort.findByShowcaseId(showcaseId)
-                .map(this::resetToRequested)
+                .map(existing -> showcase3dModelPort.save(
+                        existing.resetRequest(GENERATION_PROVIDER)))
                 .orElseGet(() -> createAndSaveModel(showcaseId));
         saveSourceImages(model.getId(), imageUrls);
         return model;
@@ -53,23 +54,6 @@ public class RequestModelGenerationService {
     private Showcase3dModel createAndSaveModel(Long showcaseId) {
         Showcase3dModel model = Showcase3dModel.request(showcaseId, GENERATION_PROVIDER);
         return showcase3dModelPort.save(model);
-    }
-
-    /**
-     * FAILED 상태의 모델을 REQUESTED로 재설정한다.
-     */
-    private Showcase3dModel resetToRequested(Showcase3dModel existingModel) {
-        Showcase3dModel newRequest = Showcase3dModel.request(
-                existingModel.getShowcaseId(), GENERATION_PROVIDER);
-        Showcase3dModel withId = Showcase3dModel.builder()
-                .id(existingModel.getId())
-                .showcaseId(existingModel.getShowcaseId())
-                .modelStatus(newRequest.getModelStatus())
-                .generationProvider(newRequest.getGenerationProvider())
-                .requestedAt(newRequest.getRequestedAt())
-                .createdAt(existingModel.getCreatedAt())
-                .build();
-        return showcase3dModelPort.save(withId);
     }
 
     private void saveSourceImages(Long showcase3dModelId, List<String> imageUrls) {

@@ -1,7 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.UpdateShowcaseCommand;
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.UpdateShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
@@ -22,44 +21,18 @@ public class UpdateShowcaseService implements UpdateShowcaseUseCase {
     @Override
     @Transactional
     public void update(Long showcaseId, Long ownerId, UpdateShowcaseCommand command) {
-        Showcase showcase = findShowcase(showcaseId);
-        validateOwner(showcase, ownerId);
-
-        Showcase updated = applyUpdate(showcase, command);
-        showcasePort.save(updated);
-    }
-
-    private Showcase findShowcase(Long showcaseId) {
-        return showcasePort.findById(showcaseId)
+        Showcase showcase = showcasePort.findById(showcaseId)
                 .orElseThrow(NotFoundShowcaseException::new);
-    }
+        showcase.validateOwner(ownerId);
 
-    private void validateOwner(Showcase showcase, Long ownerId) {
-        if (!showcase.getOwnerId().equals(ownerId)) {
-            throw new NotOwnerShowcaseException();
-        }
-    }
-
-    /**
-     * null이 아닌 필드만 업데이트한다 (Partial Update).
-     */
-    private Showcase applyUpdate(Showcase showcase, UpdateShowcaseCommand command) {
-        return Showcase.builder()
-                .id(showcase.getId())
-                .ownerId(showcase.getOwnerId())
-                .catalogItemId(showcase.getCatalogItemId())
-                .category(showcase.getCategory())
-                .brand(showcase.getBrand())
-                .modelCode(showcase.getModelCode())
-                .title(command.title() != null ? command.title() : showcase.getTitle())
-                .description(command.description() != null ? command.description() : showcase.getDescription())
-                .userSize(command.userSize() != null ? command.userSize() : showcase.getUserSize())
-                .conditionGrade(command.conditionGrade() != null ? command.conditionGrade() : showcase.getConditionGrade())
-                .wearCount(command.wearCount() != null ? command.wearCount() : showcase.getWearCount())
-                .forSale(command.isForSale() != null ? command.isForSale() : showcase.isForSale())
-                .status(showcase.getStatus())
-                .createdAt(showcase.getCreatedAt())
-                .updatedAt(java.time.Instant.now())
-                .build();
+        Showcase updated = showcase.update(
+            command.title(),
+            command.description(),
+            command.userSize(),
+            command.conditionGrade(),
+            command.wearCount(),
+            command.isForSale()
+        );
+        showcasePort.save(updated);
     }
 }
