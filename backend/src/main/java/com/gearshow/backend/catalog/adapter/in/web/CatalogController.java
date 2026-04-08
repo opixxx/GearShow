@@ -10,7 +10,6 @@ import com.gearshow.backend.catalog.application.port.in.CreateCatalogItemUseCase
 import com.gearshow.backend.catalog.application.port.in.GetCatalogItemUseCase;
 import com.gearshow.backend.catalog.application.port.in.ListCatalogItemsUseCase;
 import com.gearshow.backend.catalog.application.port.in.UpdateCatalogItemUseCase;
-import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.common.dto.PageInfo;
 import jakarta.validation.Valid;
@@ -41,26 +40,19 @@ public class CatalogController {
      * 카탈로그 아이템 목록을 조회한다.
      * 커서 기반 페이징을 지원한다.
      *
-     * @param category  카테고리 필터
-     * @param brand     브랜드 필터
-     * @param keyword   아이템명/모델코드 검색
      * @param pageToken 페이지 토큰 (첫 페이지는 생략)
      * @param size      페이지 크기 (기본값 20)
      * @return 카탈로그 아이템 목록
      */
     @GetMapping
     public ApiResponse<PageInfo<CatalogItemListResult>> list(
-            @RequestParam(required = false) Category category,
-            @RequestParam(required = false) String brand,
-            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String pageToken,
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다")
             @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다")
             int size) {
 
-        PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
-                pageToken, size, category, brand, keyword);
+        PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(pageToken, size);
 
         return ApiResponse.of(200, "카탈로그 아이템 목록 조회 성공", result);
     }

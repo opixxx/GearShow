@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,10 +46,18 @@ public class CatalogItemPersistenceAdapter implements CatalogItemPort {
     }
 
     @Override
-    public List<CatalogItem> findAllWithCursor(Long cursorId, int size,
-                                               Category category, String brand, String keyword) {
+    public List<CatalogItem> findAllFirstPage(int size) {
+        return catalogItemJpaRepository.findAllFirstPage(
+                        CatalogStatus.ACTIVE, PageRequest.of(0, size + 1))
+                .stream()
+                .map(catalogItemMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<CatalogItem> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size) {
         return catalogItemJpaRepository.findAllWithCursor(
-                        CatalogStatus.ACTIVE, cursorId, category, brand, keyword, PageRequest.of(0, size + 1))
+                        CatalogStatus.ACTIVE, cursorCreatedAt, cursorId, PageRequest.of(0, size + 1))
                 .stream()
                 .map(catalogItemMapper::toDomain)
                 .toList();

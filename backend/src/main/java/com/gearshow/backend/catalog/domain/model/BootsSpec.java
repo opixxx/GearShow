@@ -45,13 +45,23 @@ public class BootsSpec {
      *
      * @param catalogItemId 카탈로그 아이템 ID
      * @param studType      스터드 타입
+     * @param siloName      사일로명
+     * @param releaseYear   출시 연도
+     * @param surfaceType   그라운드 타입
+     * @param extraSpecJson 추가 스펙 JSON
      * @return 생성된 축구화 스펙
      */
-    public static BootsSpec create(Long catalogItemId, StudType studType) {
+    public static BootsSpec create(Long catalogItemId, StudType studType,
+                                   String siloName, String releaseYear,
+                                   String surfaceType, String extraSpecJson) {
         Instant now = Instant.now();
         return BootsSpec.builder()
                 .catalogItemId(catalogItemId)
                 .studType(studType)
+                .siloName(siloName)
+                .releaseYear(releaseYear)
+                .surfaceType(surfaceType)
+                .extraSpecJson(extraSpecJson)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();

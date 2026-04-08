@@ -51,7 +51,16 @@ public class UniformSpec {
      * @param kitType       킷 타입 (HOME/AWAY/THIRD)
      * @return 생성된 유니폼 스펙
      */
-    public static UniformSpec create(Long catalogItemId, String clubName, String season, KitType kitType) {
+    /**
+     * 필수 필드만으로 새로운 유니폼 스펙을 생성한다.
+     */
+    public static UniformSpec create(Long catalogItemId, String clubName,
+                                     String season, KitType kitType) {
+        return create(catalogItemId, clubName, season, null, kitType, null);
+    }
+
+    public static UniformSpec create(Long catalogItemId, String clubName, String season,
+                                     String league, KitType kitType, String extraSpecJson) {
         validate(catalogItemId, clubName, season, kitType);
 
         Instant now = Instant.now();
@@ -59,7 +68,9 @@ public class UniformSpec {
                 .catalogItemId(catalogItemId)
                 .clubName(clubName)
                 .season(season)
+                .league(league)
                 .kitType(kitType)
+                .extraSpecJson(extraSpecJson)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();

@@ -139,28 +139,11 @@ class CatalogItemServiceIntegrationTest {
             createCatalogItemUseCase.create(createBootsCommand("LIST-002"));
 
             // When
-            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
-                    null, 20, null, null, null);
+            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(null, 20);
 
             // Then
             assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);
             assertThat(result.hasNext()).isFalse();
-        }
-
-        @Test
-        @DisplayName("카테고리로 필터링하여 조회한다")
-        void list_filterByCategory() {
-            // Given
-            createCatalogItemUseCase.create(createBootsCommand("FILTER-001"));
-
-            // When
-            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(
-                    null, 20, Category.BOOTS, null, null);
-
-            // Then
-            assertThat(result.data())
-                    .isNotEmpty()
-                    .allMatch(item -> item.category() == Category.BOOTS);
         }
     }
 

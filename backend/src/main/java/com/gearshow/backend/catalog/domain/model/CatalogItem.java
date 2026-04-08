@@ -41,7 +41,7 @@ public class CatalogItem {
     }
 
     /**
-     * 새로운 카탈로그 아이템을 생성한다.
+     * 필수 필드만으로 새로운 카탈로그 아이템을 생성한다.
      * 최초 상태는 ACTIVE이다.
      *
      * @param category 카테고리
@@ -49,12 +49,29 @@ public class CatalogItem {
      * @return 생성된 카탈로그 아이템
      */
     public static CatalogItem create(Category category, String brand) {
+        return create(category, brand, null, null);
+    }
+
+    /**
+     * 새로운 카탈로그 아이템을 생성한다.
+     * 최초 상태는 ACTIVE이다.
+     *
+     * @param category        카테고리
+     * @param brand           브랜드명
+     * @param modelCode       모델 코드 (nullable)
+     * @param officialImageUrl 공식 이미지 URL (nullable)
+     * @return 생성된 카탈로그 아이템
+     */
+    public static CatalogItem create(Category category, String brand,
+                                     String modelCode, String officialImageUrl) {
         validate(category, brand);
 
         Instant now = Instant.now();
         return CatalogItem.builder()
                 .category(category)
                 .brand(brand)
+                .modelCode(modelCode)
+                .officialImageUrl(officialImageUrl)
                 .status(CatalogStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)
@@ -68,6 +85,28 @@ public class CatalogItem {
      */
     public boolean isActive() {
         return this.status == CatalogStatus.ACTIVE;
+    }
+
+    /**
+     * 카탈로그 아이템 정보를 수정한다.
+     * null이 아닌 필드만 변경된다.
+     *
+     * @param brand           변경할 브랜드명 (null이면 유지)
+     * @param modelCode       변경할 모델 코드 (null이면 유지)
+     * @param officialImageUrl 변경할 공식 이미지 URL (null이면 유지)
+     * @return 수정된 카탈로그 아이템
+     */
+    public CatalogItem update(String brand, String modelCode, String officialImageUrl) {
+        return CatalogItem.builder()
+                .id(this.id)
+                .category(this.category)
+                .brand(brand != null ? brand : this.brand)
+                .modelCode(modelCode != null ? modelCode : this.modelCode)
+                .officialImageUrl(officialImageUrl != null ? officialImageUrl : this.officialImageUrl)
+                .status(this.status)
+                .createdAt(this.createdAt)
+                .updatedAt(Instant.now())
+                .build();
     }
 
     /**
