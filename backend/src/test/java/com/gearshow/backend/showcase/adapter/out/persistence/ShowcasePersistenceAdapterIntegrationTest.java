@@ -4,6 +4,7 @@ import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -26,6 +27,9 @@ class ShowcasePersistenceAdapterIntegrationTest {
 
     @Autowired
     private ShowcaseJpaRepository showcaseJpaRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private ShowcasePersistenceAdapter adapter;
 
@@ -119,6 +123,47 @@ class ShowcasePersistenceAdapterIntegrationTest {
             assertThat(result)
                     .isNotEmpty()
                     .allMatch(s -> s.getOwnerId().equals(100L));
+        }
+    }
+
+    @Nested
+    @DisplayName("3D 모델 보유 여부 갱신")
+    class UpdateHas3dModel {
+
+        @Test
+        @DisplayName("has3dModel을 true로 갱신한다")
+        void updateHas3dModel_setsTrue() {
+            // Given
+            Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
+            assertThat(saved.isHas3dModel()).isFalse();
+
+            // When
+            adapter.updateHas3dModel(saved.getId(), true);
+            entityManager.flush();
+            entityManager.clear();
+
+            // Then
+            Showcase found = adapter.findById(saved.getId()).orElseThrow();
+            assertThat(found.isHas3dModel()).isTrue();
+        }
+
+        @Test
+        @DisplayName("has3dModel을 false로 갱신한다")
+        void updateHas3dModel_setsFalse() {
+            // Given
+            Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
+            adapter.updateHas3dModel(saved.getId(), true);
+            entityManager.flush();
+            entityManager.clear();
+
+            // When
+            adapter.updateHas3dModel(saved.getId(), false);
+            entityManager.flush();
+            entityManager.clear();
+
+            // Then
+            Showcase found = adapter.findById(saved.getId()).orElseThrow();
+            assertThat(found.isHas3dModel()).isFalse();
         }
     }
 
