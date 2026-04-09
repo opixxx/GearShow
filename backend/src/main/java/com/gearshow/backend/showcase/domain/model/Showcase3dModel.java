@@ -63,6 +63,25 @@ public class Showcase3dModel {
     }
 
     /**
+     * 기존 모델을 REQUESTED 상태로 재설정한다.
+     * FAILED 상태에서만 가능하다.
+     *
+     * @param generationProvider 생성 제공자
+     * @return 재요청된 3D 모델
+     */
+    public Showcase3dModel resetRequest(String generationProvider) {
+        validateStatusTransition(ModelStatus.REQUESTED);
+        return Showcase3dModel.builder()
+                .id(this.id)
+                .showcaseId(this.showcaseId)
+                .modelStatus(ModelStatus.REQUESTED)
+                .generationProvider(generationProvider)
+                .requestedAt(Instant.now())
+                .createdAt(this.createdAt)
+                .build();
+    }
+
+    /**
      * 생성 진행 중 상태로 전환한다.
      *
      * @return 생성 중인 3D 모델

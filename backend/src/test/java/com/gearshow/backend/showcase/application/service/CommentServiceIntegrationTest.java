@@ -5,8 +5,9 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
-import com.gearshow.backend.showcase.application.exception.NotAuthorCommentException;
-import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseCommentException;
+import com.gearshow.backend.showcase.domain.exception.NotAuthorCommentException;
+import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseCommentException;
+import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.*;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.support.TestInfraConfig;
@@ -81,7 +82,7 @@ class CommentServiceIntegrationTest {
         void create_onNonExistentShowcase_throwsException() {
             // Given & When & Then
             assertThatThrownBy(() -> createCommentUseCase.create(999L, 1L, "댓글"))
-                    .isInstanceOf(Exception.class);
+                    .isInstanceOf(NotFoundShowcaseException.class);
         }
     }
 

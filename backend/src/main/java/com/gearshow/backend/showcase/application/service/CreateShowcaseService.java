@@ -38,23 +38,22 @@ public class CreateShowcaseService {
      */
     @Transactional
     public Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
-        // 대표 이미지 URL을 미리 결정하여 Showcase에 함께 저장
         String primaryImageUrl = imageUrls.get(command.primaryImageIndex());
-        Showcase showcase = createShowcase(command, primaryImageUrl);
+
+        Showcase showcase = Showcase.create(
+            command.ownerId(), command.catalogItemId(),
+            command.category(), command.brand(), command.modelCode(),
+            command.title(), command.description(),
+            command.userSize(), command.conditionGrade(),
+            command.wearCount(), command.isForSale(),
+            primaryImageUrl
+        );
         Showcase saved = showcasePort.save(showcase);
+
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
         saveSpec(saved.getId(), command.category(), command);
-        return saved;
-    }
 
-    private Showcase createShowcase(CreateShowcaseCommand command, String primaryImageUrl) {
-        return Showcase.create(
-                command.ownerId(), command.catalogItemId(),
-                command.category(), command.brand(), command.modelCode(),
-                command.title(), command.description(),
-                command.userSize(), command.conditionGrade(),
-                command.wearCount(), command.isForSale(),
-                primaryImageUrl);
+        return saved;
     }
 
     private void saveImages(Long showcaseId, List<String> imageUrls, int primaryImageIndex) {

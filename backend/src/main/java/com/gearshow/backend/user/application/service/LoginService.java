@@ -1,151 +1,73 @@
 package com.gearshow.backend.user.application.service;
 
-import com.gearshow.backend.user.application.dto.LoginCommand;
-import com.gearshow.backend.user.application.dto.LoginResult;
-import com.gearshow.backend.user.application.dto.OAuthUserInfo;
-import com.gearshow.backend.user.application.exception.InvalidAuthCodeException;
-import com.gearshow.backend.user.application.exception.UnsupportedProviderException;
-import com.gearshow.backend.user.application.port.in.LoginUseCase;
-import com.gearshow.backend.user.application.port.out.AuthAccountPort;
-import com.gearshow.backend.user.application.port.out.OAuthClient;
-import com.gearshow.backend.user.application.port.out.RefreshTokenPort;
-import com.gearshow.backend.user.application.port.out.UserPort;
-import com.gearshow.backend.user.domain.model.AuthAccount;
-import com.gearshow.backend.user.domain.model.User;
-import com.gearshow.backend.user.domain.vo.ProviderType;
-import com.gearshow.backend.user.infrastructure.security.JwtTokenProvider;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import com.gearshow.backend.user.application.dto.LoginCommand;
+import com.gearshow.backend.user.application.dto.LoginResult;
+import com.gearshow.backend.user.application.dto.OAuthUserInfo;
+import com.gearshow.backend.user.application.port.in.LoginUseCase;
+import com.gearshow.backend.user.application.port.out.AuthAccountPort;
+import com.gearshow.backend.user.application.port.out.OAuthUserInfoResolver;
+import com.gearshow.backend.user.application.port.out.TokenIssuer;
+import com.gearshow.backend.user.application.port.out.UserPort;
+import com.gearshow.backend.user.domain.exception.NotFoundUserException;
+import com.gearshow.backend.user.domain.model.AuthAccount;
+import com.gearshow.backend.user.domain.model.User;
+import com.gearshow.backend.user.domain.vo.ProviderType;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * 소셜 로그인 유스케이스 구현체.
- * 인가 코드 또는 액세스 토큰으로 소셜 사용자 정보를 조회하고,
- * 신규 사용자이면 자동 가입 후 JWT를 발급한다.
- *
- * <p>외부 OAuth 호출(getOAuthUserInfo)은 트랜잭션 밖에서 수행하고,
- * DB 변경(사용자 조회/생성, 토큰 발급)만 트랜잭션 안에서 처리한다.</p>
+ * OAuth 사용자 정보 조회 → 사용자 조회/생성 → 토큰 발급 흐름을 제어한다.
  */
 @Service
 @RequiredArgsConstructor
 public class LoginService implements LoginUseCase {
 
-    private final List<OAuthClient> oAuthClients;
+    private final OAuthUserInfoResolver oAuthUserInfoResolver;
     private final UserPort userPort;
     private final AuthAccountPort authAccountPort;
-    private final RefreshTokenPort refreshTokenPort;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenIssuer tokenIssuer;
 
     /**
      * 소셜 로그인을 수행한다.
-     * 외부 OAuth API 호출 후, DB 변경 작업을 트랜잭션으로 처리한다.
+     * 소셜 사용자 정보를 조회하고, 신규 사용자이면 자동 가입 후 토큰을 발급한다.
      */
     @Override
     @Transactional
     public LoginResult login(LoginCommand command) {
-        OAuthClient client = findOAuthClient(command.provider());
-        OAuthUserInfo userInfo = getOAuthUserInfo(client, command);
-
-        ProviderType providerType = resolveProviderType(command.provider());
+        OAuthUserInfo userInfo = oAuthUserInfoResolver.resolve(command);
+        ProviderType providerType = ProviderType.from(command.provider());
         User user = findOrCreateUser(providerType, userInfo);
-
-        return generateTokens(user.getId());
-    }
-
-    /**
-     * 제공자 이름에 맞는 OAuthClient를 찾는다.
-     */
-    private OAuthClient findOAuthClient(String provider) {
-        return oAuthClients.stream()
-                .filter(client -> client.getProvider().equals(provider))
-                .findFirst()
-                .orElseThrow(UnsupportedProviderException::new);
-    }
-
-    /**
-     * 액세스 토큰 또는 인가 코드로 소셜 사용자 정보를 조회한다.
-     * 액세스 토큰이 있으면 우선 사용한다.
-     */
-    private OAuthUserInfo getOAuthUserInfo(OAuthClient client, LoginCommand command) {
-        if (command.hasAccessToken()) {
-            return client.getUserInfoByAccessToken(command.accessToken());
-        }
-        if (command.hasAuthorizationCode()) {
-            return client.getUserInfo(command.authorizationCode());
-        }
-        throw new InvalidAuthCodeException();
+        return tokenIssuer.issue(user.getId());
     }
 
     /**
      * 기존 사용자를 조회하거나, 신규 사용자를 자동 생성한다.
+     * 기존 사용자이면 최종 로그인 시간을 갱신한다.
      */
     private User findOrCreateUser(ProviderType providerType, OAuthUserInfo userInfo) {
         return authAccountPort
                 .findByProviderTypeAndProviderUserKey(providerType, userInfo.providerUserKey())
-                .map(authAccount -> {
-                    authAccountPort.save(authAccount.updateLastLogin());
-                    return userPort.findById(authAccount.getUserId()).orElseThrow();
-                })
-                .orElseGet(() -> createNewUser(providerType, userInfo));
+                .map(this::updateLastLoginAndFindUser)
+                .orElseGet(() -> registerNewUser(providerType, userInfo));
     }
 
-    /**
-     * 신규 사용자와 인증 계정을 생성한다.
-     */
-    private User createNewUser(ProviderType providerType, OAuthUserInfo userInfo) {
-        String nickname = generateUniqueNickname();
-        User newUser = User.create(nickname);
-        User savedUser = userPort.save(newUser);
+    private User updateLastLoginAndFindUser(AuthAccount authAccount) {
+        authAccountPort.save(authAccount.updateLastLogin());
+        return userPort.findById(authAccount.getUserId())
+                .orElseThrow(NotFoundUserException::new);
+    }
+
+    private User registerNewUser(ProviderType providerType, OAuthUserInfo userInfo) {
+        User savedUser = userPort.save(User.createWithTempNickname());
 
         AuthAccount authAccount = AuthAccount.create(
                 savedUser.getId(), providerType, userInfo.providerUserKey());
         authAccountPort.save(authAccount);
 
         return savedUser;
-    }
-
-    /**
-     * 신규 가입 시 임시 닉네임을 생성한다.
-     * UUID를 사용하여 동시 가입 시에도 충돌이 발생하지 않도록 한다.
-     * "사용자_"로 시작하는 닉네임은 닉네임 미설정 상태를 의미한다.
-     */
-    private String generateUniqueNickname() {
-        return "사용자_" + UUID.randomUUID().toString().substring(0, 8);
-    }
-
-    /**
-     * Access Token과 Refresh Token을 생성하고 DB에 저장한다.
-     */
-    private LoginResult generateTokens(Long userId) {
-        String accessToken = jwtTokenProvider.generateAccessToken(userId);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
-
-        refreshTokenPort.deleteByUserId(userId);
-        refreshTokenPort.save(userId, refreshToken,
-                Instant.now().plus(Duration.ofDays(14)));
-
-        return new LoginResult(
-                accessToken,
-                refreshToken,
-                "Bearer",
-                jwtTokenProvider.getAccessTokenExpirationSeconds()
-        );
-    }
-
-    /**
-     * 문자열 제공자명을 ProviderType enum으로 변환한다.
-     */
-    private ProviderType resolveProviderType(String provider) {
-        return switch (provider.toLowerCase()) {
-            case "kakao" -> ProviderType.KAKAO;
-            case "apple" -> ProviderType.APPLE;
-            case "google" -> ProviderType.GOOGLE;
-            default -> throw new UnsupportedProviderException();
-        };
     }
 }

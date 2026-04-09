@@ -1,4 +1,4 @@
-package com.gearshow.backend.showcase.application.exception;
+package com.gearshow.backend.showcase.domain.exception;
 
 import com.gearshow.backend.common.exception.CustomException;
 import com.gearshow.backend.common.exception.ErrorCode;

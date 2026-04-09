@@ -31,15 +31,23 @@ public class GetCatalogItemService implements GetCatalogItemUseCase {
         CatalogItem item = catalogItemPort.findById(catalogItemId)
                 .orElseThrow(NotFoundCatalogItemException::new);
 
-        BootsSpec bootsSpec = null;
-        UniformSpec uniformSpec = null;
-
-        if (item.getCategory() == Category.BOOTS) {
-            bootsSpec = bootsSpecPort.findByCatalogItemId(catalogItemId).orElse(null);
-        } else if (item.getCategory() == Category.UNIFORM) {
-            uniformSpec = uniformSpecPort.findByCatalogItemId(catalogItemId).orElse(null);
-        }
+        BootsSpec bootsSpec = findBootsSpec(item.getCategory(), catalogItemId);
+        UniformSpec uniformSpec = findUniformSpec(item.getCategory(), catalogItemId);
 
         return CatalogItemDetailResult.of(item, bootsSpec, uniformSpec);
+    }
+
+    private BootsSpec findBootsSpec(Category category, Long catalogItemId) {
+        if (category != Category.BOOTS) {
+            return null;
+        }
+        return bootsSpecPort.findByCatalogItemId(catalogItemId).orElse(null);
+    }
+
+    private UniformSpec findUniformSpec(Category category, Long catalogItemId) {
+        if (category != Category.UNIFORM) {
+            return null;
+        }
+        return uniformSpecPort.findByCatalogItemId(catalogItemId).orElse(null);
     }
 }

@@ -3,18 +3,14 @@ package com.gearshow.backend.user.application.service;
 import com.gearshow.backend.user.application.dto.LoginResult;
 import com.gearshow.backend.user.application.port.in.DevLoginUseCase;
 import com.gearshow.backend.user.application.port.out.AuthAccountPort;
-import com.gearshow.backend.user.application.port.out.RefreshTokenPort;
+import com.gearshow.backend.user.application.port.out.TokenIssuer;
 import com.gearshow.backend.user.application.port.out.UserPort;
 import com.gearshow.backend.user.domain.model.AuthAccount;
 import com.gearshow.backend.user.domain.model.User;
 import com.gearshow.backend.user.domain.vo.ProviderType;
-import com.gearshow.backend.user.infrastructure.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
-import java.time.Instant;
 
 /**
  * 개발 환경 전용 로그인 서비스.
@@ -31,14 +27,13 @@ public class DevLoginService implements DevLoginUseCase {
 
     private final UserPort userPort;
     private final AuthAccountPort authAccountPort;
-    private final RefreshTokenPort refreshTokenPort;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenIssuer tokenIssuer;
 
     @Override
     @Transactional
     public LoginResult devLogin() {
         User user = findOrCreateDevUser();
-        return generateTokens(user.getId());
+        return tokenIssuer.issue(user.getId());
     }
 
     /**
@@ -63,24 +58,5 @@ public class DevLoginService implements DevLoginUseCase {
         authAccountPort.save(account);
 
         return saved;
-    }
-
-    /**
-     * JWT 토큰을 생성하고 Refresh Token을 저장한다.
-     */
-    private LoginResult generateTokens(Long userId) {
-        String accessToken = jwtTokenProvider.generateAccessToken(userId);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
-
-        refreshTokenPort.deleteByUserId(userId);
-        refreshTokenPort.save(userId, refreshToken,
-                Instant.now().plus(Duration.ofDays(14)));
-
-        return new LoginResult(
-                accessToken,
-                refreshToken,
-                "Bearer",
-                jwtTokenProvider.getAccessTokenExpirationSeconds()
-        );
     }
 }

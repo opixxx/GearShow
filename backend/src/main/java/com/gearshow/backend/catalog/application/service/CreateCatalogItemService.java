@@ -6,10 +6,10 @@ import com.gearshow.backend.catalog.application.port.in.CreateCatalogItemUseCase
 import com.gearshow.backend.catalog.application.port.out.BootsSpecPort;
 import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
 import com.gearshow.backend.catalog.application.port.out.UniformSpecPort;
-import com.gearshow.backend.catalog.domain.exception.DuplicateModelCodeException;
 import com.gearshow.backend.catalog.domain.model.BootsSpec;
 import com.gearshow.backend.catalog.domain.model.CatalogItem;
 import com.gearshow.backend.catalog.domain.model.UniformSpec;
+import com.gearshow.backend.catalog.domain.policy.ModelCodeDuplicatePolicy;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,72 +29,53 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
     @Override
     @Transactional
     public CreateCatalogItemResult create(CreateCatalogItemCommand command) {
-        validateModelCode(command.category(), command.modelCode());
+        ModelCodeDuplicatePolicy.validate(
+            command.category(),
+            command.modelCode(),
+            null,
+            catalogItemPort::existsByCategoryAndModelCode
+        );
 
-        CatalogItem item = saveCatalogItem(command);
-        saveSpec(item.getId(), item.getCategory(), command);
+        CatalogItem catalogItem = CatalogItem.create(
+            command.category(),
+            command.brand(),
+            command.modelCode(),
+            command.officialImageUrl()
+        );
+
+        CatalogItem item = catalogItemPort.save(catalogItem);
+
+        saveSpec(item.getId(), command);
 
         return new CreateCatalogItemResult(item.getId());
-    }
-
-    private void validateModelCode(Category category, String modelCode) {
-        if (modelCode != null && catalogItemPort.existsByCategoryAndModelCode(category, modelCode)) {
-            throw new DuplicateModelCodeException();
-        }
-    }
-
-    private CatalogItem saveCatalogItem(CreateCatalogItemCommand command) {
-        CatalogItem item = CatalogItem.create(command.category(), command.brand());
-        // modelCode, officialImageUrl은 Builder로 직접 설정
-        CatalogItem withDetails = CatalogItem.builder()
-                .id(null)
-                .category(command.category())
-                .brand(command.brand())
-                .modelCode(command.modelCode())
-                .officialImageUrl(command.officialImageUrl())
-                .status(item.getStatus())
-                .createdAt(item.getCreatedAt())
-                .updatedAt(item.getUpdatedAt())
-                .build();
-        return catalogItemPort.save(withDetails);
     }
 
     /**
      * 카테고리에 따라 하위 스펙을 저장한다.
      */
-    private void saveSpec(Long catalogItemId, Category category, CreateCatalogItemCommand command) {
-        if (category == Category.BOOTS && command.bootsSpec() != null) {
-            saveBootsSpec(catalogItemId, command.bootsSpec());
-        } else if (category == Category.UNIFORM && command.uniformSpec() != null) {
-            saveUniformSpec(catalogItemId, command.uniformSpec());
+    private void saveSpec(Long catalogItemId, CreateCatalogItemCommand command) {
+        if (command.category() == Category.BOOTS && command.bootsSpec() != null) {
+            var spec = command.bootsSpec();
+            BootsSpec bootsSpec = BootsSpec.create(
+                catalogItemId,
+                spec.studType(),
+                spec.siloName(),
+                spec.releaseYear(),
+                spec.surfaceType(),
+                spec.extraSpecJson()
+            );
+            bootsSpecPort.save(bootsSpec);
+        } else if (command.category() == Category.UNIFORM && command.uniformSpec() != null) {
+            var spec = command.uniformSpec();
+            UniformSpec uniformSpec = UniformSpec.create(
+                catalogItemId,
+                spec.clubName(),
+                spec.season(),
+                spec.league(),
+                spec.kitType(),
+                spec.extraSpecJson()
+            );
+            uniformSpecPort.save(uniformSpec);
         }
-    }
-
-    private void saveBootsSpec(Long catalogItemId, CreateCatalogItemCommand.BootsSpecCommand spec) {
-        BootsSpec bootsSpec = BootsSpec.builder()
-                .catalogItemId(catalogItemId)
-                .studType(spec.studType())
-                .siloName(spec.siloName())
-                .releaseYear(spec.releaseYear())
-                .surfaceType(spec.surfaceType())
-                .extraSpecJson(spec.extraSpecJson())
-                .createdAt(java.time.Instant.now())
-                .updatedAt(java.time.Instant.now())
-                .build();
-        bootsSpecPort.save(bootsSpec);
-    }
-
-    private void saveUniformSpec(Long catalogItemId, CreateCatalogItemCommand.UniformSpecCommand spec) {
-        UniformSpec uniformSpec = UniformSpec.builder()
-                .catalogItemId(catalogItemId)
-                .clubName(spec.clubName())
-                .season(spec.season())
-                .league(spec.league())
-                .kitType(spec.kitType())
-                .extraSpecJson(spec.extraSpecJson())
-                .createdAt(java.time.Instant.now())
-                .updatedAt(java.time.Instant.now())
-                .build();
-        uniformSpecPort.save(uniformSpec);
     }
 }

@@ -1,6 +1,5 @@
 package com.gearshow.backend.showcase.application.service;
 
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.DeleteShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseCommentPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -23,25 +22,13 @@ public class DeleteShowcaseService implements DeleteShowcaseUseCase {
     @Override
     @Transactional
     public void delete(Long showcaseId, Long ownerId) {
-        Showcase showcase = findShowcase(showcaseId);
-        validateOwner(showcase, ownerId);
+        Showcase showcase = showcasePort.findById(showcaseId)
+                .orElseThrow(NotFoundShowcaseException::new);
+        showcase.validateOwner(ownerId);
 
-        // 쇼케이스 소프트 삭제
         Showcase deleted = showcase.delete();
         showcasePort.save(deleted);
 
-        // 연관 댓글 일괄 소프트 삭제
         showcaseCommentPort.softDeleteAllByShowcaseId(showcaseId);
-    }
-
-    private Showcase findShowcase(Long showcaseId) {
-        return showcasePort.findById(showcaseId)
-                .orElseThrow(NotFoundShowcaseException::new);
-    }
-
-    private void validateOwner(Showcase showcase, Long ownerId) {
-        if (!showcase.getOwnerId().equals(ownerId)) {
-            throw new NotOwnerShowcaseException();
-        }
     }
 }

@@ -12,7 +12,7 @@ import com.gearshow.backend.showcase.application.exception.DuplicateSortOrderExc
 import com.gearshow.backend.showcase.application.exception.ImageNotBelongToShowcaseException;
 import com.gearshow.backend.showcase.application.exception.ImageReorderMismatchException;
 import com.gearshow.backend.showcase.application.exception.NotFoundShowcaseImageException;
-import com.gearshow.backend.showcase.application.exception.NotOwnerShowcaseException;
+import com.gearshow.backend.showcase.domain.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.application.port.in.*;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.catalog.domain.vo.KitType;
