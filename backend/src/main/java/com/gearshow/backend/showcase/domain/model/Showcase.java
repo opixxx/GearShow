@@ -5,6 +5,7 @@ import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseStatusTransitionException;
 import com.gearshow.backend.showcase.domain.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+import com.gearshow.backend.showcase.domain.vo.ShowcaseUpdate;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.Builder;
 import lombok.Getter;
@@ -124,32 +125,24 @@ public class Showcase {
 
     /**
      * 쇼케이스 정보를 수정한다.
-     * null이 아닌 필드만 변경된다 (Partial Update).
+     * {@link ShowcaseUpdate}의 null이 아닌 필드만 변경된다 (Partial Update).
      *
-     * @param title          변경할 제목 (null이면 유지)
-     * @param description    변경할 설명 (null이면 유지)
-     * @param modelCode      변경할 모델 코드 (null이면 유지)
-     * @param userSize       변경할 사용자 사이즈 (null이면 유지)
-     * @param conditionGrade 변경할 상태 등급 (null이면 유지)
-     * @param wearCount      변경할 착용 횟수 (null이면 유지)
-     * @param forSale        변경할 판매 여부 (null이면 유지)
+     * @param update 변경할 필드를 묶은 값 객체
      * @return 수정된 쇼케이스
      */
-    public Showcase update(String title, String description, String modelCode,
-                           String userSize, ConditionGrade conditionGrade,
-                           Integer wearCount, Boolean forSale) {
-        if (title != null && title.isBlank()) {
+    public Showcase update(ShowcaseUpdate update) {
+        if (update.title() != null && update.title().isBlank()) {
             throw new InvalidShowcaseException();
         }
 
         return toBuilder()
-                .title(title != null ? title : this.title)
-                .description(description != null ? description : this.description)
-                .modelCode(modelCode != null ? modelCode : this.modelCode)
-                .userSize(userSize != null ? userSize : this.userSize)
-                .conditionGrade(conditionGrade != null ? conditionGrade : this.conditionGrade)
-                .wearCount(wearCount != null ? wearCount : this.wearCount)
-                .forSale(forSale != null ? forSale : this.forSale)
+                .title(update.title() != null ? update.title() : this.title)
+                .description(update.description() != null ? update.description() : this.description)
+                .modelCode(update.modelCode() != null ? update.modelCode() : this.modelCode)
+                .userSize(update.userSize() != null ? update.userSize() : this.userSize)
+                .conditionGrade(update.conditionGrade() != null ? update.conditionGrade() : this.conditionGrade)
+                .wearCount(update.wearCount() != null ? update.wearCount() : this.wearCount)
+                .forSale(update.forSale() != null ? update.forSale() : this.forSale)
                 .build();
     }
 

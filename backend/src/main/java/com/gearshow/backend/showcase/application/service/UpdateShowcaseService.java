@@ -5,6 +5,7 @@ import com.gearshow.backend.showcase.application.port.in.UpdateShowcaseUseCase;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.Showcase;
+import com.gearshow.backend.showcase.domain.vo.ShowcaseUpdate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +26,15 @@ public class UpdateShowcaseService implements UpdateShowcaseUseCase {
                 .orElseThrow(NotFoundShowcaseException::new);
         showcase.validateOwner(ownerId);
 
-        Showcase updated = showcase.update(
-            command.title(),
-            command.description(),
-            command.modelCode(),
-            command.userSize(),
-            command.conditionGrade(),
-            command.wearCount(),
-            command.isForSale()
+        ShowcaseUpdate update = new ShowcaseUpdate(
+                command.title(),
+                command.description(),
+                command.modelCode(),
+                command.userSize(),
+                command.conditionGrade(),
+                command.wearCount(),
+                command.isForSale()
         );
-        showcasePort.save(updated);
+        showcasePort.save(showcase.update(update));
     }
 }

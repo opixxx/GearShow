@@ -111,12 +111,15 @@ public class TestInfraConfig {
     /**
      * 프로필 이미지 저장소 테스트 스텁.
      * 업로드/삭제 호출을 추적하여 검증에 활용할 수 있다.
+     *
+     * <p>싱글톤 빈으로 등록되므로 가변 상태가 테스트 간 누적될 수 있다.
+     * 각 테스트의 {@code @BeforeEach}에서 {@link #reset()}을 호출해 격리해야 한다.</p>
      */
     public static class TestProfileImageStorageStub implements ProfileImageStoragePort {
         private static final String CDN_PREFIX = "https://test-cdn.gearshow.com/";
 
-        public final List<String> uploadedKeys = new ArrayList<>();
-        public final List<String> deletedKeys = new ArrayList<>();
+        private final List<String> uploadedKeys = new ArrayList<>();
+        private final List<String> deletedKeys = new ArrayList<>();
 
         @Override
         public void upload(String s3Key, byte[] content, String contentType) {
@@ -138,10 +141,27 @@ public class TestInfraConfig {
             if (imageUrl == null || imageUrl.isBlank()) {
                 return null;
             }
-            if (imageUrl.startsWith(CDN_PREFIX)) {
-                return imageUrl.substring(CDN_PREFIX.length());
+            if (!imageUrl.startsWith(CDN_PREFIX)) {
+                return null;
             }
-            return null;
+            String key = imageUrl.substring(CDN_PREFIX.length());
+            return key.isBlank() ? null : key;
+        }
+
+        /** 추적된 업로드 키 목록 (불변 사본). */
+        public List<String> uploadedKeys() {
+            return List.copyOf(uploadedKeys);
+        }
+
+        /** 추적된 삭제 키 목록 (불변 사본). */
+        public List<String> deletedKeys() {
+            return List.copyOf(deletedKeys);
+        }
+
+        /** 테스트 격리를 위해 추적 상태를 초기화한다. */
+        public void reset() {
+            uploadedKeys.clear();
+            deletedKeys.clear();
         }
     }
 }

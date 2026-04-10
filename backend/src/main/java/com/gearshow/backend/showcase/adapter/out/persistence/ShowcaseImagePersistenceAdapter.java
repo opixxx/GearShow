@@ -61,6 +61,12 @@ public class ShowcaseImagePersistenceAdapter implements ShowcaseImagePort {
     }
 
     @Override
+    public Optional<ShowcaseImage> findFirstByShowcaseIdOrderBySortOrder(Long showcaseId) {
+        return showcaseImageJpaRepository.findFirstByShowcaseIdOrderBySortOrder(showcaseId)
+                .map(showcaseImageMapper::toDomain);
+    }
+
+    @Override
     public String findPrimaryImageUrlByShowcaseId(Long showcaseId) {
         return showcaseImageJpaRepository.findPrimaryByShowcaseId(showcaseId)
                 .map(ShowcaseImageJpaEntity::getImageUrl)

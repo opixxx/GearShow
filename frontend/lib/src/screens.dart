@@ -1387,6 +1387,7 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
   }
 
   /// 이미지를 삭제한다.
+  /// 삭제 후 백엔드에서 상세를 다시 조회해 대표 이미지 자동 승격 결과를 반영한다.
   Future<void> _deleteImage(ShowcaseImage image) async {
     if (_images.length <= 1) {
       _showSnack(context, '최소 1개의 이미지가 필요합니다.');
@@ -1399,8 +1400,14 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
         showcaseId: widget.detail.showcaseId,
         imageId: image.showcaseImageId,
       );
+      // 백엔드가 대표 이미지를 자동 승격할 수 있으므로 상세를 다시 조회한다
+      final detail = await widget.controller.api.getShowcaseDetail(
+        baseUrl: widget.controller.baseUrl,
+        showcaseId: widget.detail.showcaseId,
+      );
+      if (!mounted) return;
       setState(() {
-        _images.remove(image);
+        _images = List.from(detail.images);
         _imageChanged = true;
       });
     } on ApiException catch (error) {
@@ -1417,6 +1424,7 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
         showcaseId: widget.detail.showcaseId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
+        modelCode: _modelCodeController.text.trim(),
         isForSale: _isForSale,
       );
       if (!mounted) return;

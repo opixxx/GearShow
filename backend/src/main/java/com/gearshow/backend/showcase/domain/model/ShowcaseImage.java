@@ -50,4 +50,21 @@ public class ShowcaseImage {
                 .createdAt(Instant.now())
                 .build();
     }
+
+    /**
+     * 이 이미지를 대표 이미지로 승격한다.
+     * 다른 이미지가 삭제되어 이 이미지가 새 대표가 될 때 호출된다.
+     *
+     * @return primary가 true로 변경된 새 인스턴스
+     */
+    public ShowcaseImage promoteToPrimary() {
+        return ShowcaseImage.builder()
+                .id(this.id)
+                .showcaseId(this.showcaseId)
+                .imageUrl(this.imageUrl)
+                .sortOrder(this.sortOrder)
+                .primary(true)
+                .createdAt(this.createdAt)
+                .build();
+    }
 }
