@@ -11,6 +11,7 @@ env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: gearshow-backend
   CONTAINER_NAME: gearshow-backend
+  EC2_APP_DIR: /home/ec2-user/gearshow
 
 jobs:
   # 1. 빌드 & 테스트
@@ -75,12 +76,15 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-  # 3. EC2 배포
+  # 3. EC2 배포 (docker compose 기반)
   deploy:
     name: EC2 배포
     needs: docker-push
     runs-on: ubuntu-latest
     steps:
+      - name: 소스코드 체크아웃
+        uses: actions/checkout@v4
+
       - name: AWS 자격 증명 설정
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -92,49 +96,57 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: EC2에 배포
-        uses: appleboy/ssh-action@v1
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_REGION }}
+      # 인프라 정의(compose 파일)도 버전 관리되므로, 매 배포마다 EC2에 동기화한다
+      - name: docker-compose.prod.yml 을 EC2로 전송
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ECR_REGISTRY,ECR_REPOSITORY,CONTAINER_NAME,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION
+          source: "docker-compose.prod.yml"
+          target: ${{ env.EC2_APP_DIR }}
+
+      - name: EC2 에서 backend 컨테이너 재기동
+        uses: appleboy/ssh-action@v1
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          EC2_APP_DIR: ${{ env.EC2_APP_DIR }}
+          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,EC2_APP_DIR,CONTAINER_NAME
           script: |
+            set -e
+            cd "$EC2_APP_DIR"
+
             # ECR 로그인
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region "$AWS_REGION" \
+              | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-            # 최신 이미지 풀
-            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            # compose 에서 사용하는 변수 주입
+            export ECR_REGISTRY IMAGE_TAG
 
-            # 기존 컨테이너 중지 & 삭제
-            docker stop $CONTAINER_NAME || true
-            docker rm $CONTAINER_NAME || true
+            # Kafka 가 아직 안 떠 있으면 먼저 기동 (이미 healthy 면 no-op)
+            docker compose -f docker-compose.prod.yml up -d kafka
 
-            # 새 컨테이너 실행 (.env 파일에서 환경변수 로드)
-            docker run -d \
-              --name $CONTAINER_NAME \
-              --env-file /home/ec2-user/.env \
-              -p 8080:8080 \
-              --restart unless-stopped \
-              $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            # 새 backend 이미지 pull 후 교체
+            docker compose -f docker-compose.prod.yml pull backend
+            docker compose -f docker-compose.prod.yml up -d backend
 
-            # 헬스체크 (최대 30초 대기)
-            for i in $(seq 1 6); do
+            # 헬스체크 (최대 60초 대기)
+            for i in $(seq 1 12); do
               if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
-                echo "헬스체크 성공"
+                echo "✅ 헬스체크 성공 (image: $IMAGE_TAG)"
                 exit 0
               fi
-              echo "헬스체크 대기중... ($i/6)"
+              echo "헬스체크 대기중... ($i/12)"
               sleep 5
             done
 
-            echo "헬스체크 실패"
-            docker logs $CONTAINER_NAME
+            echo "❌ 헬스체크 실패 - 최근 로그"
+            docker compose -f docker-compose.prod.yml logs --tail=200 backend
             exit 1
