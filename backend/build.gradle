@@ -119,9 +119,10 @@ ext.jacocoExcludes = [
 	'**/messaging/dto/**',
 	// Fake 3D 모델 클라이언트 (Kafka 활성화 시에만 동작)
 	'**/model3d/fake/**',
-	// S3 인프라 (테스트에서 Mock 사용)
+	// S3 인프라 (테스트에서 Mock 사용, 실제 AWS SDK 호출 코드)
 	'**/infrastructure/config/S3Config.*',
 	'**/storage/s3/**',
+	'**/user/adapter/out/storage/**',
 	// Port 인터페이스 (구현체에서 간접 커버)
 	'**/port/out/ModelGenerationClient.*',
 	'**/port/in/ManageShowcaseImageUseCase.*'
@@ -188,6 +189,7 @@ sonar {
 			'**/model3d/fake/**',
 			'**/infrastructure/config/S3Config.java',
 			'**/storage/s3/**',
+			'**/user/adapter/out/storage/**',
 			'**/port/out/ModelGenerationClient.java',
 			'**/port/in/ManageShowcaseImageUseCase.java'
 		].join(',')
