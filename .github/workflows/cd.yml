@@ -114,11 +114,15 @@ jobs:
           AWS_REGION: ${{ env.AWS_REGION }}
           EC2_APP_DIR: ${{ env.EC2_APP_DIR }}
           CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
+          # EC2 인스턴스에 IAM Role 이 붙어있지 않으므로 ECR 로그인용 자격증명을
+          # GitHub Secrets 에서 직접 주입한다. AWS CLI 가 이 환경변수들을 자동 인식.
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,EC2_APP_DIR,CONTAINER_NAME
+          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,EC2_APP_DIR,CONTAINER_NAME,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
           script: |
             set -e
             cd "$EC2_APP_DIR"
