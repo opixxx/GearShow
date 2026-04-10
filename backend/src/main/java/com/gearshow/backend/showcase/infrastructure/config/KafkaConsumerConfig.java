@@ -33,7 +33,10 @@ public class KafkaConsumerConfig {
         config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         config.put(JsonDeserializer.TRUSTED_PACKAGES, "com.gearshow.backend.showcase.adapter.out.messaging.dto");
+        // 메시지 유실 방지: offset이 없으면 토픽 처음부터 읽음
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Tripo 폴링 등 장시간 처리 대비: 10분간 poll 미호출 허용 (기본 5분)
+        config.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 600000);
         return new DefaultKafkaConsumerFactory<>(config);
     }
 

@@ -9,6 +9,13 @@ spring:
       hibernate:
         format_sql: false
 
+  # Kafka Consumer concurrency(기본 3) + 정리 스케줄러 + 일반 요청을 모두 수용
+  # HikariCP 기본값(10)은 동시 메시지 처리 시 부족할 수 있어 명시적으로 상향
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
 logging:
   level:
     root: INFO
