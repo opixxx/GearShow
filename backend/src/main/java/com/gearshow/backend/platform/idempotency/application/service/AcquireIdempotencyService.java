@@ -35,4 +35,10 @@ public class AcquireIdempotencyService implements AcquireIdempotencyUseCase {
         }
         return acquired;
     }
+
+    @Override
+    public void release(String messageId, IdempotencyDomain domain) {
+        processedMessagePort.release(messageId, domain.name());
+        log.info("멱등성 선점 해제 - messageId: {}, domain: {}", messageId, domain);
+    }
 }

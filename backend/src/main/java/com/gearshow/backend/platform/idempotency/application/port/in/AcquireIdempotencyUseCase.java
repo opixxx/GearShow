@@ -18,4 +18,16 @@ public interface AcquireIdempotencyUseCase {
      * @return 처음 처리되는 메시지면 {@code true}, 이미 처리된 메시지면 {@code false}
      */
     boolean tryAcquire(String messageId, IdempotencyDomain domain);
+
+    /**
+     * 처리 권한 선점을 되돌린다.
+     *
+     * <p>비즈니스 로직 처리 실패 시 호출하여 멱등성 레코드를 삭제하면
+     * 다음 메시지 재전달 시 다시 처리할 수 있다.
+     * 좀비 메시지(선점만 되고 처리 안 된 상태)를 방지한다.</p>
+     *
+     * @param messageId 메시지 고유 식별자
+     * @param domain    멱등성 도메인
+     */
+    void release(String messageId, IdempotencyDomain domain);
 }

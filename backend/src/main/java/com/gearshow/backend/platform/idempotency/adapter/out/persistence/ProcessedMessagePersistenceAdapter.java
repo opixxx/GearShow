@@ -25,6 +25,12 @@ public class ProcessedMessagePersistenceAdapter implements ProcessedMessagePort 
 
     @Override
     @Transactional
+    public void release(String messageId, String domain) {
+        repository.deleteByMessageIdAndDomain(messageId, domain);
+    }
+
+    @Override
+    @Transactional
     public int deleteBatchOlderThan(Instant threshold, int batchSize) {
         return repository.deleteBatchOlderThan(threshold, batchSize);
     }

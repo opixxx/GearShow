@@ -37,7 +37,7 @@ public interface ProcessedMessageJpaRepository extends JpaRepository<ProcessedMe
      * 동시에 들어오는 INSERT(메시지 처리)와 락 경합이 발생한다.
      * 배치 삭제로 트랜잭션을 짧게 유지하여 락 경합을 최소화한다.</p>
      *
-     * @return 실제 삭제된 행 수ㄴ
+     * @return 실제 삭제된 행 수
      */
     @Modifying
     @Query(value = """
@@ -48,4 +48,19 @@ public interface ProcessedMessageJpaRepository extends JpaRepository<ProcessedMe
             """, nativeQuery = true)
     int deleteBatchOlderThan(@Param("threshold") Instant threshold,
                              @Param("batchSize") int batchSize);
+
+    /**
+     * 처리 이력을 보상 삭제한다.
+     *
+     * <p>비즈니스 로직 처리가 실패한 경우 호출되어, 다음 메시지 재전달 시
+     * 멱등성 가드가 다시 처리할 수 있도록 선점 기록을 되돌린다.
+     * 이로써 좀비 메시지(선점만 되고 처리 안 된 상태)를 방지한다.</p>
+     *
+     * @return 삭제된 행 수 (이미 없으면 0)
+     */
+    @Modifying
+    @Query("DELETE FROM ProcessedMessageJpaEntity p" +
+            " WHERE p.messageId = :messageId AND p.domain = :domain")
+    int deleteByMessageIdAndDomain(@Param("messageId") String messageId,
+                                   @Param("domain") String domain);
 }
