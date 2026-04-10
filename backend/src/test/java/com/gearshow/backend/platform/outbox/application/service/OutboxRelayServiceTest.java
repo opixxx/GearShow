@@ -1,11 +1,10 @@
 package com.gearshow.backend.platform.outbox.application.service;
 
+import com.gearshow.backend.platform.outbox.application.port.out.OutboxMessageBroker;
+import com.gearshow.backend.platform.outbox.application.port.out.OutboxMessageBroker.BrokerPublishException;
 import com.gearshow.backend.platform.outbox.application.port.out.OutboxMessagePort;
 import com.gearshow.backend.platform.outbox.domain.OutboxMessage;
 import com.gearshow.backend.platform.outbox.infrastructure.config.OutboxRelayProperties;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -14,18 +13,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,9 +30,12 @@ import static org.mockito.Mockito.verify;
 /**
  * OutboxRelayService 단위 테스트.
  *
- * <p>Relay 서비스는 Outbox 폴링 → Kafka 발행 → published 마킹 흐름을 담당한다.
+ * <p>Relay 서비스는 Outbox 폴링 → 브로커 발행 → published 마킹 흐름을 담당한다.
  * 핵심 불변식은 "발행 성공한 메시지만 markPublished 된다" 이므로
  * 실패 시나리오에서 markPublished 가 호출되지 않는지를 중점 검증한다.</p>
+ *
+ * <p>Kafka 세부사항은 {@link OutboxMessageBroker} 포트 뒤에 숨어있어, 이 테스트는
+ * Kafka API 를 직접 mock 하지 않고 포트만 mock 한다.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class OutboxRelayServiceTest {
@@ -47,8 +47,7 @@ class OutboxRelayServiceTest {
     private OutboxMessagePort outboxMessagePort;
 
     @Mock
-    @SuppressWarnings("rawtypes")
-    private KafkaTemplate outboxKafkaTemplate;
+    private OutboxMessageBroker outboxMessageBroker;
 
     private OutboxRelayService service;
 
@@ -57,9 +56,7 @@ class OutboxRelayServiceTest {
         OutboxRelayProperties properties = new OutboxRelayProperties(
                 1_000L, BATCH_SIZE, PUBLISH_TIMEOUT_MS,
                 "0 0 4 * * *", "Asia/Seoul", 7, 1_000, 50L);
-        @SuppressWarnings("unchecked")
-        KafkaTemplate<String, byte[]> typed = outboxKafkaTemplate;
-        service = new OutboxRelayService(outboxMessagePort, typed, properties);
+        service = new OutboxRelayService(outboxMessagePort, outboxMessageBroker, properties);
     }
 
     private static OutboxMessage pendingMessage(long id, String topic) {
@@ -78,24 +75,6 @@ class OutboxRelayServiceTest {
         // 주: Builder 를 직접 쓰는 이유는 id 가 있는 상태로 생성해서 markPublished(id) 검증을 하기 위함
     }
 
-    @SuppressWarnings("unchecked")
-    private CompletableFuture<SendResult<String, byte[]>> successFuture(String topic, int partition, long offset) {
-        // SendResult.getRecordMetadata() 는 로그에서만 호출되지만 NPE 를 피하려면 값이 있어야 한다
-        RecordMetadata metadata = new RecordMetadata(
-                new TopicPartition(topic, partition), offset, 0, 0L, 0, 0);
-        SendResult<String, byte[]> result = new SendResult<>(
-                new ProducerRecord<>(topic, "key", new byte[]{0}), metadata);
-        return CompletableFuture.completedFuture(result);
-    }
-
-    @SuppressWarnings("unchecked")
-    private CompletableFuture<SendResult<String, byte[]>> failedFuture() {
-        CompletableFuture<SendResult<String, byte[]>> future = new CompletableFuture<>();
-        future.completeExceptionally(
-                new ExecutionException("Kafka broker unreachable", new RuntimeException("boom")));
-        return future;
-    }
-
     @Nested
     @DisplayName("Happy Path")
     class HappyPath {
@@ -110,42 +89,43 @@ class OutboxRelayServiceTest {
                     pendingMessage(3L, "topic-b")
             );
             given(outboxMessagePort.findPendingBatch(BATCH_SIZE)).willReturn(pending);
-            given(outboxKafkaTemplate.send(any(ProducerRecord.class)))
-                    .willReturn(successFuture("topic-a", 0, 10L))
-                    .willReturn(successFuture("topic-a", 0, 11L))
-                    .willReturn(successFuture("topic-b", 1, 20L));
+            willDoNothing().given(outboxMessageBroker)
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
 
             // When
             int publishedCount = service.publishPending();
 
             // Then
             assertThat(publishedCount).isEqualTo(3);
-            verify(outboxKafkaTemplate, times(3)).send(any(ProducerRecord.class));
+            verify(outboxMessageBroker, times(3))
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
             verify(outboxMessagePort, times(1)).markPublished(1L);
             verify(outboxMessagePort, times(1)).markPublished(2L);
             verify(outboxMessagePort, times(1)).markPublished(3L);
         }
 
         @Test
-        @DisplayName("발행 시 메시지의 topic/partitionKey/payload 가 ProducerRecord 에 그대로 전달된다")
-        void publishPending_buildsProducerRecordWithCorrectFields() {
+        @DisplayName("발행 시 메시지의 topic/partitionKey/payload 가 broker 포트에 그대로 전달된다")
+        void publishPending_passesCorrectFieldsToBroker() {
             // Given
             OutboxMessage message = pendingMessage(42L, "showcase.topic");
             given(outboxMessagePort.findPendingBatch(BATCH_SIZE)).willReturn(List.of(message));
-            given(outboxKafkaTemplate.send(any(ProducerRecord.class)))
-                    .willReturn(successFuture("showcase.topic", 0, 5L));
+            willDoNothing().given(outboxMessageBroker)
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
 
             // When
             service.publishPending();
 
             // Then
-            ArgumentCaptor<ProducerRecord<String, byte[]>> captor =
-                    ArgumentCaptor.forClass(ProducerRecord.class);
-            verify(outboxKafkaTemplate).send(captor.capture());
-            ProducerRecord<String, byte[]> record = captor.getValue();
-            assertThat(record.topic()).isEqualTo("showcase.topic");
-            assertThat(record.key()).isEqualTo("42");
-            assertThat(new String(record.value())).isEqualTo("{\"id\":42}");
+            ArgumentCaptor<String> topicCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<byte[]> payloadCaptor = ArgumentCaptor.forClass(byte[].class);
+            verify(outboxMessageBroker).publish(
+                    topicCaptor.capture(), keyCaptor.capture(),
+                    payloadCaptor.capture(), anyLong());
+            assertThat(topicCaptor.getValue()).isEqualTo("showcase.topic");
+            assertThat(keyCaptor.getValue()).isEqualTo("42");
+            assertThat(new String(payloadCaptor.getValue())).isEqualTo("{\"id\":42}");
         }
     }
 
@@ -154,7 +134,7 @@ class OutboxRelayServiceTest {
     class Empty {
 
         @Test
-        @DisplayName("pending 이 없으면 0을 반환하고 Kafka 발행을 시도하지 않는다")
+        @DisplayName("pending 이 없으면 0을 반환하고 브로커 발행을 시도하지 않는다")
         void publishPending_emptyBatch_returnsZero() {
             // Given
             given(outboxMessagePort.findPendingBatch(BATCH_SIZE)).willReturn(List.of());
@@ -164,7 +144,8 @@ class OutboxRelayServiceTest {
 
             // Then
             assertThat(publishedCount).isZero();
-            verify(outboxKafkaTemplate, never()).send(any(ProducerRecord.class));
+            verify(outboxMessageBroker, never())
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
             verify(outboxMessagePort, never()).markPublished(anyLong());
         }
     }
@@ -174,12 +155,14 @@ class OutboxRelayServiceTest {
     class UnhappyPath {
 
         @Test
-        @DisplayName("Kafka 발행이 실패한 메시지는 markPublished 되지 않아 다음 주기에 재시도된다")
-        void publishPending_kafkaFailure_doesNotMarkPublished() {
+        @DisplayName("브로커 발행이 실패한 메시지는 markPublished 되지 않아 다음 주기에 재시도된다")
+        void publishPending_brokerFailure_doesNotMarkPublished() {
             // Given
             OutboxMessage message = pendingMessage(7L, "topic-x");
             given(outboxMessagePort.findPendingBatch(BATCH_SIZE)).willReturn(List.of(message));
-            given(outboxKafkaTemplate.send(any(ProducerRecord.class))).willReturn(failedFuture());
+            willThrow(new BrokerPublishException("Kafka broker unreachable", new RuntimeException("boom")))
+                    .given(outboxMessageBroker)
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
 
             // When
             int publishedCount = service.publishPending();
@@ -199,10 +182,11 @@ class OutboxRelayServiceTest {
                     pendingMessage(3L, "topic-a")   // 성공
             );
             given(outboxMessagePort.findPendingBatch(BATCH_SIZE)).willReturn(pending);
-            given(outboxKafkaTemplate.send(any(ProducerRecord.class)))
-                    .willReturn(successFuture("topic-a", 0, 1L))
-                    .willReturn(failedFuture())
-                    .willReturn(successFuture("topic-a", 0, 2L));
+            willDoNothing()
+                    .willThrow(new BrokerPublishException("boom", new RuntimeException()))
+                    .willDoNothing()
+                    .given(outboxMessageBroker)
+                    .publish(any(String.class), any(String.class), any(byte[].class), anyLong());
 
             // When
             int publishedCount = service.publishPending();

@@ -6,7 +6,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 가짜 3D 모델 생성 클라이언트.
@@ -16,39 +15,37 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <ul>
  *   <li>startGeneration: 즉시 UUID 기반 fake task_id 반환</li>
- *   <li>fetchStatus: 80% 확률 SUCCESS, 20% 확률 FAILED 반환</li>
+ *   <li>fetchStatus: task_id 해시 기반 <b>결정론적</b> 80% SUCCESS / 20% FAILED</li>
  *   <li>fetchResult: 쇼케이스 ID 기반 가짜 URL 반환</li>
  * </ul>
  *
- * <p><b>보안 관련 정적 분석 힌트</b>: 이 클래스는 {@code tripo.enabled=false} 일 때만
- * 로드되는 로컬/개발 전용 Fake 이며, {@link ThreadLocalRandom} 사용처는 오로지 성공률
- * 시뮬레이션(80%/20%) 이다. 보안 결정(토큰, 패스워드, nonce 등) 과 무관하므로
- * Sonar rule {@code java:S2245} 는 여기서 적용 대상이 아니다.</p>
+ * <p><b>결정론 보장</b>: 같은 {@code taskId} 에 대해 {@link #fetchStatus} 는 항상 같은
+ * 결과를 반환해야 한다. 그렇지 않으면 폴링 스케줄러가 재시도 / 크래시 복구 시나리오에서
+ * 이전 판정과 모순된 결과를 보게 되어 상태 머신이 꼬인다. 해시 기반 분기로 무작위성 제거.</p>
  */
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "tripo.enabled", havingValue = "false", matchIfMissing = true)
 public class FakeModelGenerationClient implements ModelGenerationClient {
 
-    private static final double SUCCESS_RATE = 0.8;
+    /** 80% 는 SUCCESS, 20% 는 FAILED. taskId 해시 % 100 < 80 기준. */
+    private static final int SUCCESS_THRESHOLD = 80;
     private static final String FAILURE_REASON_SAMPLE = "이미지 품질이 부족합니다 (Fake 시뮬레이션)";
 
     @Override
     public String startGeneration(Long showcase3dModelId, Long showcaseId) {
         String fakeTaskId = "fake-" + UUID.randomUUID();
-        log.info("Fake startGeneration - showcase3dModelId: {}, showcaseId: {}, taskId: {}",
+        log.info("Fake 3D 모델 생성 시작 - showcase3dModelId: {}, showcaseId: {}, taskId: {}",
                 showcase3dModelId, showcaseId, fakeTaskId);
         return fakeTaskId;
     }
 
     @Override
-    @SuppressWarnings("java:S2245") // Fake 시뮬레이션용 — 보안 컨텍스트 아님
     public GenerationStatus fetchStatus(String taskId) {
-        // 실제로는 task_id 별로 상태가 일정해야 하지만,
-        // Fake 구현은 폴링 스케줄러의 1회 호출에서 즉시 결과가 나오도록 한다.
-        // ThreadLocalRandom 은 멀티 스레드 환경에서 Random 보다 contention 이 낮다.
-        // 보안 결정에 쓰이는 난수가 아니므로 SecureRandom 불필요.
-        if (ThreadLocalRandom.current().nextDouble() < SUCCESS_RATE) {
+        // taskId 해시 % 100 기반 결정론적 분기 — 같은 taskId 는 항상 같은 결과를 돌려준다.
+        // 재시도/복구 시나리오에서 상태가 뒤집히는 일을 방지한다.
+        int bucket = Math.floorMod(taskId.hashCode(), 100);
+        if (bucket < SUCCESS_THRESHOLD) {
             log.debug("Fake fetchStatus SUCCESS - taskId: {}", taskId);
             return GenerationStatus.success();
         }
@@ -62,7 +59,7 @@ public class FakeModelGenerationClient implements ModelGenerationClient {
                 "https://cdn.gearshow.com/models/%d/model.glb", showcaseId);
         String previewImageUrl = String.format(
                 "https://cdn.gearshow.com/models/%d/preview.jpg", showcaseId);
-        log.info("Fake fetchResult - taskId: {}, showcaseId: {}", taskId, showcaseId);
+        log.info("Fake 3D 모델 결과 조회 - taskId: {}, showcaseId: {}", taskId, showcaseId);
         return new GenerationResult(modelFileUrl, previewImageUrl);
     }
 }

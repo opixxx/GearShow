@@ -55,10 +55,28 @@ public interface ModelGenerationClient {
     /**
      * Tripo task 상태 조회 결과.
      *
-     * @param phase          현재 단계
-     * @param failureReason  FAILED 인 경우의 실패 사유 (그 외엔 null)
+     * <p>{@code record} 의 public 생성자는 모든 조합의 입력을 허용하므로, 상태 조합의
+     * 불변식(예: SUCCESS 인데 failureReason 이 있는 모순) 은 compact constructor 에서 차단한다.
+     * 외부에서 직접 생성하지 말고 {@link #running()} / {@link #success()} / {@link #failed(String)}
+     * 정적 팩토리를 사용해야 한다.</p>
+     *
+     * @param phase          현재 단계 (null 불가)
+     * @param failureReason  FAILED 인 경우에만 필수, 그 외에는 null 이어야 함
      */
     record GenerationStatus(GenerationPhase phase, String failureReason) {
+
+        public GenerationStatus {
+            if (phase == null) {
+                throw new IllegalArgumentException("phase 는 필수입니다");
+            }
+            if (phase == GenerationPhase.FAILED && (failureReason == null || failureReason.isBlank())) {
+                throw new IllegalArgumentException("FAILED 상태는 failureReason 이 필수입니다");
+            }
+            if (phase != GenerationPhase.FAILED && failureReason != null) {
+                throw new IllegalArgumentException(
+                        "FAILED 가 아닌 상태에는 failureReason 을 설정할 수 없습니다: " + phase);
+            }
+        }
 
         public boolean isRunning() {
             return phase == GenerationPhase.RUNNING;

@@ -27,8 +27,14 @@ import java.util.Map;
 @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
 public class OutboxKafkaConfig {
 
-    @Value("${spring.kafka.bootstrap-servers}")
-    private String bootstrapServers;
+    private final String bootstrapServers;
+
+    /**
+     * 생성자 주입. {@code @Value} 필드 주입은 테스트 용이성과 DI 일관성 관점에서 지양한다.
+     */
+    public OutboxKafkaConfig(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
+        this.bootstrapServers = bootstrapServers;
+    }
 
     @Bean
     public ProducerFactory<String, byte[]> outboxProducerFactory() {

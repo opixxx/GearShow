@@ -46,6 +46,8 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
 
     /**
      * REQUESTED 상태에서 오래 머물러 있는 모델을 Outbox 에 재등록한다.
+     *
+     * @return 실제로 재등록에 성공한 모델 수 (실패 건은 제외)
      */
     private int recoverStuckRequested() {
         Instant threshold = Instant.now()
@@ -54,16 +56,18 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
         List<Showcase3dModel> stuck = showcase3dModelPort
                 .findStaleByStatus(ModelStatus.REQUESTED, threshold, properties.batchSize());
 
+        int recovered = 0;
         for (Showcase3dModel model : stuck) {
             try {
                 modelGenerationEventPublisher.publishRequested(model.getId(), model.getShowcaseId());
                 log.warn("REQUESTED stuck 복구 - Outbox 재등록 - showcase3dModelId: {}",
                         model.getId());
+                recovered++;
             } catch (RuntimeException e) {
                 log.error("REQUESTED stuck 복구 실패 - showcase3dModelId: {}", model.getId(), e);
             }
         }
-        return stuck.size();
+        return recovered;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.common.exception.CustomException;
 import com.gearshow.backend.showcase.application.port.in.PollGenerationStatusUseCase;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
@@ -9,7 +10,9 @@ import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -58,8 +61,9 @@ public class PollGenerationStatusService implements PollGenerationStatusUseCase 
                 if (pollSingle(model)) {
                     terminalCount++;
                 }
-            } catch (RuntimeException e) {
-                // 다음 사이클에서 자동 재시도 — 개별 실패가 배치 전체를 막지 않도록 격리
+            } catch (CustomException | RestClientException | DataAccessException e) {
+                // 비즈니스/인프라 예외: 다음 사이클에서 자동 재시도되도록 로깅만 하고 계속 진행
+                // 구체 타입으로 catch 하여 NPE/ClassCastException 같은 프로그래밍 버그는 전파되도록 한다
                 log.error("Tripo 폴링 중 예외 발생 - showcase3dModelId: {}, taskId: {}",
                         model.getId(), model.getGenerationTaskId(), e);
             }

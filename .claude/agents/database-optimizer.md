@@ -289,3 +289,8 @@ spring:
 - 두 Aggregate 동시 변경을 보호한다고 믿었던 `@Transactional` 이 실제로는 별도 커밋 중일 수 있음 → 데이터 불일치
 - **해결**: 트랜잭셔널 메서드를 별도 `@Component` 로 추출해 주입받아 호출 (프록시 경유)
 - **검사**: `grep -rn -B1 "protected\|private" | grep -A1 "@Transactional"` 로 의심 후보 탐지
+
+### CR 갭 보강 — 2026-04-10 PR#24
+
+- [ ] **벌크 쿼리 `@Modifying(flushAutomatically=true, clearAutomatically=true)`**: 누락 시 같은 트랜잭션 내 영속성 컨텍스트의 stale 데이터가 쿼리 결과에 반영되지 않거나, DELETE/UPDATE 이후 오래된 엔티티가 남음
+- [ ] **외부 HTTP 클라이언트 timeout 필수**: `RestClient.create()` 는 기본 timeout 없음 → 스케줄러 스레드 무한 블로킹 위험. `ClientHttpRequestFactory` 로 connect/read timeout 명시

@@ -12,9 +12,11 @@ import com.gearshow.backend.showcase.infrastructure.config.TripoConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -37,11 +39,29 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TripoModelGenerationClient implements ModelGenerationClient {
 
+    private static final Duration DOWNLOAD_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration DOWNLOAD_READ_TIMEOUT = Duration.ofSeconds(60);
+
     private final TripoApiClient tripoApiClient;
     private final TripoConfig tripoConfig;
     private final ModelSourceImagePort modelSourceImagePort;
     private final ImageStoragePort imageStoragePort;
-    private final RestClient downloadRestClient = RestClient.create();
+
+    /**
+     * Tripo 결과 파일(GLB, 프리뷰) 다운로드 전용 RestClient.
+     * {@code RestClient.create()} 는 기본 timeout 이 없어 무한 블로킹 위험이 있으므로
+     * connect/read timeout 을 명시적으로 설정한다.
+     */
+    private final RestClient downloadRestClient = RestClient.builder()
+            .requestFactory(createRequestFactoryWithTimeouts())
+            .build();
+
+    private static SimpleClientHttpRequestFactory createRequestFactoryWithTimeouts() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) DOWNLOAD_CONNECT_TIMEOUT.toMillis());
+        factory.setReadTimeout((int) DOWNLOAD_READ_TIMEOUT.toMillis());
+        return factory;
+    }
 
     @Override
     public String startGeneration(Long showcase3dModelId, Long showcaseId) {
@@ -71,6 +91,13 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     public GenerationStatus fetchStatus(String taskId) {
         TripoTaskStatusResponse response = tripoApiClient.getTaskStatus(taskId);
 
+        // Tripo 응답의 data 필드가 null 인 경우 (빈 body, 불완전 payload) 방어.
+        // 상위 로직이 NPE 로 터지면 맥락 없는 에러가 발생하므로 명시적 TripoApiException 으로 변환.
+        if (response == null || response.data() == null) {
+            log.error("Tripo task 상태 응답이 비어있거나 data 가 null - taskId: {}", taskId);
+            throw new TripoApiException(ErrorCode.TRIPO_TASK_STATUS_FAILED);
+        }
+
         if (!response.isTerminal()) {
             log.debug("Tripo task 진행 중 - taskId: {}, status: {}, progress: {}%",
                     taskId, response.data().status(), response.data().progress());
@@ -91,7 +118,8 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     public GenerationResult fetchResult(String taskId, Long showcaseId) {
         TripoTaskStatusResponse status = tripoApiClient.getTaskStatus(taskId);
 
-        if (status.data().output() == null) {
+        if (status == null || status.data() == null || status.data().output() == null) {
+            log.error("Tripo task 결과 응답에 data/output 이 없음 - taskId: {}", taskId);
             throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
         }
 

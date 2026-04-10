@@ -122,8 +122,14 @@ public class Showcase3dModel {
     /**
      * 폴링 시각을 업데이트한다. 상태 전이는 없고 {@code lastPolledAt} 만 갱신된다.
      * stuck 감지 스케줄러가 이 값을 기준으로 타임아웃을 판정한다.
+     *
+     * <p>폴링 메타데이터는 생성 중 모델에만 의미가 있으므로 {@code GENERATING} 상태에서만
+     * 호출 가능하다. 그 외 상태에서 호출되면 상태 머신 불변식 위반이다.</p>
      */
     public Showcase3dModel markPolled() {
+        if (this.modelStatus != ModelStatus.GENERATING) {
+            throw new InvalidShowcaseModelStatusTransitionException();
+        }
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)

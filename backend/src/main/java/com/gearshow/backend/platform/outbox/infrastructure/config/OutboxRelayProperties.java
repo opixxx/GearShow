@@ -1,6 +1,7 @@
 package com.gearshow.backend.platform.outbox.infrastructure.config;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -35,9 +36,11 @@ public record OutboxRelayProperties(
         @DefaultValue("5000")
         long publishTimeoutMs,
 
+        @NotBlank(message = "cleanupCron 은 빈 문자열일 수 없습니다")
         @DefaultValue("0 0 4 * * *")
         String cleanupCron,
 
+        @NotBlank(message = "cleanupZone 은 빈 문자열일 수 없습니다")
         @DefaultValue("Asia/Seoul")
         String cleanupZone,
 

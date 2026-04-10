@@ -88,12 +88,49 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
             return;
         }
 
-        // Tripo task 생성 성공 — 반드시 task_id 를 DB 에 보존해야 한다.
-        // 이 save 가 실패하면 Tripo task 만 생성되고 우리는 task_id 를 잃는 edge case 가 발생하지만,
-        // 예외를 그대로 던져 DLT 로 보내는 것이 정답이다 (비즈니스 FAILED 로 덮으면 복구가 더 어려워진다).
-        Showcase3dModel generating = model.markGenerating(taskId);
-        showcase3dModelPort.save(generating);
-        log.info("3D 모델 생성 시작 - showcase3dModelId: {}, taskId: {}",
-                showcase3dModelId, taskId);
+        // Tripo task 생성 성공 — 이 시점부터는 save 가 반드시 성공해야 한다.
+        // save 실패 시 그대로 예외를 던지면:
+        //   1) Worker 는 이미 tryAcquire 로 messageId 를 선점했으므로 재시도도 프로세스를 통과 못함
+        //   2) 상태는 REQUESTED 로 남아 StuckModelRecoveryScheduler 가 새 messageId 로 재발행
+        //   3) 새 messageId → tryAcquire 통과 → startGeneration 재호출 → 중복 Tripo 과금
+        // 이를 막기 위해 save 실패 시 명시적으로 모델을 FAILED(orphan) 로 마킹하여
+        // recovery 대상에서 제외한다. orphan Tripo task 는 운영자 수동 처리.
+        persistGenerating(model, taskId, showcase3dModelId);
+    }
+
+    /**
+     * GENERATING 전환을 DB 에 저장한다. 저장 실패 시 orphan task 마킹을 시도한다.
+     */
+    private void persistGenerating(Showcase3dModel model, String taskId, Long showcase3dModelId) {
+        try {
+            Showcase3dModel generating = model.markGenerating(taskId);
+            showcase3dModelPort.save(generating);
+            log.info("3D 모델 생성 시작 - showcase3dModelId: {}, taskId: {}",
+                    showcase3dModelId, taskId);
+        } catch (DataAccessException e) {
+            log.error("CRITICAL: Tripo task 생성 후 DB 저장 실패 - "
+                            + "orphan task_id: {}, showcase3dModelId: {} (수동 복구 필요)",
+                    taskId, showcase3dModelId, e);
+            markOrphanToPreventDuplicateCharge(model, taskId, showcase3dModelId);
+        }
+    }
+
+    /**
+     * 모델을 FAILED 로 마킹하여 recovery 스케줄러의 재발행을 차단한다.
+     * 이 작업도 실패하면 로그만 남기고 조용히 종료한다 (예외 전파 시 또 다른 재시도 유발).
+     */
+    private void markOrphanToPreventDuplicateCharge(Showcase3dModel model, String taskId, Long showcase3dModelId) {
+        try {
+            Showcase3dModel failed = model.fail(
+                    "Tripo task 생성되었으나 DB 저장 실패 (orphan task_id=" + taskId + ")");
+            showcase3dModelPort.save(failed);
+            log.warn("orphan 마킹 완료 - showcase3dModelId: {}, taskId: {}",
+                    showcase3dModelId, taskId);
+        } catch (DataAccessException inner) {
+            // FAILED 마킹조차 실패하면 recovery 가 이 모델을 재발행할 수 있고
+            // 그때 중복 과금이 발생한다. DB 가 완전히 죽은 상황이라 운영자 수동 개입 필요.
+            log.error("CRITICAL: orphan 마킹 실패 - 수동 복구 필수 (modelId: {}, taskId: {})",
+                    showcase3dModelId, taskId, inner);
+        }
     }
 }

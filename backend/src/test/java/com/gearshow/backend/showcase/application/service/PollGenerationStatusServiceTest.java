@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -218,7 +219,7 @@ class PollGenerationStatusServiceTest {
             // m3: 정상 SUCCESS
             given(modelGenerationClient.fetchStatus(m1.getGenerationTaskId()))
                     .willReturn(GenerationStatus.success());
-            willThrow(new RuntimeException("Tripo 네트워크 오류"))
+            willThrow(new ResourceAccessException("Tripo 네트워크 오류"))
                     .given(modelGenerationClient).fetchStatus(m2.getGenerationTaskId());
             given(modelGenerationClient.fetchStatus(m3.getGenerationTaskId()))
                     .willReturn(GenerationStatus.success());

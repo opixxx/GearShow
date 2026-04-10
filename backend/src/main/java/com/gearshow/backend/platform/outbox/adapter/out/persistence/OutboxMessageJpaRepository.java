@@ -29,9 +29,13 @@ public interface OutboxMessageJpaRepository extends JpaRepository<OutboxMessageJ
      * <p>인덱스 락 경합을 최소화하기 위해 LIMIT 으로 배치 크기를 제한한다.
      * 정리 스케줄러가 이 메서드를 반복 호출하여 전체 이력을 정리한다.</p>
      *
+     * <p>{@code flushAutomatically=true} + {@code clearAutomatically=true} 를 함께 지정하여
+     * 같은 트랜잭션 내에 영속된 엔티티가 있으면 DB 로 flush 한 뒤 네이티브 벌크 삭제를 수행하고,
+     * 벌크 이후엔 1차 캐시를 비워 stale 엔티티가 남지 않도록 한다.</p>
+     *
      * @return 실제 삭제된 행 수
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             DELETE FROM outbox_message
             WHERE published = TRUE
@@ -50,9 +54,11 @@ public interface OutboxMessageJpaRepository extends JpaRepository<OutboxMessageJ
      * WHERE 절에 {@code published = FALSE} 를 포함시켜 동시에 두 Relay 인스턴스가
      * 같은 메시지를 마킹하려 할 때 0 row affected 가 발생하도록 DB 레벨 보호를 둔다.</p>
      *
+     * <p>{@code flushAutomatically/clearAutomatically} 로 영속성 컨텍스트 일관성을 보장한다.</p>
+     *
      * @return 실제 갱신된 행 수 (0 이면 이미 다른 프로세스가 마킹 완료)
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE OutboxMessageJpaEntity o" +
             "   SET o.published = true, o.publishedAt = :publishedAt" +
             " WHERE o.id = :id AND o.published = false")
