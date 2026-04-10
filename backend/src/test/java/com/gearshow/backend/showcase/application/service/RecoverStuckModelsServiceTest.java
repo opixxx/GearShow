@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
@@ -84,20 +85,6 @@ class RecoverStuckModelsServiceTest {
                 .build();
     }
 
-    private Showcase3dModel generatingHealthy(Long id) {
-        // task_id 가 있는 정상 GENERATING — 폴링 스케줄러 소관이므로 복구 대상 아님
-        Instant old = Instant.now().minusSeconds(600);
-        return Showcase3dModel.builder()
-                .id(id)
-                .showcaseId(SHOWCASE_ID_BASE + id)
-                .modelStatus(ModelStatus.GENERATING)
-                .generationProvider("fake-tripo")
-                .generationTaskId("tripo-task-" + id)
-                .requestedAt(old)
-                .createdAt(old)
-                .build();
-    }
-
     @Nested
     @DisplayName("REQUESTED stuck 복구")
     class RecoverRequestedStuck {
@@ -113,8 +100,8 @@ class RecoverStuckModelsServiceTest {
             );
             given(showcase3dModelPort.findStaleByStatus(
                     eq(ModelStatus.REQUESTED), any(Instant.class), anyInt())).willReturn(stuck);
-            given(showcase3dModelPort.findStaleByStatus(
-                    eq(ModelStatus.GENERATING), any(Instant.class), anyInt())).willReturn(List.of());
+            given(showcase3dModelPort.findStaleGeneratingWithoutTaskId(
+                    any(Instant.class), anyInt())).willReturn(List.of());
 
             // When
             int recovered = service.recoverOnce();
@@ -139,8 +126,8 @@ class RecoverStuckModelsServiceTest {
             // Given
             given(showcase3dModelPort.findStaleByStatus(
                     eq(ModelStatus.REQUESTED), any(Instant.class), anyInt())).willReturn(List.of());
-            given(showcase3dModelPort.findStaleByStatus(
-                    eq(ModelStatus.GENERATING), any(Instant.class), anyInt()))
+            given(showcase3dModelPort.findStaleGeneratingWithoutTaskId(
+                    any(Instant.class), anyInt()))
                     .willReturn(List.of(generatingZombie(10L)));
 
             // When
@@ -157,23 +144,22 @@ class RecoverStuckModelsServiceTest {
         }
 
         @Test
-        @DisplayName("GENERATING 후보 중 task_id 가 있는 정상 모델은 skip 된다 (폴링 스케줄러 소관)")
-        void recoverOnce_generatingWithTaskId_isSkipped() {
-            // Given
+        @DisplayName("쿼리 레벨에서 task_id 없는 좀비만 반환하므로 여러 건이 있으면 각각 FAILED 로 저장된다")
+        void recoverOnce_multipleZombies_failsAll() {
+            // Given — findStaleGeneratingWithoutTaskId 는 쿼리 단계에서 task_id 있는 모델을 제외
             given(showcase3dModelPort.findStaleByStatus(
                     eq(ModelStatus.REQUESTED), any(Instant.class), anyInt())).willReturn(List.of());
-            given(showcase3dModelPort.findStaleByStatus(
-                    eq(ModelStatus.GENERATING), any(Instant.class), anyInt()))
+            given(showcase3dModelPort.findStaleGeneratingWithoutTaskId(
+                    any(Instant.class), anyInt()))
                     .willReturn(List.of(
                             generatingZombie(10L),
-                            generatingHealthy(11L),  // task_id 있음 → skip
                             generatingZombie(12L)
                     ));
 
             // When
             int recovered = service.recoverOnce();
 
-            // Then: 좀비 2건만 FAILED 전환
+            // Then
             assertThat(recovered).isEqualTo(2);
             verify(showcase3dModelPort, times(2)).save(any());
         }
@@ -189,8 +175,8 @@ class RecoverStuckModelsServiceTest {
             // Given
             given(showcase3dModelPort.findStaleByStatus(
                     eq(ModelStatus.REQUESTED), any(Instant.class), anyInt())).willReturn(List.of());
-            given(showcase3dModelPort.findStaleByStatus(
-                    eq(ModelStatus.GENERATING), any(Instant.class), anyInt())).willReturn(List.of());
+            given(showcase3dModelPort.findStaleGeneratingWithoutTaskId(
+                    any(Instant.class), anyInt())).willReturn(List.of());
 
             // When
             int recovered = service.recoverOnce();

@@ -5,8 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 가짜 3D 모델 생성 클라이언트.
@@ -28,8 +28,6 @@ public class FakeModelGenerationClient implements ModelGenerationClient {
     private static final double SUCCESS_RATE = 0.8;
     private static final String FAILURE_REASON_SAMPLE = "이미지 품질이 부족합니다 (Fake 시뮬레이션)";
 
-    private final Random random = new Random();
-
     @Override
     public String startGeneration(Long showcase3dModelId, Long showcaseId) {
         String fakeTaskId = "fake-" + UUID.randomUUID();
@@ -42,7 +40,8 @@ public class FakeModelGenerationClient implements ModelGenerationClient {
     public GenerationStatus fetchStatus(String taskId) {
         // 실제로는 task_id 별로 상태가 일정해야 하지만,
         // Fake 구현은 폴링 스케줄러의 1회 호출에서 즉시 결과가 나오도록 한다.
-        if (random.nextDouble() < SUCCESS_RATE) {
+        // ThreadLocalRandom 은 멀티 스레드 환경에서 Random 보다 contention 이 낮다.
+        if (ThreadLocalRandom.current().nextDouble() < SUCCESS_RATE) {
             log.debug("Fake fetchStatus SUCCESS - taskId: {}", taskId);
             return GenerationStatus.success();
         }

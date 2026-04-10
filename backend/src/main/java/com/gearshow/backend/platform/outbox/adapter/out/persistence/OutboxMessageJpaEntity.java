@@ -58,8 +58,12 @@ public class OutboxMessageJpaEntity {
     @Column(name = "message_id", nullable = false, length = 64)
     private String messageId;
 
-    @Lob
-    @Column(name = "payload", nullable = false)
+    /**
+     * 이벤트 페이로드 JSON.
+     * {@code @Lob} 을 쓰면 MySQL 에서 LONGTEXT(4GB) 로 매핑되어 row 외부 페이지에 저장되고
+     * SELECT/정렬 시 부하가 커진다. 현재 요구사항은 수 KB 이내이므로 TEXT(64KB) 로 충분하다.
+     */
+    @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
 
     @Column(name = "published", nullable = false)

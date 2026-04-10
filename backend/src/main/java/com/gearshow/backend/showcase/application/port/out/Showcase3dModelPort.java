@@ -49,12 +49,21 @@ public interface Showcase3dModelPort {
     List<Showcase3dModel> findPollableGeneratingTasks(int limit);
 
     /**
-     * 지정 상태이면서 {@code referenceAt} 이전에 마지막 변경된 모델을 조회한다.
-     * stuck task 감지 스케줄러가 사용한다.
+     * 지정 상태이면서 {@code requestedAt} 이 {@code referenceAt} 이전인 모델을 조회한다.
+     * REQUESTED stuck 감지용.
      *
      * @param status      대상 상태
-     * @param referenceAt 이 시각 이전에 변경된 모델만 조회
+     * @param referenceAt 이 시각 이전에 요청된 모델만 조회
      * @param limit       최대 반환 수
      */
     List<Showcase3dModel> findStaleByStatus(ModelStatus status, Instant referenceAt, int limit);
+
+    /**
+     * GENERATING 상태이면서 {@code generationTaskId} 가 비어있고 오래된 좀비 모델을 조회한다.
+     * Worker 가 Tripo 호출 전 크래시한 edge case 복구용.
+     *
+     * @param referenceAt 이 시각 이전에 요청된 모델만 조회
+     * @param limit       최대 반환 수
+     */
+    List<Showcase3dModel> findStaleGeneratingWithoutTaskId(Instant referenceAt, int limit);
 }

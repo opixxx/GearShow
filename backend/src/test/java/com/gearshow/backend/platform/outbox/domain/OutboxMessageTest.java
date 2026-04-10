@@ -1,5 +1,6 @@
 package com.gearshow.backend.platform.outbox.domain;
 
+import com.gearshow.backend.platform.outbox.domain.exception.InvalidOutboxMessageException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -69,74 +70,60 @@ class OutboxMessageTest {
         }
 
         @Test
-        @DisplayName("aggregateType 이 null 이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("aggregateType 이 null 이면 InvalidOutboxMessageException 이 발생한다")
         void create_withNullAggregateType_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     null, AGGREGATE_ID, EVENT_TYPE, TOPIC, PARTITION_KEY, MESSAGE_ID, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("aggregateType");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("aggregateType 이 공백이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("aggregateType 이 공백이면 InvalidOutboxMessageException 이 발생한다")
         void create_withBlankAggregateType_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     "   ", AGGREGATE_ID, EVENT_TYPE, TOPIC, PARTITION_KEY, MESSAGE_ID, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("aggregateType");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("aggregateId 가 null 이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("aggregateId 가 null 이면 InvalidOutboxMessageException 이 발생한다")
         void create_withNullAggregateId_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     AGGREGATE_TYPE, null, EVENT_TYPE, TOPIC, PARTITION_KEY, MESSAGE_ID, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("aggregateId");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("eventType 이 공백이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("eventType 이 공백이면 InvalidOutboxMessageException 이 발생한다")
         void create_withBlankEventType_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     AGGREGATE_TYPE, AGGREGATE_ID, "", TOPIC, PARTITION_KEY, MESSAGE_ID, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("eventType");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("topic 이 공백이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("topic 이 공백이면 InvalidOutboxMessageException 이 발생한다")
         void create_withBlankTopic_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     AGGREGATE_TYPE, AGGREGATE_ID, EVENT_TYPE, "", PARTITION_KEY, MESSAGE_ID, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("topic");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("messageId 가 null 이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("messageId 가 null 이면 InvalidOutboxMessageException 이 발생한다")
         void create_withNullMessageId_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     AGGREGATE_TYPE, AGGREGATE_ID, EVENT_TYPE, TOPIC, PARTITION_KEY, null, PAYLOAD))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("messageId");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
 
         @Test
-        @DisplayName("payload 가 공백이면 IllegalArgumentException 이 발생한다")
+        @DisplayName("payload 가 공백이면 InvalidOutboxMessageException 이 발생한다")
         void create_withBlankPayload_throwsException() {
             // When & Then
             assertThatThrownBy(() -> OutboxMessage.create(
                     AGGREGATE_TYPE, AGGREGATE_ID, EVENT_TYPE, TOPIC, PARTITION_KEY, MESSAGE_ID, "  "))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("payload");
-        }
+                    .isInstanceOf(InvalidOutboxMessageException.class);        }
     }
 
     @Nested

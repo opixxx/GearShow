@@ -24,6 +24,11 @@ public interface Showcase3dModelJpaRepository extends JpaRepository<Showcase3dMo
     Optional<Showcase3dModelJpaEntity> findByShowcaseId(Long showcaseId);
 
     /**
+     * 쇼케이스 ID 기반 존재 여부 확인. Spring Data JPA 가 {@code SELECT 1} 로 최적화한다.
+     */
+    boolean existsByShowcaseId(Long showcaseId);
+
+    /**
      * 여러 쇼케이스 중 3D 모델이 존재하는 쇼케이스 ID를 조회한다.
      */
     @Query("SELECT m.showcaseId FROM Showcase3dModelJpaEntity m" +
@@ -44,17 +49,8 @@ public interface Showcase3dModelJpaRepository extends JpaRepository<Showcase3dMo
     List<Showcase3dModelJpaEntity> findPollableGeneratingTasks(Pageable pageable);
 
     /**
-     * 특정 상태이면서 {@code referenceAt} 이전에 가장 최근 변경된 모델을 조회한다.
-     * stuck task 감지 / recovery 스케줄러가 사용한다.
-     *
-     * <p>"변경 시각" 의 정의:</p>
-     * <ul>
-     *   <li>GENERATING: {@code last_polled_at} 이 null 이면 {@code requested_at}, 아니면 {@code last_polled_at}</li>
-     *   <li>그 외: {@code requested_at} 을 기준으로 함</li>
-     * </ul>
-     *
-     * <p>코드 단순화를 위해 쿼리 레벨에서는 {@code requested_at} 기준으로만 필터링하고,
-     * 호출 측에서 {@code lastPolledAt} 을 추가로 확인한다.</p>
+     * 특정 상태이면서 {@code requestedAt} 이 {@code referenceAt} 이전인 모델을 조회한다.
+     * REQUESTED stuck 감지용. {@code (model_status, requested_at)} 인덱스로 커버된다.
      */
     @Query("SELECT m FROM Showcase3dModelJpaEntity m" +
             " WHERE m.modelStatus = :status" +
@@ -62,6 +58,22 @@ public interface Showcase3dModelJpaRepository extends JpaRepository<Showcase3dMo
             " ORDER BY m.requestedAt ASC")
     List<Showcase3dModelJpaEntity> findByStatusAndRequestedBefore(
             @Param("status") ModelStatus status,
+            @Param("referenceAt") Instant referenceAt,
+            Pageable pageable);
+
+    /**
+     * GENERATING 상태이면서 {@code generation_task_id} 가 비어있고 오래된 좀비 모델을 조회한다.
+     * Worker 가 tryAcquire 후 Tripo createTask 도달 전에 크래시한 edge case 복구용.
+     *
+     * <p>in-memory 필터로 정상 모델을 후처리 제거하는 방식은 batch 낭비가 심하므로
+     * 쿼리 레벨에서 직접 {@code generationTaskId IS NULL} 조건을 적용한다.</p>
+     */
+    @Query("SELECT m FROM Showcase3dModelJpaEntity m" +
+            " WHERE m.modelStatus = com.gearshow.backend.showcase.domain.vo.ModelStatus.GENERATING" +
+            "   AND m.generationTaskId IS NULL" +
+            "   AND m.requestedAt < :referenceAt" +
+            " ORDER BY m.requestedAt ASC")
+    List<Showcase3dModelJpaEntity> findStaleGeneratingWithoutTaskId(
             @Param("referenceAt") Instant referenceAt,
             Pageable pageable);
 }

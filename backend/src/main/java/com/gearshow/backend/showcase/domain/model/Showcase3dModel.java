@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.domain.model;
 
+import com.gearshow.backend.showcase.domain.exception.InvalidGenerationTaskIdException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseModelStatusTransitionException;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import lombok.Builder;
@@ -104,7 +105,7 @@ public class Showcase3dModel {
      */
     public Showcase3dModel markGenerating(String generationTaskId) {
         if (generationTaskId == null || generationTaskId.isBlank()) {
-            throw new IllegalArgumentException("generationTaskId 는 필수입니다");
+            throw new InvalidGenerationTaskIdException();
         }
         validateStatusTransition(ModelStatus.GENERATING);
         return Showcase3dModel.builder()
@@ -170,9 +171,7 @@ public class Showcase3dModel {
      * @return 실패한 3D 모델
      */
     public Showcase3dModel fail(String failureReason) {
-        if (this.modelStatus != ModelStatus.REQUESTED && this.modelStatus != ModelStatus.GENERATING) {
-            throw new InvalidShowcaseModelStatusTransitionException();
-        }
+        validateStatusTransition(ModelStatus.FAILED);
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)
@@ -217,6 +216,18 @@ public class Showcase3dModel {
         return this.modelStatus == ModelStatus.GENERATING;
     }
 
+    /**
+     * 상태 머신의 단일 진입점. 모든 전이 메서드(complete/fail/markGenerating/markUnavailable)가
+     * 이 검증을 통과해야 실제 전이가 이뤄진다. 규칙이 한 곳에 모여 있어 관리가 쉬워진다.
+     *
+     * <p>허용되는 전이:</p>
+     * <ul>
+     *   <li>REQUESTED → GENERATING | FAILED | UNAVAILABLE</li>
+     *   <li>GENERATING → COMPLETED | FAILED</li>
+     *   <li>FAILED | UNAVAILABLE → REQUESTED (사용자 재요청)</li>
+     *   <li>COMPLETED → (종결, 어디로도 전이 불가)</li>
+     * </ul>
+     */
     private void validateStatusTransition(ModelStatus target) {
         boolean valid = switch (this.modelStatus) {
             case REQUESTED -> target == ModelStatus.GENERATING

@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.domain.model;
 
+import com.gearshow.backend.showcase.domain.exception.InvalidGenerationTaskIdException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseModelStatusTransitionException;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -58,9 +59,9 @@ class Showcase3dModelTest {
 
             // When & Then
             assertThatThrownBy(() -> model.markGenerating(""))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidGenerationTaskIdException.class);
             assertThatThrownBy(() -> model.markGenerating(null))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(InvalidGenerationTaskIdException.class);
         }
 
         @Test

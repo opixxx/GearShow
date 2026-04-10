@@ -1,5 +1,6 @@
 package com.gearshow.backend.platform.outbox.domain;
 
+import com.gearshow.backend.platform.outbox.domain.exception.InvalidOutboxMessageException;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -94,23 +95,13 @@ public class OutboxMessage {
     private static void validateRequired(String aggregateType, Long aggregateId,
                                          String eventType, String topic,
                                          String messageId, String payload) {
-        if (isBlank(aggregateType)) {
-            throw new IllegalArgumentException("aggregateType 은 필수입니다");
-        }
-        if (aggregateId == null) {
-            throw new IllegalArgumentException("aggregateId 는 필수입니다");
-        }
-        if (isBlank(eventType)) {
-            throw new IllegalArgumentException("eventType 은 필수입니다");
-        }
-        if (isBlank(topic)) {
-            throw new IllegalArgumentException("topic 은 필수입니다");
-        }
-        if (isBlank(messageId)) {
-            throw new IllegalArgumentException("messageId 는 필수입니다");
-        }
-        if (isBlank(payload)) {
-            throw new IllegalArgumentException("payload 는 필수입니다");
+        if (isBlank(aggregateType)
+                || aggregateId == null
+                || isBlank(eventType)
+                || isBlank(topic)
+                || isBlank(messageId)
+                || isBlank(payload)) {
+            throw new InvalidOutboxMessageException();
         }
     }
 

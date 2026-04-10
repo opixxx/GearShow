@@ -13,11 +13,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
@@ -152,12 +155,12 @@ class PrepareModelGenerationServiceTest {
         }
 
         @Test
-        @DisplayName("Tripo 호출에서 일반 RuntimeException 이 발생하면 FAILED 로 전환되어 저장된다")
-        void prepare_runtimeException_savesFailedWithReason() {
+        @DisplayName("Tripo 호출에서 RestClientException 이 발생하면 FAILED 로 전환되고 고정된 사유가 저장된다")
+        void prepare_restClientException_savesFailedWithFixedReason() {
             // Given
             Showcase3dModel model = existingRequestedModel();
             given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
-            willThrow(new RuntimeException("이미지 다운로드 실패"))
+            willThrow(new ResourceAccessException("connection reset by peer"))
                     .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
 
             // When
@@ -168,7 +171,26 @@ class PrepareModelGenerationServiceTest {
             verify(showcase3dModelPort, times(1)).save(captor.capture());
             Showcase3dModel saved = captor.getValue();
             assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.FAILED);
-            assertThat(saved.getFailureReason()).contains("이미지 다운로드 실패");
+            // 고정된 사용자 노출 메시지 (내부 예외 메시지가 그대로 노출되지 않음)
+            assertThat(saved.getFailureReason()).isEqualTo("3D 모델 생성을 시작하지 못했습니다");
+            assertThat(saved.getFailureReason()).doesNotContain("connection reset");
+        }
+
+        @Test
+        @DisplayName("DataAccessException 은 인프라 장애이므로 catch 하지 않고 그대로 전파한다 (DLT 이동 유도)")
+        void prepare_dataAccessException_propagatesWithoutStatusChange() {
+            // Given
+            Showcase3dModel model = existingRequestedModel();
+            given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
+            willThrow(new QueryTimeoutException("DB lock timeout"))
+                    .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
+
+            // When & Then
+            assertThatThrownBy(() -> service.prepare(MODEL_ID, SHOWCASE_ID))
+                    .isInstanceOf(QueryTimeoutException.class);
+
+            // 인프라 장애는 상태를 FAILED 로 오분류하지 않고 그대로 전파되어 DLT 가 처리하도록 한다
+            verify(showcase3dModelPort, never()).save(any());
         }
     }
 }

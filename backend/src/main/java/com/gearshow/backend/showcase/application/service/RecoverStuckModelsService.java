@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.port.in.RecoverStuckModelsUseCase;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
@@ -67,20 +68,19 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
 
     /**
      * GENERATING 상태이지만 task_id 가 없는 좀비 모델을 FAILED 로 전환한다.
+     *
+     * <p>전용 쿼리 {@code findStaleGeneratingWithoutTaskId} 를 사용하여 정상 모델(task_id 있음)은
+     * 쿼리 레벨에서 이미 제외된다. in-memory 필터링 방식보다 배치 슬롯 낭비가 없다.</p>
      */
     private int failZombieGenerating() {
         Instant threshold = Instant.now()
                 .minus(Duration.ofMinutes(properties.generatingWithoutTaskIdStuckMinutes()));
 
-        List<Showcase3dModel> candidates = showcase3dModelPort
-                .findStaleByStatus(ModelStatus.GENERATING, threshold, properties.batchSize());
+        List<Showcase3dModel> zombies = showcase3dModelPort
+                .findStaleGeneratingWithoutTaskId(threshold, properties.batchSize());
 
         int failed = 0;
-        for (Showcase3dModel model : candidates) {
-            if (model.getGenerationTaskId() != null && !model.getGenerationTaskId().isBlank()) {
-                // task_id 가 있으면 폴링 스케줄러가 처리 중이므로 skip (정상)
-                continue;
-            }
+        for (Showcase3dModel model : zombies) {
             try {
                 Showcase3dModel failedModel = model.fail("Worker 크래시 추정 - task_id 미설정 좀비");
                 showcase3dModelPort.save(failedModel);

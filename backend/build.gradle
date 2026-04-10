@@ -118,7 +118,6 @@ ext.jacocoExcludes = [
 	'**/DevLoginService.*',
 	// Kafka 인프라 (테스트에서 Mock 사용, 실제 브로커 필요)
 	'**/infrastructure/config/Kafka*.*',
-	'**/infrastructure/config/NoOpKafkaConfig.*',
 	'**/messaging/kafka/**',
 	'**/messaging/dto/**',
 	// Fake 3D 모델 클라이언트 (Kafka 활성화 시에만 동작)
@@ -187,7 +186,6 @@ sonar {
 			'**/DevAuthController.java',
 			'**/DevLoginService.java',
 			'**/infrastructure/config/Kafka*.java',
-			'**/infrastructure/config/NoOpKafkaConfig.java',
 			'**/messaging/kafka/**',
 			'**/messaging/dto/**',
 			'**/model3d/fake/**',

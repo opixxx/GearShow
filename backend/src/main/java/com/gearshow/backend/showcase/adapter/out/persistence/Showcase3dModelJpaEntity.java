@@ -11,9 +11,29 @@ import java.time.Instant;
 
 /**
  * 쇼케이스 3D 모델 JPA 엔티티.
+ *
+ * <p><b>인덱스 설계</b>:</p>
+ * <ul>
+ *   <li>{@code idx_3d_model_status_polled}: 폴링 스케줄러의 "GENERATING + task_id 있음"
+ *       배치 조회를 위한 복합 인덱스. {@code last_polled_at} 까지 포함하여 정렬(filesort) 을 제거한다.</li>
+ *   <li>{@code idx_3d_model_status_requested}: 좀비 복구 스케줄러의
+ *       "특정 상태 + requested_at 이전" 배치 조회용 복합 인덱스.</li>
+ * </ul>
  */
 @Entity
-@Table(name = "showcase_3d_model")
+@Table(
+        name = "showcase_3d_model",
+        indexes = {
+                @Index(
+                        name = "idx_3d_model_status_polled",
+                        columnList = "model_status, last_polled_at, showcase_3d_model_id"
+                ),
+                @Index(
+                        name = "idx_3d_model_status_requested",
+                        columnList = "model_status, requested_at"
+                )
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Showcase3dModelJpaEntity {

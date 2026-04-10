@@ -46,6 +46,9 @@ public enum ErrorCode {
     SHOWCASE_MIN_IMAGE_REQUIRED(400, "최소 1개의 이미지가 필요합니다"),
     SHOWCASE_PRIMARY_IMAGE_REQUIRED(400, "대표 이미지가 반드시 1개 존재해야 합니다"),
     SHOWCASE_MODEL_ALREADY_GENERATING(400, "3D 모델이 이미 생성 중입니다"),
+    SHOWCASE_MODEL_INVALID_STATUS_TRANSITION(400, "유효하지 않은 3D 모델 상태 전이입니다"),
+    SHOWCASE_MODEL_INVALID_TASK_ID(400, "유효하지 않은 3D 모델 생성 task_id 입니다"),
+    SHOWCASE_MODEL_GENERATION_START_FAILED(500, "3D 모델 생성을 시작하지 못했습니다"),
     SHOWCASE_MODEL_MIN_SOURCE_IMAGE_REQUIRED(400, "3D 모델 생성에는 최소 4장의 소스 이미지가 필요합니다"),
     SHOWCASE_IMAGE_NOT_BELONG(400, "해당 쇼케이스에 속하지 않는 이미지입니다"),
     SHOWCASE_IMAGE_NOT_FOUND(404, "쇼케이스 이미지를 찾을 수 없습니다"),
@@ -68,7 +71,11 @@ public enum ErrorCode {
     TRIPO_TASK_CREATION_FAILED(500, "Tripo 3D 모델 생성 요청에 실패했습니다"),
     TRIPO_TASK_STATUS_FAILED(500, "Tripo Task 상태 조회에 실패했습니다"),
     TRIPO_TASK_TIMEOUT(500, "Tripo 3D 모델 생성 시간이 초과되었습니다"),
-    TRIPO_DOWNLOAD_FAILED(500, "Tripo 3D 모델 다운로드에 실패했습니다");
+    TRIPO_DOWNLOAD_FAILED(500, "Tripo 3D 모델 다운로드에 실패했습니다"),
+
+    // OUTBOX (Transactional Outbox 패턴)
+    OUTBOX_INVALID_MESSAGE(400, "Outbox 메시지 필수 값이 누락되었습니다"),
+    OUTBOX_EVENT_SERIALIZATION_FAILED(500, "Outbox 이벤트 직렬화에 실패했습니다");
 
     private final int status;
     private final String message;
