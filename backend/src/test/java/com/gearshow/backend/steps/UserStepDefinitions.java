@@ -51,9 +51,11 @@ public class UserStepDefinitions {
     public void 닉네임_수정(String newNickname) {
         String accessToken = context.get("accessToken");
         apiClient.authenticate(accessToken);
-        context.setLastResponse(apiClient.patch(
-                "/api/v1/users/me",
-                Map.of("nickname", newNickname)));
+        org.springframework.util.LinkedMultiValueMap<String, Object> parts =
+                new org.springframework.util.LinkedMultiValueMap<>();
+        parts.add("nickname", newNickname);
+        context.setLastResponse(apiClient.patchMultipart(
+                "/api/v1/users/me", parts));
         apiClient.clearAuth();
     }
 

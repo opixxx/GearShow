@@ -110,7 +110,7 @@ class UserProfileServiceIntegrationTest {
         void updateProfile_changesNickname() {
             // Given
             Long userId = createUser("valid-code-update1");
-            UpdateProfileCommand command = new UpdateProfileCommand("새닉네임", null);
+            UpdateProfileCommand command = new UpdateProfileCommand("새닉네임", null, null, null);
 
             // When
             UpdateProfileResult result = updateProfileUseCase.updateProfile(userId, command);
@@ -127,7 +127,7 @@ class UserProfileServiceIntegrationTest {
             Long userId2 = createUser("valid-code-dup2");
 
             MyProfileResult firstUser = getMyProfileUseCase.getMyProfile(userId1);
-            UpdateProfileCommand command = new UpdateProfileCommand(firstUser.nickname(), null);
+            UpdateProfileCommand command = new UpdateProfileCommand(firstUser.nickname(), null, null, null);
 
             // When & Then
             assertThatThrownBy(() -> updateProfileUseCase.updateProfile(userId2, command))

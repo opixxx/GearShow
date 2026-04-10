@@ -245,7 +245,7 @@ class ShowcaseServiceIntegrationTest {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             UpdateShowcaseCommand command = new UpdateShowcaseCommand(
-                    "수정된 제목", null, null, null, null, null);
+                    "수정된 제목", null, null, null, null, null, null);
 
             // When
             updateShowcaseUseCase.update(showcaseId, 1L, command);
@@ -262,7 +262,7 @@ class ShowcaseServiceIntegrationTest {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             UpdateShowcaseCommand command = new UpdateShowcaseCommand(
-                    "수정", null, null, null, null, null);
+                    "수정", null, null, null, null, null, null);
 
             // When & Then
             assertThatThrownBy(() -> updateShowcaseUseCase.update(showcaseId, 999L, command))
