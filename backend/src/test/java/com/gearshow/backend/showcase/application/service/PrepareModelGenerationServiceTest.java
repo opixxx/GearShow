@@ -177,8 +177,8 @@ class PrepareModelGenerationServiceTest {
         }
 
         @Test
-        @DisplayName("DataAccessException 은 인프라 장애이므로 catch 하지 않고 그대로 전파한다 (DLT 이동 유도)")
-        void prepare_dataAccessException_propagatesWithoutStatusChange() {
+        @DisplayName("startGeneration 전 DataAccessException 은 인프라 장애이므로 catch 하지 않고 그대로 전파한다")
+        void prepare_dataAccessExceptionBeforeTripo_propagatesWithoutStatusChange() {
             // Given
             Showcase3dModel model = existingRequestedModel();
             given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
@@ -189,8 +189,56 @@ class PrepareModelGenerationServiceTest {
             assertThatThrownBy(() -> service.prepare(MODEL_ID, SHOWCASE_ID))
                     .isInstanceOf(QueryTimeoutException.class);
 
-            // 인프라 장애는 상태를 FAILED 로 오분류하지 않고 그대로 전파되어 DLT 가 처리하도록 한다
             verify(showcase3dModelPort, never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Orphan task 방어 (CR#12)")
+    class OrphanTaskProtection {
+
+        @Test
+        @DisplayName("Tripo 성공 후 GENERATING 저장 실패 시 orphan 으로 FAILED 마킹된다")
+        void prepare_saveGeneratingFails_marksAsOrphanFailed() {
+            // Given
+            Showcase3dModel model = existingRequestedModel();
+            given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
+            given(modelGenerationClient.startGeneration(MODEL_ID, SHOWCASE_ID)).willReturn(TASK_ID);
+            // 첫 번째 save(GENERATING) 은 실패, 두 번째 save(FAILED orphan) 는 성공
+            willThrow(new QueryTimeoutException("DB lock"))
+                    .willAnswer(invocation -> invocation.getArgument(0))
+                    .given(showcase3dModelPort).save(any(Showcase3dModel.class));
+
+            // When — 예외는 전파되지 않는다 (orphan 마킹으로 recovery 재발행 차단)
+            service.prepare(MODEL_ID, SHOWCASE_ID);
+
+            // Then — save 가 두 번 호출됨 (GENERATING 시도 → 실패, 그다음 FAILED orphan 저장)
+            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
+            verify(showcase3dModelPort, times(2)).save(captor.capture());
+
+            Showcase3dModel orphanFailed = captor.getAllValues().get(1);
+            assertThat(orphanFailed.getModelStatus()).isEqualTo(ModelStatus.FAILED);
+            assertThat(orphanFailed.getFailureReason())
+                    .contains("orphan")
+                    .contains(TASK_ID);
+        }
+
+        @Test
+        @DisplayName("orphan 마킹마저 실패해도 예외를 전파하지 않는다 (무한 재시도 방지)")
+        void prepare_orphanMarkingAlsoFails_swallowsException() {
+            // Given
+            Showcase3dModel model = existingRequestedModel();
+            given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
+            given(modelGenerationClient.startGeneration(MODEL_ID, SHOWCASE_ID)).willReturn(TASK_ID);
+            // GENERATING 저장도 실패, orphan FAILED 저장도 실패
+            willThrow(new QueryTimeoutException("DB completely down"))
+                    .given(showcase3dModelPort).save(any(Showcase3dModel.class));
+
+            // When & Then — 두 번째 실패를 catch 해서 조용히 종료, 예외 전파 없음
+            service.prepare(MODEL_ID, SHOWCASE_ID);
+
+            // save 시도는 두 번 발생 (GENERATING, FAILED 각각)
+            verify(showcase3dModelPort, times(2)).save(any());
         }
     }
 }
