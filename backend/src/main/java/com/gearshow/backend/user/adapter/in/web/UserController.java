@@ -2,8 +2,8 @@ package com.gearshow.backend.user.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.user.adapter.in.web.dto.*;
-import jakarta.validation.Valid;
 import com.gearshow.backend.user.application.dto.MyProfileResult;
+import com.gearshow.backend.user.application.dto.UpdateProfileCommand;
 import com.gearshow.backend.user.application.dto.UpdateProfileResult;
 import com.gearshow.backend.user.application.dto.UserProfileResult;
 import com.gearshow.backend.user.application.port.in.CheckNicknameUseCase;
@@ -11,9 +11,13 @@ import com.gearshow.backend.user.application.port.in.GetMyProfileUseCase;
 import com.gearshow.backend.user.application.port.in.GetUserProfileUseCase;
 import com.gearshow.backend.user.application.port.in.UpdateProfileUseCase;
 import com.gearshow.backend.user.application.port.in.WithdrawUseCase;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 /**
  * 사용자 관련 API 컨트롤러.
@@ -77,18 +81,29 @@ public class UserController {
 
     /**
      * 내 프로필을 수정한다.
+     * Multipart 요청으로 닉네임과 프로필 이미지를 함께 수정할 수 있다.
      *
-     * @param userId  인증된 사용자 ID
-     * @param request 수정할 프로필 정보
+     * @param userId       인증된 사용자 ID
+     * @param nickname     변경할 닉네임 (선택)
+     * @param profileImage 변경할 프로필 이미지 (선택)
      * @return 수정된 프로필 정보
      */
-    @PatchMapping("/me")
+    @PatchMapping(value = "/me", consumes = "multipart/form-data")
     public ApiResponse<UpdateProfileResponse> updateProfile(
             @AuthenticationPrincipal Long userId,
-            @Valid @RequestBody UpdateProfileRequest request) {
+            @RequestPart(required = false)
+            @Size(min = 2, max = 20, message = "닉네임은 2자 이상 20자 이하여야 합니다")
+            String nickname,
+            @RequestPart(required = false) MultipartFile profileImage) throws IOException {
 
-        UpdateProfileResult result = updateProfileUseCase.updateProfile(
-                userId, request.toCommand());
+        UpdateProfileCommand command = new UpdateProfileCommand(
+                nickname,
+                profileImage != null ? profileImage.getBytes() : null,
+                profileImage != null ? profileImage.getContentType() : null,
+                profileImage != null ? profileImage.getOriginalFilename() : null
+        );
+
+        UpdateProfileResult result = updateProfileUseCase.updateProfile(userId, command);
 
         return ApiResponse.of(200, "프로필 수정 성공", UpdateProfileResponse.from(result));
     }

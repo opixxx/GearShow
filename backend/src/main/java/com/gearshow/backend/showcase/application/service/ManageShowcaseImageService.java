@@ -73,8 +73,19 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
             showcaseImagePort.findByShowcaseId(showcaseId).stream()
                     .findFirst()
                     .ifPresent(next -> {
+                        // 쇼케이스의 대표 이미지 URL 갱신
                         Showcase updated = showcase.changePrimaryImageUrl(next.getImageUrl());
                         showcasePort.save(updated);
+                        // 승격된 이미지의 isPrimary 플래그 갱신
+                        ShowcaseImage promoted = ShowcaseImage.builder()
+                                .id(next.getId())
+                                .showcaseId(next.getShowcaseId())
+                                .imageUrl(next.getImageUrl())
+                                .sortOrder(next.getSortOrder())
+                                .primary(true)
+                                .createdAt(next.getCreatedAt())
+                                .build();
+                        showcaseImagePort.save(promoted);
                     });
         }
 

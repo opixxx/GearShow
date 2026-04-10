@@ -28,6 +28,7 @@ public class UpdateShowcaseService implements UpdateShowcaseUseCase {
         Showcase updated = showcase.update(
             command.title(),
             command.description(),
+            command.modelCode(),
             command.userSize(),
             command.conditionGrade(),
             command.wearCount(),

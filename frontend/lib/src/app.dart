@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'api.dart';
 import 'models.dart';
@@ -22,7 +23,13 @@ class AppController extends ChangeNotifier {
   /// 개발 환경 여부.
   bool get isDev => environment == AppEnvironment.dev;
 
-  String baseUrl = 'http://localhost:8080';
+  /// 환경별 기본 API URL.
+  static const _defaultBaseUrls = {
+    AppEnvironment.dev: 'http://localhost:8080',
+    AppEnvironment.prod: 'http://43.201.105.102:8080',
+  };
+
+  late String baseUrl = _defaultBaseUrls[environment]!;
   AuthSession? session;
   UserProfile? profile;
 
@@ -95,7 +102,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> saveProfile({
     required String nickname,
-    required String profileImageUrl,
+    XFile? profileImage,
   }) async {
     final token = session?.accessToken;
     if (token == null || token.isEmpty) {
@@ -105,7 +112,7 @@ class AppController extends ChangeNotifier {
       baseUrl: baseUrl,
       accessToken: token,
       nickname: nickname.trim().isEmpty ? null : nickname.trim(),
-      profileImageUrl: profileImageUrl.trim().isEmpty ? null : profileImageUrl.trim(),
+      profileImage: profileImage,
     );
     profile = UserProfile(
       userId: updated.userId,

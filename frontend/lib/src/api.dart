@@ -96,19 +96,41 @@ class GearShowApiClient {
     return UserProfile.fromJson(_extractData(response));
   }
 
+  /// 프로필을 수정한다. Multipart 요청으로 닉네임과 이미지를 함께 전송한다.
   Future<UserProfile> updateMyProfile({
     required String baseUrl,
     required String accessToken,
     String? nickname,
-    String? profileImageUrl,
+    XFile? profileImage,
   }) async {
-    final response = await http.patch(
+    final request = http.MultipartRequest(
+      'PATCH',
       _uri(baseUrl, '/api/v1/users/me'),
-      headers: _headers(accessToken: accessToken),
-      body: jsonEncode({
-        'nickname': nickname,
-        'profileImageUrl': profileImageUrl,
-      }),
+    );
+    request.headers['Authorization'] = 'Bearer $accessToken';
+
+    if (nickname != null && nickname.isNotEmpty) {
+      request.fields['nickname'] = nickname;
+    }
+    if (profileImage != null) {
+      request.files.add(await http.MultipartFile.fromPath(
+        'profileImage',
+        profileImage.path,
+      ));
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return UserProfile.fromJson(_extractData(response));
+  }
+
+  /// 다른 사용자의 공개 프로필을 조회한다.
+  Future<UserProfile> getUserProfile({
+    required String baseUrl,
+    required int userId,
+  }) async {
+    final response = await http.get(
+      _uri(baseUrl, '/api/v1/users/$userId'),
     );
     return UserProfile.fromJson(_extractData(response));
   }
@@ -204,6 +226,93 @@ class GearShowApiClient {
       _uri(baseUrl, '/api/v1/showcases/$showcaseId'),
     );
     return ShowcaseDetail.fromJson(_extractData(response));
+  }
+
+  /// 쇼케이스를 수정한다.
+  Future<void> updateShowcase({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+    String? title,
+    String? description,
+    String? modelCode,
+    bool? isForSale,
+  }) async {
+    final response = await http.patch(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (modelCode != null) 'modelCode': modelCode,
+        if (isForSale != null) 'isForSale': isForSale,
+      }),
+    );
+    _extractData(response);
+  }
+
+  /// 쇼케이스에 이미지를 추가한다.
+  /// Presigned URL 발급 → S3 업로드 → 서버에 이미지 키 등록
+  Future<void> addShowcaseImage({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+    required XFile imageFile,
+  }) async {
+    final contentType = imageFile.mimeType ?? 'image/jpeg';
+
+    // 1. Presigned URL 발급 (기존 쇼케이스에 이미지 추가용)
+    final presignedResponse = await http.post(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId/images/upload-urls'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({'files': [
+        {'contentType': contentType, 'filename': imageFile.name, 'type': 'SHOWCASE_IMAGE'},
+      ]}),
+    );
+    if (presignedResponse.statusCode != 200) {
+      throw ApiException('업로드 URL 발급 실패: ${presignedResponse.statusCode}');
+    }
+    final List<dynamic> raw = jsonDecode(presignedResponse.body)['data'] as List<dynamic>;
+    final presignedUrl = raw[0]['presignedUrl'] as String;
+    final s3Key = raw[0]['s3Key'] as String;
+
+    // 2. S3에 직접 업로드
+    await _uploadToS3(presignedUrl: presignedUrl, file: imageFile, contentType: contentType);
+
+    // 3. 서버에 이미지 키 등록
+    final addResponse = await http.post(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId/images'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({'imageKeys': [s3Key]}),
+    );
+    _extractData(addResponse);
+  }
+
+  /// 쇼케이스 이미지를 삭제한다.
+  Future<void> deleteShowcaseImage({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+    required int imageId,
+  }) async {
+    final response = await http.delete(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId/images/$imageId'),
+      headers: _headers(accessToken: accessToken),
+    );
+    _extractData(response);
+  }
+
+  /// 쇼케이스를 삭제한다.
+  Future<void> deleteShowcase({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+  }) async {
+    final response = await http.delete(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId'),
+      headers: _headers(accessToken: accessToken),
+    );
+    _extractData(response);
   }
 
   Future<PageInfo<ShowcaseComment>> listComments({
