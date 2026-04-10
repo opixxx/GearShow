@@ -24,9 +24,12 @@ class AppController extends ChangeNotifier {
   bool get isDev => environment == AppEnvironment.dev;
 
   /// 환경별 기본 API URL.
+  ///
+  /// 주의: prod URL 의 IP 는 EC2 의 Amazon 할당 public IP 이므로
+  /// 인스턴스 재부팅 시 바뀔 수 있다. 장기적으로는 Elastic IP 또는 도메인 연결 필요.
   static const _defaultBaseUrls = {
     AppEnvironment.dev: 'http://localhost:8080',
-    AppEnvironment.prod: 'http://43.201.105.102:8080',
+    AppEnvironment.prod: 'http://54.180.92.87:8080',
   };
 
   late String baseUrl = _defaultBaseUrls[environment]!;
