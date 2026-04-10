@@ -26,7 +26,7 @@ class AppController extends ChangeNotifier {
   /// 환경별 기본 API URL.
   static const _defaultBaseUrls = {
     AppEnvironment.dev: 'http://localhost:8080',
-    AppEnvironment.prod: 'http://43.201.105.102:8080',
+    AppEnvironment.prod: 'http://54.180.92.87:8080',
   };
 
   late String baseUrl = _defaultBaseUrls[environment]!;
