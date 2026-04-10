@@ -204,6 +204,74 @@ Service는 순수 오케스트레이션만 담당하며, 비즈니스 로직을 
 - [ ] **과도한 책임**: 하나의 Service가 여러 유스케이스를 처리 (1 UseCase = 1 Service)
 - [ ] **@Transactional 위치**: Application Service 외의 계층에 @Transactional 배치
 
+### 7. 계층 간 컨트랙트 일관성 [CRITICAL]
+
+DTO/도메인 모델에 필드가 추가/삭제될 때, 변경이 모든 계층에 일관되게 반영되었는지 추적한다.
+한 계층에만 추가되고 다른 계층에서 누락되면 **저장 누락 버그** 또는 **데드 필드**가 된다.
+
+#### 검증 흐름
+
+새 필드가 추가되었을 때 다음 흐름을 모두 따라가야 한다:
+
+```
+[Inbound] Request DTO
+   ↓ toCommand()
+[Application] Command DTO
+   ↓ Service 호출
+[Service] 도메인 모델 호출
+   ↓
+[Domain] update()/change*() 메서드
+   ↓
+[Outbound] Persistence (JPA Entity, Mapper)
+   ↓
+[Application] Result DTO
+   ↓ from()
+[Inbound] Response DTO
+```
+
+#### 검증 방법
+
+새 필드/메서드가 변경되었다면 grep으로 모든 사용처를 추적한다:
+
+```bash
+# 필드 추가 시 모든 계층 사용처 확인
+grep -rn "fieldName" backend/src/main/java/com/gearshow/backend/{domain}
+
+# 메서드 시그니처 변경 시 호출부 확인
+grep -rn "methodName(" backend/src/main/java
+```
+
+#### 체크리스트
+
+- [ ] **데이터 흐름 끊김** [CRITICAL]
+  - Request DTO에 추가된 필드가 Command DTO → Service → Domain까지 전달되는가
+  - 한 계층이라도 누락되면 사용자 입력이 무시되어 **저장 누락 버그**
+  - 예: `UpdateShowcaseRequest`에 `modelCode` 추가했지만 `Showcase.update()` 시그니처에 누락
+
+- [ ] **응답 스키마 일치** [MAJOR]
+  - Domain의 새 필드가 Result DTO와 Response DTO에 모두 반영되는가
+  - JPA Entity와 Mapper에 매핑되는가
+
+- [ ] **삭제된 필드의 잔재** [MAJOR]
+  - 필드 제거 시 호출부 / 테스트 / Mapper / DB 컬럼까지 모두 정리되었는가
+
+- [ ] **메서드 시그니처 변경 영향도** [MAJOR]
+  - 도메인 메서드 시그니처가 바뀌면 모든 호출부에서 새 파라미터를 전달하는가
+  - 예: `Showcase.update()`에 `modelCode` 파라미터 추가 시 `UpdateShowcaseService`도 같이 수정되어야 함
+
+- [ ] **Long Parameter List** [MAJOR]
+  - 도메인 메서드의 파라미터가 5개 이상이면 VO로 묶을 것을 권장
+  - 동일 타입(String) 파라미터가 연속되면 호출 시 순서 실수가 컴파일러에 잡히지 않음
+
+#### 능동 추적 패턴
+
+리뷰 시 다음 시나리오를 자동으로 의심한다:
+
+1. **"필드 X가 Request DTO에 새로 추가되었다"** → grep으로 추적해서 Service/Domain까지 도달하는지 확인
+2. **"도메인 메서드 시그니처가 바뀌었다"** → 모든 호출부의 인자 개수/순서 검증
+3. **"DTO record에 새 필드가 추가되었다"** → 생성자 호출부(`new XxxCommand(...)`) 모두 갱신되었는지 확인
+4. **"포트 인터페이스에 메서드가 추가되었다"** → 모든 구현체와 테스트 스텁이 갱신되었는지 확인
+
 ---
 
 ## 심각도 및 승인 기준
