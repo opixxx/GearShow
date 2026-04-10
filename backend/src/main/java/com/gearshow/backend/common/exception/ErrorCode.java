@@ -19,6 +19,10 @@ public enum ErrorCode {
     USER_HAS_ACTIVE_TRANSACTION(400, "진행 중인 거래가 있어 탈퇴할 수 없습니다"),
     USER_PHONE_NOT_VERIFIED(400, "휴대폰 인증이 필요합니다"),
     USER_INVALID_STATUS_TRANSITION(400, "유효하지 않은 사용자 상태 전이입니다"),
+    USER_PROFILE_IMAGE_TOO_LARGE(400, "프로필 이미지는 5MB 이하여야 합니다"),
+    USER_UNSUPPORTED_PROFILE_IMAGE_TYPE(400, "지원하지 않는 이미지 형식입니다 (JPEG, PNG, WebP만 허용)"),
+    USER_PROFILE_IMAGE_UPLOAD_FAILED(500, "프로필 이미지 업로드에 실패했습니다"),
+    USER_PROFILE_IMAGE_DELETE_FAILED(500, "프로필 이미지 삭제에 실패했습니다"),
 
     // AUTH
     AUTH_ACCOUNT_NOT_FOUND(404, "인증 계정을 찾을 수 없습니다"),

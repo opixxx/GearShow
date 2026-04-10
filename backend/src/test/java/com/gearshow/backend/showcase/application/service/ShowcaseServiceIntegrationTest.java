@@ -245,7 +245,7 @@ class ShowcaseServiceIntegrationTest {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             UpdateShowcaseCommand command = new UpdateShowcaseCommand(
-                    "수정된 제목", null, null, null, null, null);
+                    "수정된 제목", null, null, null, null, null, null);
 
             // When
             updateShowcaseUseCase.update(showcaseId, 1L, command);
@@ -257,12 +257,28 @@ class ShowcaseServiceIntegrationTest {
         }
 
         @Test
+        @DisplayName("modelCode를 수정한다")
+        void update_modelCode_success() {
+            // Given
+            Long showcaseId = createAndGetShowcaseId(1L);
+            UpdateShowcaseCommand command = new UpdateShowcaseCommand(
+                    null, null, "NEW-MODEL-999", null, null, null, null);
+
+            // When
+            updateShowcaseUseCase.update(showcaseId, 1L, command);
+
+            // Then
+            ShowcaseDetailResult result = getShowcaseUseCase.getShowcase(showcaseId);
+            assertThat(result.modelCode()).isEqualTo("NEW-MODEL-999");
+        }
+
+        @Test
         @DisplayName("소유자가 아닌 사용자가 수정하면 예외가 발생한다")
         void update_byNonOwner_throwsException() {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             UpdateShowcaseCommand command = new UpdateShowcaseCommand(
-                    "수정", null, null, null, null, null);
+                    "수정", null, null, null, null, null, null);
 
             // When & Then
             assertThatThrownBy(() -> updateShowcaseUseCase.update(showcaseId, 999L, command))
@@ -408,6 +424,30 @@ class ShowcaseServiceIntegrationTest {
             assertThatThrownBy(() -> manageShowcaseImageUseCase.deleteImage(
                     showcaseIdA, imageBId, 1L))
                     .isInstanceOf(ImageNotBelongToShowcaseException.class);
+        }
+
+        @Test
+        @DisplayName("대표 이미지를 삭제하면 다음 이미지가 자동으로 대표로 승격된다")
+        void deleteImage_primary_autoPromotesNextImage() {
+            // Given - 쇼케이스 + 이미지 1장 (자동으로 primary)
+            Long showcaseId = createAndGetShowcaseId(1L);
+            manageShowcaseImageUseCase.addImages(showcaseId, 1L, createFakeImageKeys(1));
+
+            ShowcaseDetailResult before = getShowcaseUseCase.getShowcase(showcaseId);
+            Long primaryImageId = before.images().stream()
+                    .filter(ShowcaseDetailResult.ImageResult::isPrimary)
+                    .findFirst()
+                    .orElseThrow()
+                    .showcaseImageId();
+
+            // When - 대표 이미지 삭제
+            manageShowcaseImageUseCase.deleteImage(showcaseId, primaryImageId, 1L);
+
+            // Then - 남은 이미지 중 하나가 대표로 승격되어 있다
+            ShowcaseDetailResult after = getShowcaseUseCase.getShowcase(showcaseId);
+            assertThat(after.images())
+                    .isNotEmpty()
+                    .anyMatch(ShowcaseDetailResult.ImageResult::isPrimary);
         }
 
         @Test

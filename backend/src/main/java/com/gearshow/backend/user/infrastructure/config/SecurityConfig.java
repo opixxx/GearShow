@@ -47,7 +47,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/showcases/**").permitAll()
                         // 닉네임 중복 확인은 인증 없이 접근 가능
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/nicknames/check").permitAll()
-                        // /users/me는 인증 필수 (/{userId}보다 먼저 매칭되도록)
+                        // /users/me 및 하위 경로는 인증 필수 (/{userId}보다 먼저 매칭되도록)
+                        .requestMatchers("/api/v1/users/me/**").authenticated()
                         .requestMatchers("/api/v1/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/{userId}").permitAll()
                         // 나머지는 인증 필요

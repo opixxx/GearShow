@@ -172,6 +172,91 @@ tools:
 - [ ] **불필요한 전체 조회**: 필요한 필드만 조회하지 않고 Entity 전체를 로드
 - [ ] **트랜잭션 범위 과다**: 읽기 전용 작업에 쓰기 트랜잭션 사용 (`@Transactional(readOnly = true)` 미사용)
 
+### 10. 데드 코드 / 변경 추적 [CRITICAL]
+
+DTO/도메인 모델에 필드를 추가했지만 호출부에서 실제로 사용되지 않으면 **저장 누락 버그**가 발생한다.
+체크리스트가 아니라 **반드시 grep으로 추적해야 한다.**
+
+- [ ] **새 필드가 모든 호출 경로에서 사용되는가**
+  - DTO/Command/Domain 모델에 새 필드가 추가되었다면, 다음을 모두 확인:
+    1. 생성자/팩토리에서 받는가
+    2. Service에서 도메인으로 전달되는가
+    3. 도메인 모델의 update/change 메서드에서 처리하는가
+    4. 응답 DTO에 반영되는가
+
+  ```bash
+  # 새 필드명을 grep으로 모든 사용처 추적
+  grep -rn "newFieldName" backend/src/main/java
+  ```
+- [ ] **사용되지 않는 public 메서드 추가**: 새 메서드를 추가했지만 호출부 0건
+- [ ] **삭제된 메서드의 잔재**: 메서드 제거 시 호출부 전부 정리되었는가
+- [ ] **add only, never call**: 새 입력 필드가 Request DTO에 추가되었지만 Service/Domain까지 전달되지 않고 무시됨
+
+### 11. 테스트 코드 품질 [MAJOR]
+
+테스트 코드도 production 코드와 동일한 품질 기준으로 검토한다.
+
+- [ ] **테스트 스텁 가변 상태 공유**
+  - 싱글톤 스코프(`@Bean`)로 등록된 테스트 스텁이 내부에 가변 컬렉션(`List`, `Map`)을 가지면 **테스트 간 상태가 공유**되어 플래키 테스트의 원인이 된다.
+  - 해결: `@BeforeEach`에서 명시적 초기화 메서드 호출, 또는 `@Scope("prototype")` 사용
+  ```java
+  // Bad: 싱글톤 스텁이 누적 상태 보유
+  public class TestStub implements SomePort {
+      public final List<String> uploadedKeys = new ArrayList<>();  // 테스트 간 공유됨
+  }
+
+  // Good: 초기화 메서드 제공
+  public class TestStub implements SomePort {
+      private final List<String> uploadedKeys = new ArrayList<>();
+      public List<String> uploadedKeys() { return List.copyOf(uploadedKeys); }
+      public void reset() { uploadedKeys.clear(); }
+  }
+  ```
+
+- [ ] **약한 assertion**
+  - `doesNotContain`, `isNotNull`, `isNotEmpty`만으로 끝나는 검증은 의도를 보장하지 못한다.
+  - 예: "이전 이미지가 삭제되었는지" 검증할 때 `assertThat(url).doesNotContain("first.jpg")`는 키 생성 방식에 따라 우연히 통과할 수 있다. **호출 자체를 검증**해야 한다.
+  ```java
+  // Bad: 결과 URL 문자열만 검증 → 삭제 호출 없이도 통과 가능
+  assertThat(result.profileImageUrl()).doesNotContain("first.jpg");
+
+  // Good: 실제 삭제 호출 추적
+  assertThat(stub.deletedKeys()).contains(extractKeyOf(firstUrl));
+  ```
+
+- [ ] **테스트 격리 위반**: 다른 테스트의 데이터에 의존, 정적 필드 사용, `@BeforeEach` 누락
+- [ ] **테스트 더블 호출 검증 누락**: Mock/Stub의 호출 횟수/인자 검증 없이 통과 가능한 케이스
+- [ ] **Happy Path만 존재**: Unhappy Path(예외, 경계값) 없음
+
+### 12. 엣지 케이스 [MAJOR]
+
+체크리스트가 아니라 **항상 의심해야 할 패턴**이다.
+
+- [ ] **빈 문자열 vs null**: `""`와 `null`을 동일하게 처리하는가, 다르게 처리하는가 의도가 명확한가
+  ```java
+  // 의심: nickname == null이면 변경 안 함, 빈 문자열이면 어떻게 처리?
+  if (command.nickname() != null) { ... }  // ""은 통과해서 invalid 데이터로 저장될 수 있음
+  ```
+
+- [ ] **Trailing slash / leading slash 미정규화**
+  ```java
+  // 의심: cdnUrl이 "https://cdn.example.com/"으로 끝나면 // 발생
+  return cdnUrl + "/" + s3Key;  // → "https://cdn.example.com//profiles/uuid.jpg"
+  ```
+
+- [ ] **prefix-only URL에서 빈 키 반환**
+  ```java
+  // 의심: imageUrl이 prefix와 정확히 같으면 빈 문자열 반환
+  if (imageUrl.startsWith(prefix)) {
+      return imageUrl.substring(prefix.length());  // ""을 반환할 수 있음
+  }
+  ```
+
+- [ ] **빈 컬렉션 vs null**: 메서드가 빈 리스트를 반환하는지 null을 반환하는지 일관성
+- [ ] **경계값**: 0, -1, MAX_VALUE, 빈 배열, 단일 요소 컬렉션 처리
+- [ ] **유니크 제약과 동시성**: `existsBy*` 검사 후 `save()`에 TOCTOU 갭이 있는가
+- [ ] **외부 입력의 신뢰**: `MultipartFile.getContentType()` 같은 클라이언트 제공 메타데이터를 검증 없이 사용
+
 ---
 
 ## 심각도 및 승인 기준

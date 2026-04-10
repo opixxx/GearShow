@@ -42,6 +42,12 @@ public interface ShowcaseImagePort {
     int countByShowcaseId(Long showcaseId);
 
     /**
+     * 쇼케이스 ID로 가장 정렬 순서가 낮은 이미지 1건을 조회한다.
+     * 대표 이미지 삭제 후 다음 대표 후보를 찾을 때 사용한다.
+     */
+    Optional<ShowcaseImage> findFirstByShowcaseIdOrderBySortOrder(Long showcaseId);
+
+    /**
      * 쇼케이스 ID로 대표 이미지 URL을 조회한다.
      */
     String findPrimaryImageUrlByShowcaseId(Long showcaseId);

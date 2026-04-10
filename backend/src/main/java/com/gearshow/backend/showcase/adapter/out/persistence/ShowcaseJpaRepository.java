@@ -12,11 +12,20 @@ import java.util.List;
 
 /**
  * 쇼케이스 JPA 저장소.
+ *
+ * <p>인덱스 권장 (DB에 직접 추가 예정):</p>
+ * <ul>
+ *     <li>{@code (status, created_at DESC, id DESC)} — 공개 목록 커서 페이징 커버링</li>
+ *     <li>{@code (owner_id, status, created_at DESC, id DESC)} — 내 쇼케이스 커서 페이징 커버링</li>
+ *     <li>{@code (owner_id)} — findByOwnerId 단순 조회</li>
+ *     <li>{@code (catalog_item_id)} — 카탈로그 → 쇼케이스 역참조</li>
+ * </ul>
  */
 public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, Long> {
 
     /**
      * 소유자 ID로 쇼케이스 목록을 조회한다.
+     * 인덱스 권장: {@code (owner_id)}
      */
     List<ShowcaseJpaEntity> findByOwnerId(Long ownerId);
 

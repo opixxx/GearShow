@@ -141,6 +141,26 @@ public class TestApiClient {
         return TestResponse.from(response);
     }
 
+    /**
+     * Multipart form-data PATCH 요청을 보낸다.
+     *
+     * @param path  API 경로
+     * @param parts multipart 파트 (key-value)
+     * @return 파싱된 응답
+     */
+    public TestResponse<Map<String, Object>> patchMultipart(String path, MultiValueMap<String, Object> parts) {
+        HttpHeaders headers = buildHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                path,
+                HttpMethod.PATCH,
+                new HttpEntity<>(parts, headers),
+                new ParameterizedTypeReference<>() {}
+        );
+        return TestResponse.from(response);
+    }
+
     private HttpHeaders buildHeaders() {
         HttpHeaders headers = new HttpHeaders();
         if (authToken != null) {

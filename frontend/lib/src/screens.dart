@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
@@ -405,16 +406,13 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   late int _index;
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _index = widget.initialIndex;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screens = [
+    _screens = [
       HomeScreen(controller: widget.controller),
       ShowcaseCreateScreen(controller: widget.controller),
       const UnsupportedFeatureScreen(
@@ -423,9 +421,12 @@ class _MainShellState extends State<MainShell> {
       ),
       MyPageScreen(controller: widget.controller),
     ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: screens),
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: NavigationBar(
         backgroundColor: const Color(0xFF111111),
         indicatorColor: const Color(0xFF164E3F),
@@ -556,10 +557,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ShowcaseCard(
                         item: item,
-                        onTap: () => Navigator.of(context).pushNamed(
-                          '/showcase/detail',
-                          arguments: ShowcaseDetailArgs(item.showcaseId),
-                        ),
+                        onTap: () async {
+                          final deleted = await Navigator.of(context).pushNamed(
+                            '/showcase/detail',
+                            arguments: ShowcaseDetailArgs(item.showcaseId),
+                          );
+                          if (deleted == true && mounted) setState(() {});
+                        },
                       ),
                     );
                   },
@@ -828,10 +832,13 @@ class _CatalogDetailScreenState extends State<CatalogDetailScreen> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(18),
-                            onTap: () => Navigator.of(context).pushNamed(
-                              '/showcase/detail',
-                              arguments: ShowcaseDetailArgs(showcase.showcaseId),
-                            ),
+                            onTap: () async {
+                              final result = await Navigator.of(context).pushNamed(
+                                '/showcase/detail',
+                                arguments: ShowcaseDetailArgs(showcase.showcaseId),
+                              );
+                              if (result == true && mounted) setState(() {});
+                            },
                             child: Ink(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -903,7 +910,7 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
   final PageController _pageController = PageController();
   int _pageIndex = 0;
   bool _submittingComment = false;
-  late Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments})> _loadFuture;
+  late Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments, UserProfile? ownerProfile})> _loadFuture;
 
   @override
   void initState() {
@@ -918,7 +925,7 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
     super.dispose();
   }
 
-  Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments})> _load() async {
+  Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments, UserProfile? ownerProfile})> _load() async {
     final detail = await widget.controller.api.getShowcaseDetail(
       baseUrl: widget.controller.baseUrl,
       showcaseId: widget.args.showcaseId,
@@ -935,7 +942,14 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
       showcaseId: detail.showcaseId,
       size: 30,
     );
-    return (detail: detail, catalog: catalog, comments: comments.items);
+    UserProfile? ownerProfile;
+    try {
+      ownerProfile = await widget.controller.api.getUserProfile(
+        baseUrl: widget.controller.baseUrl,
+        userId: detail.ownerId,
+      );
+    } catch (_) {}
+    return (detail: detail, catalog: catalog, comments: comments.items, ownerProfile: ownerProfile);
   }
 
   Future<void> _submitComment() async {
@@ -975,29 +989,115 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
     }
   }
 
+  /// 쇼케이스 수정 바텀시트를 표시한다.
+  Future<void> _showEditSheet(ShowcaseDetail detail) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _ShowcaseEditSheet(
+        controller: widget.controller,
+        detail: detail,
+      ),
+    );
+    if (result == true && mounted) {
+      setState(() {
+        _loadFuture = _load();
+      });
+    }
+  }
+
+  /// 쇼케이스 삭제 확인 다이얼로그를 표시한다.
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('쇼케이스 삭제'),
+        content: const Text('정말 삭제하시겠습니까?\n삭제된 쇼케이스는 복구할 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      final token = widget.controller.session?.accessToken;
+      if (token == null || token.isEmpty) {
+        _showSnack(context, '로그인이 필요합니다.');
+        return;
+      }
+      try {
+        await widget.controller.api.deleteShowcase(
+          baseUrl: widget.controller.baseUrl,
+          accessToken: token,
+          showcaseId: widget.args.showcaseId,
+        );
+        if (!mounted) return;
+        _showSnack(context, '쇼케이스가 삭제되었습니다.');
+        Navigator.of(context).pop(true);
+      } on ApiException catch (error) {
+        _showSnack(context, error.message);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(),
-      body: FutureBuilder<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments})>(
-        future: _loadFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _ErrorState(
+    return FutureBuilder<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments, UserProfile? ownerProfile})>(
+      future: _loadFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: _ErrorState(
               message: _errorText(snapshot.error),
               onRetry: () => setState(() {
                 _loadFuture = _load();
               }),
-            );
-          }
-          final detail = snapshot.data!.detail;
-          final catalog = snapshot.data!.catalog;
-          final comments = snapshot.data!.comments;
-          final images = detail.images;
-          return Column(
+            ),
+          );
+        }
+        final detail = snapshot.data!.detail;
+        final catalog = snapshot.data!.catalog;
+        final comments = snapshot.data!.comments;
+        final ownerProfile = snapshot.data!.ownerProfile;
+        final images = detail.images;
+        final bool isOwner = widget.controller.profile?.userId == detail.ownerId;
+
+        return Scaffold(
+          appBar: AppBar(
+            actions: isOwner
+                ? [
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _showEditSheet(detail);
+                        } else if (value == 'delete') {
+                          _confirmDelete();
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('수정')),
+                        PopupMenuItem(value: 'delete', child: Text('삭제', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  ]
+                : null,
+          ),
+          body: Column(
             children: [
               Expanded(
                 child: ListView(
@@ -1076,15 +1176,20 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                               CircleAvatar(
                                 radius: 20,
                                 backgroundColor: const Color(0xFF0F766E),
-                                child: Text(
-                                  _ownerEmoji(detail.ownerId),
-                                  style: const TextStyle(fontSize: 18),
-                                ),
+                                backgroundImage: ownerProfile?.profileImageUrl != null && ownerProfile!.profileImageUrl!.isNotEmpty
+                                    ? NetworkImage(ownerProfile.profileImageUrl!)
+                                    : null,
+                                child: ownerProfile?.profileImageUrl == null || ownerProfile!.profileImageUrl!.isEmpty
+                                    ? Text(
+                                        _profileAvatar(ownerProfile),
+                                        style: const TextStyle(fontSize: 18),
+                                      )
+                                    : null,
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  '판매자 #${detail.ownerId}',
+                                  ownerProfile?.nickname ?? '판매자 #${detail.ownerId}',
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                                 ),
                               ),
@@ -1207,8 +1312,285 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                 onPressed: () => _showSnack(context, '거래/채팅 backend API가 아직 없습니다.'),
               ),
             ],
-          );
-        },
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 쇼케이스 수정 바텀시트.
+class _ShowcaseEditSheet extends StatefulWidget {
+  const _ShowcaseEditSheet({
+    required this.controller,
+    required this.detail,
+  });
+
+  final AppController controller;
+  final ShowcaseDetail detail;
+
+  @override
+  State<_ShowcaseEditSheet> createState() => _ShowcaseEditSheetState();
+}
+
+class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _modelCodeController;
+  late List<ShowcaseImage> _images;
+  late bool _isForSale;
+  bool _saving = false;
+  bool _imageChanged = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.detail;
+    _titleController = TextEditingController(text: d.title);
+    _descriptionController = TextEditingController(text: d.description ?? '');
+    _modelCodeController = TextEditingController(text: d.modelCode ?? '');
+    _images = List.from(d.images);
+    _isForSale = d.isForSale;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _modelCodeController.dispose();
+    super.dispose();
+  }
+
+  /// 갤러리에서 이미지를 선택하여 추가한다.
+  Future<void> _addImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
+
+    try {
+      // 1. 백엔드에 이미지 추가 (Presigned URL 발급 + S3 업로드 + DB 등록까지 처리)
+      await widget.controller.api.addShowcaseImage(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: widget.detail.showcaseId,
+        imageFile: picked,
+      );
+      if (!mounted) return;
+      // 상세 다시 로드하여 이미지 목록 갱신
+      final detail = await widget.controller.api.getShowcaseDetail(
+        baseUrl: widget.controller.baseUrl,
+        showcaseId: widget.detail.showcaseId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _images = List.from(detail.images);
+        _imageChanged = true;
+      });
+    } on ApiException catch (error) {
+      _showSnack(context, error.message);
+    }
+  }
+
+  /// 이미지를 삭제한다.
+  /// 삭제 후 백엔드에서 상세를 다시 조회해 대표 이미지 자동 승격 결과를 반영한다.
+  Future<void> _deleteImage(ShowcaseImage image) async {
+    if (_images.length <= 1) {
+      _showSnack(context, '최소 1개의 이미지가 필요합니다.');
+      return;
+    }
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
+    try {
+      await widget.controller.api.deleteShowcaseImage(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: widget.detail.showcaseId,
+        imageId: image.showcaseImageId,
+      );
+      // 백엔드가 대표 이미지를 자동 승격할 수 있으므로 상세를 다시 조회한다
+      final detail = await widget.controller.api.getShowcaseDetail(
+        baseUrl: widget.controller.baseUrl,
+        showcaseId: widget.detail.showcaseId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _images = List.from(detail.images);
+        _imageChanged = true;
+      });
+    } on ApiException catch (error) {
+      _showSnack(context, error.message);
+    }
+  }
+
+  Future<void> _save() async {
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.controller.api.updateShowcase(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: widget.detail.showcaseId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        modelCode: _modelCodeController.text.trim(),
+        isForSale: _isForSale,
+      );
+      if (!mounted) return;
+      _showSnack(context, '쇼케이스가 수정되었습니다.');
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      _showSnack(context, error.message);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16, right: 16, top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 헤더
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('쇼케이스 수정', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(_imageChanged ? true : null),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // 이미지 관리
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('이미지 (${_images.length}장)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                GestureDetector(
+                  onTap: _addImage,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFF19C37D)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_photo_alternate_outlined, size: 16, color: Color(0xFF19C37D)),
+                        SizedBox(width: 4),
+                        Text('추가', style: TextStyle(color: Color(0xFF19C37D), fontSize: 12, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 80,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _images.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final image = _images[i];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(image.imageUrl, width: 80, height: 80, fit: BoxFit.cover),
+                      ),
+                      if (image.isPrimary)
+                        Positioned(left: 4, top: 4, child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFF19C37D), borderRadius: BorderRadius.circular(4)),
+                          child: const Text('대표', style: TextStyle(color: Colors.white, fontSize: 9)),
+                        )),
+                      Positioned(right: 0, top: 0, child: GestureDetector(
+                        onTap: () => _deleteImage(image),
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      )),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 제목
+            TextField(
+              controller: _titleController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: '제목'),
+              maxLength: 100,
+            ),
+            const SizedBox(height: 12),
+
+            // 설명
+            TextField(
+              controller: _descriptionController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: '설명'),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+
+            // 모델 코드
+            TextField(
+              controller: _modelCodeController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: '모델 코드'),
+            ),
+            const SizedBox(height: 12),
+
+            // 판매 여부
+            SwitchListTile(
+              title: const Text('판매 중', style: TextStyle(color: Colors.white)),
+              value: _isForSale,
+              onChanged: (v) => setState(() => _isForSale = v),
+              activeColor: const Color(0xFF19C37D),
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 12),
+
+            // 저장 버튼
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: Text(_saving ? '저장 중...' : '저장하기'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -2448,7 +2830,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
           if (snapshot.hasError) {
             return _ErrorState(
               message: _errorText(snapshot.error),
-              onRetry: () => setState(() => _future = _loadProfile()),
+              onRetry: () {
+                setState(() {
+                  _future = _loadProfile();
+                });
+              },
             );
           }
           final profile = snapshot.data;
@@ -2480,10 +2866,15 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         CircleAvatar(
                           radius: 38,
                           backgroundColor: const Color(0xFF0F766E),
-                          child: Text(
-                            _profileAvatar(profile),
-                            style: const TextStyle(fontSize: 34),
-                          ),
+                          backgroundImage: profile.profileImageUrl != null && profile.profileImageUrl!.isNotEmpty
+                              ? NetworkImage(profile.profileImageUrl!)
+                              : null,
+                          child: profile.profileImageUrl == null || profile.profileImageUrl!.isEmpty
+                              ? Text(
+                                  _profileAvatar(profile),
+                                  style: const TextStyle(fontSize: 34),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -2508,7 +2899,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     FilledButton(
                       onPressed: () async {
                         await Navigator.of(context).pushNamed('/mypage/profile');
-                        if (mounted) setState(() => _future = _loadProfile());
+                        if (mounted) {
+                          setState(() {
+                            _future = _loadProfile();
+                          });
+                        }
                       },
                       child: const Text('프로필 수정'),
                     ),
@@ -2574,34 +2969,47 @@ class ProfileEditScreen extends StatefulWidget {
 
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   late final TextEditingController _nicknameController;
-  late final TextEditingController _profileUrlController;
   bool _saving = false;
+  String? _profileImageUrl;
+  XFile? _selectedImage;
 
   @override
   void initState() {
     super.initState();
     final profile = widget.controller.profile;
     _nicknameController = TextEditingController(text: profile?.nickname ?? '');
-    _profileUrlController = TextEditingController(text: profile?.profileImageUrl ?? '');
+    _profileImageUrl = profile?.profileImageUrl;
   }
 
   @override
   void dispose() {
     _nicknameController.dispose();
-    _profileUrlController.dispose();
     super.dispose();
   }
 
+  /// 갤러리에서 이미지를 선택한다.
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 80,
+    );
+    if (picked != null) {
+      setState(() => _selectedImage = picked);
+    }
+  }
+
+  /// 프로필을 저장한다. Multipart로 닉네임과 이미지를 한 번에 전송한다.
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
       await widget.controller.saveProfile(
         nickname: _nicknameController.text.trim(),
-        profileImageUrl: _profileUrlController.text.trim(),
+        profileImage: _selectedImage,
       );
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       _showSnack(context, '프로필이 수정되었습니다.');
       Navigator.of(context).pop();
     } on ApiException catch (error) {
@@ -2624,13 +3032,46 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 Center(
-                  child: CircleAvatar(
-                    radius: 48,
-                    backgroundColor: const Color(0xFF0F766E),
-                    child: Text(
-                      _profileAvatar(widget.controller.profile),
-                      style: const TextStyle(fontSize: 42),
+                  child: GestureDetector(
+                    onTap: _saving ? null : _pickImage,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 48,
+                          backgroundColor: const Color(0xFF0F766E),
+                          backgroundImage: _resolveAvatarImage(),
+                          child: _resolveAvatarImage() == null
+                              ? Text(
+                                  _profileAvatar(widget.controller.profile),
+                                  style: const TextStyle(fontSize: 42),
+                                )
+                              : null,
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF19C37D),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Center(
+                  child: Text(
+                    '사진을 탭하여 변경',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -2639,12 +3080,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(labelText: '닉네임'),
                   maxLength: 20,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _profileUrlController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: '프로필 이미지 URL'),
                 ),
               ],
             ),
@@ -2657,6 +3092,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         ],
       ),
     );
+  }
+
+  /// 아바타에 표시할 이미지를 결정한다.
+  /// 새로 선택한 이미지 > 기존 프로필 이미지 > null(이모지 표시)
+  ImageProvider? _resolveAvatarImage() {
+    if (_selectedImage != null) {
+      return FileImage(File(_selectedImage!.path));
+    }
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return NetworkImage(_profileImageUrl!);
+    }
+    return null;
   }
 }
 
@@ -2743,10 +3190,13 @@ class _MyShowcasesScreenState extends State<MyShowcasesScreen> {
                       child: _ShowcaseCard(
                         item: item,
                         statusText: _tab == '공개' ? '공개' : '비공개',
-                        onTap: () => Navigator.of(context).pushNamed(
-                          '/showcase/detail',
-                          arguments: ShowcaseDetailArgs(item.showcaseId),
-                        ),
+                        onTap: () async {
+                          final result = await Navigator.of(context).pushNamed(
+                            '/showcase/detail',
+                            arguments: ShowcaseDetailArgs(item.showcaseId),
+                          );
+                          if (result == true && mounted) setState(() {});
+                        },
                       ),
                     );
                   },
@@ -2986,8 +3436,7 @@ class _ImageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // LocalStack의 localhost URL을 실기기에서 접근 가능하도록 변환
-    final resolvedUrl = imageUrl?.replaceAll('localhost', '192.168.68.105');
+    final resolvedUrl = imageUrl;
     final emojiWidget = Center(
       child: Text(emoji, style: TextStyle(fontSize: size.isFinite ? size / 3 : 56)),
     );
@@ -3539,7 +3988,6 @@ class _NicknameSetupScreenState extends State<NicknameSetupScreen> {
     try {
       await widget.controller.saveProfile(
         nickname: _nicknameController.text.trim(),
-        profileImageUrl: '',
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/shell');

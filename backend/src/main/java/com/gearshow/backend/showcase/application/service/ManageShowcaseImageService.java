@@ -70,16 +70,24 @@ public class ManageShowcaseImageService implements ManageShowcaseImageUseCase {
 
         // 대표 이미지가 삭제된 경우 다른 이미지를 대표로 승격
         if (image.isPrimary()) {
-            showcaseImagePort.findByShowcaseId(showcaseId).stream()
-                    .findFirst()
-                    .ifPresent(next -> {
-                        Showcase updated = showcase.changePrimaryImageUrl(next.getImageUrl());
-                        showcasePort.save(updated);
-                    });
+            promoteNextAsPrimary(showcase, showcaseId);
         }
 
         // S3에서 이미지 파일 삭제
         imageStoragePort.delete(image.getImageUrl());
+    }
+
+    /**
+     * 남은 이미지 중 sortOrder가 가장 낮은 1건을 새 대표 이미지로 승격한다.
+     * Showcase의 primaryImageUrl과 ShowcaseImage의 isPrimary 플래그를 함께 갱신한다.
+     */
+    private void promoteNextAsPrimary(Showcase showcase, Long showcaseId) {
+        showcaseImagePort.findFirstByShowcaseIdOrderBySortOrder(showcaseId)
+                .ifPresent(next -> {
+                    Showcase updated = showcase.changePrimaryImageUrl(next.getImageUrl());
+                    showcasePort.save(updated);
+                    showcaseImagePort.save(next.promoteToPrimary());
+                });
     }
 
     @Override

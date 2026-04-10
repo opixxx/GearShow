@@ -15,6 +15,8 @@ public record UpdateShowcaseRequest(
 
         String description,
 
+        String modelCode,
+
         String userSize,
 
         ConditionGrade conditionGrade,
@@ -30,7 +32,7 @@ public record UpdateShowcaseRequest(
      */
     public UpdateShowcaseCommand toCommand() {
         return new UpdateShowcaseCommand(
-                title, description, userSize,
+                title, description, modelCode, userSize,
                 conditionGrade, wearCount, isForSale);
     }
 }

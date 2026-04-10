@@ -5,6 +5,7 @@ import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseStatusTransitionException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
+import com.gearshow.backend.showcase.domain.vo.ShowcaseUpdate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -192,6 +193,63 @@ class ShowcaseTest {
                     .isInstanceOf(InvalidShowcaseStatusTransitionException.class);
             assertThatThrownBy(showcase::markAsSold)
                     .isInstanceOf(InvalidShowcaseStatusTransitionException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("쇼케이스 수정")
+    class Update {
+
+        @Test
+        @DisplayName("modelCode를 포함한 모든 필드를 변경한다")
+        void update_allFieldsIncludingModelCode_changesAll() {
+            // Given
+            Showcase showcase = createShowcase();
+            ShowcaseUpdate update = new ShowcaseUpdate(
+                    "새 제목", "새 설명", "NEW-CODE-123",
+                    "280", ConditionGrade.S, 10, true);
+
+            // When
+            Showcase updated = showcase.update(update);
+
+            // Then
+            assertThat(updated.getTitle()).isEqualTo("새 제목");
+            assertThat(updated.getDescription()).isEqualTo("새 설명");
+            assertThat(updated.getModelCode()).isEqualTo("NEW-CODE-123");
+            assertThat(updated.getUserSize()).isEqualTo("280");
+            assertThat(updated.getConditionGrade()).isEqualTo(ConditionGrade.S);
+            assertThat(updated.getWearCount()).isEqualTo(10);
+            assertThat(updated.isForSale()).isTrue();
+        }
+
+        @Test
+        @DisplayName("modelCode가 null이면 기존 값을 유지한다")
+        void update_nullModelCode_keepsOriginal() {
+            // Given
+            Showcase showcase = createShowcase();
+            String original = showcase.getModelCode();
+            ShowcaseUpdate update = new ShowcaseUpdate(
+                    "새 제목", null, null, null, null, null, null);
+
+            // When
+            Showcase updated = showcase.update(update);
+
+            // Then
+            assertThat(updated.getModelCode()).isEqualTo(original);
+            assertThat(updated.getTitle()).isEqualTo("새 제목");
+        }
+
+        @Test
+        @DisplayName("title이 빈 문자열이면 예외가 발생한다")
+        void update_blankTitle_throwsException() {
+            // Given
+            Showcase showcase = createShowcase();
+            ShowcaseUpdate update = new ShowcaseUpdate(
+                    "   ", null, null, null, null, null, null);
+
+            // When & Then
+            assertThatThrownBy(() -> showcase.update(update))
+                    .isInstanceOf(InvalidShowcaseException.class);
         }
     }
 }
