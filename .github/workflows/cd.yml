@@ -145,6 +145,13 @@ jobs:
             for i in $(seq 1 12); do
               if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
                 echo "✅ 헬스체크 성공 (image: $IMAGE_TAG)"
+
+                # 배포 성공 시에만 디스크 정리 실행.
+                # --filter "until=24h" 로 24시간 이내 이미지는 보존하여
+                # 직전 버전으로의 즉시 롤백 경로를 보장한다.
+                echo "🧹 오래된 Docker 이미지 정리 (24시간 초과)"
+                docker image prune -a -f --filter "until=24h" || true
+                df -h / | tail -1
                 exit 0
               fi
               echo "헬스체크 대기중... ($i/12)"
