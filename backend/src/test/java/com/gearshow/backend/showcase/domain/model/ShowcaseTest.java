@@ -197,7 +197,7 @@ class ShowcaseTest {
     }
 
     @Nested
-    @DisplayName("update")
+    @DisplayName("쇼케이스 수정")
     class Update {
 
         @Test

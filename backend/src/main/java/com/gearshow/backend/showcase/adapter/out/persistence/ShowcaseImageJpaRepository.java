@@ -50,11 +50,12 @@ public interface ShowcaseImageJpaRepository extends JpaRepository<ShowcaseImageJ
     /**
      * 쇼케이스 ID로 가장 정렬 순서가 낮은 이미지 1건을 조회한다.
      * 대표 이미지 삭제 후 다음 대표 후보를 찾을 때 사용한다.
-     * 인덱스 권장: {@code (showcase_id, sort_order)} — 커버링 인덱스로 LIMIT 1 최적화
+     * sortOrder 동점 시 id ASC를 2차 정렬 키로 사용해 결정적 결과를 보장한다.
+     * 인덱스 권장: {@code (showcase_id, sort_order, id)} — 커버링 인덱스로 LIMIT 1 최적화
      */
     @Query("SELECT si FROM ShowcaseImageJpaEntity si" +
             " WHERE si.showcaseId = :showcaseId" +
-            " ORDER BY si.sortOrder ASC")
+            " ORDER BY si.sortOrder ASC, si.id ASC")
     List<ShowcaseImageJpaEntity> findFirstByShowcaseIdOrderBySortOrder(
             @Param("showcaseId") Long showcaseId, PageRequest pageRequest);
 

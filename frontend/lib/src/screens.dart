@@ -1030,10 +1030,15 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
       ),
     );
     if (confirmed == true && mounted) {
+      final token = widget.controller.session?.accessToken;
+      if (token == null || token.isEmpty) {
+        _showSnack(context, '로그인이 필요합니다.');
+        return;
+      }
       try {
         await widget.controller.api.deleteShowcase(
           baseUrl: widget.controller.baseUrl,
-          accessToken: widget.controller.session!.accessToken,
+          accessToken: token,
           showcaseId: widget.args.showcaseId,
         );
         if (!mounted) return;
@@ -1362,11 +1367,17 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked == null) return;
 
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
+
     try {
-      // 1. Presigned URL 발급
-      final presigned = await widget.controller.api.addShowcaseImage(
+      // 1. 백엔드에 이미지 추가 (Presigned URL 발급 + S3 업로드 + DB 등록까지 처리)
+      await widget.controller.api.addShowcaseImage(
         baseUrl: widget.controller.baseUrl,
-        accessToken: widget.controller.session!.accessToken,
+        accessToken: token,
         showcaseId: widget.detail.showcaseId,
         imageFile: picked,
       );
@@ -1393,10 +1404,15 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
       _showSnack(context, '최소 1개의 이미지가 필요합니다.');
       return;
     }
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
     try {
       await widget.controller.api.deleteShowcaseImage(
         baseUrl: widget.controller.baseUrl,
-        accessToken: widget.controller.session!.accessToken,
+        accessToken: token,
         showcaseId: widget.detail.showcaseId,
         imageId: image.showcaseImageId,
       );
@@ -1416,11 +1432,16 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
   }
 
   Future<void> _save() async {
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
     setState(() => _saving = true);
     try {
       await widget.controller.api.updateShowcase(
         baseUrl: widget.controller.baseUrl,
-        accessToken: widget.controller.session!.accessToken,
+        accessToken: token,
         showcaseId: widget.detail.showcaseId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
