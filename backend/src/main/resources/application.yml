@@ -15,7 +15,11 @@ spring:
     open-in-view: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
+    # default 값을 의도적으로 두지 않는다.
+    # 운영 환경에서 환경변수 누락 시 localhost:9092 로 조용히 fallback 되어 기동이 실패해도
+    # 원인 파악이 어려운 사고를 막기 위해 fail-fast 로 동작시킨다.
+    # (테스트 프로파일에서는 KafkaAutoConfiguration 을 exclude 하므로 이 값이 resolve 되지 않음)
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     enabled: ${KAFKA_ENABLED:false}
 
   servlet:
