@@ -34,6 +34,50 @@ app:
     cleanup-cron: "0 0 3 * * *"
     cleanup-zone: Asia/Seoul
 
+  # Transactional Outbox Relay 설정
+  outbox:
+    relay-interval-ms: 1000        # 1초 주기로 미발행 메시지 Kafka 발행
+    batch-size: 100                # 한 주기당 최대 100건
+    publish-timeout-ms: 5000       # Kafka 발행 동기 대기 타임아웃
+    cleanup-cron: "0 0 4 * * *"    # 새벽 4시 발행 완료 레코드 정리
+    cleanup-zone: Asia/Seoul
+    retention-days: 7              # 발행 완료 후 7일 보존
+    cleanup-batch-size: 1000
+    cleanup-batch-sleep-ms: 50
+
+  # Tripo 폴링 스케줄러 설정
+  tripo-polling:
+    interval-ms: 3000              # 3초 주기로 GENERATING 모델 상태 확인
+    batch-size: 20                 # 한 주기당 최대 20건 폴링
+    task-timeout-minutes: 15       # 15분 초과 시 자동 FAILED
+
+  # 좀비 모델 복구 스케줄러 설정
+  stuck-recovery:
+    interval-ms: 60000                                # 1분 주기로 stuck 검사
+    batch-size: 50
+    requested-stuck-minutes: 5                        # REQUESTED 5분 초과 시 Outbox 재등록
+    generating-without-task-id-stuck-minutes: 5       # GENERATING + task_id 없음 5분 초과 시 FAILED
+
+# ===========================================
+# Resilience4j Circuit Breaker (Tripo API 보호)
+# ===========================================
+# - slidingWindowSize(10) 호출 중 failureRateThreshold(50%) 실패 시 OPEN
+# - OPEN 후 waitDurationInOpenState(30s) 동안 모든 호출 차단 (fast-fail)
+# - 이후 HALF_OPEN 상태로 전환, permittedNumberOfCallsInHalfOpenState(3) 건 시도
+# - OPEN 상태에서 상위 레이어가 CallNotPermittedException 을 잡아 모델을 UNAVAILABLE 로 전환
+resilience4j:
+  circuitbreaker:
+    instances:
+      tripo:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+
 # ===========================================
 # Kafka 운영 메모
 # acks=all이 실제 내구성을 보장하려면 브로커/토픽의 min.insync.replicas >= 2 필수

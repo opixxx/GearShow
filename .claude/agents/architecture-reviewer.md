@@ -325,3 +325,12 @@ grep -rn "methodName(" backend/src/main/java
 - **변경된 파일만 리뷰한다.** 전체 코드베이스를 검토하지 않는다.
 - **CLAUDE.md의 아키텍처 규칙을 최우선**으로 적용한다.
 - **`common/` 패키지**는 공통 인프라로, BC 간 공유가 허용되는 유일한 패키지다.
+
+---
+
+## 추가 학습 (review-gap-analysis)
+
+### CR 갭 보강 — 2026-04-10 PR#24
+
+- [ ] **도메인 상태 전이 메서드 가드**: `markX()` / `startX()` 류가 메타데이터만 갱신하는 경우에도 **허용된 시작 상태** 에서만 동작해야 함. 가드 없이 모든 상태에서 호출 가능하면 상태 머신이 우회됨 (예: `markPolled()` 가 REQUESTED/COMPLETED 에서도 동작하면 폴링 메타가 엉뚱한 상태에 쌓임)
+- [ ] **application → infrastructure 직접 의존**: application/service 가 `KafkaTemplate`, `RestClient` 등 인프라 기술에 직접 의존하면 계층 역전. 포트 인터페이스 추상화 필요. `@ConfigurationProperties` record 는 application/config 배치 권장

@@ -277,3 +277,20 @@ spring:
 - **확장성 관점 포함**: 현재 트래픽에서는 문제없더라도, 트래픽이 100배 증가했을 때 병목이 될 수 있는 지점은 MINOR로 지적한다
 - **Aggregate 경계 존중**: Cross-Aggregate JPA 관계 매핑 제안 금지 (ID 논리 참조 원칙 유지)
 - **CLAUDE.md 규칙 준수**: @Transactional은 Application Service에만, domain 패키지에 JPA 의존 금지
+
+---
+
+## 추가 학습 (review-gap-analysis)
+
+### `@Transactional` self-invocation (Sonar S6809) — 2026-04-10 PR#24
+
+- [ ] **같은 클래스 안에서 `this.method()` 로 `@Transactional` 호출 시 프록시 우회되어 트랜잭션 무력화** (CRITICAL)
+- 특히 `private`/`protected` + `@Transactional` 조합은 대부분 버그
+- 두 Aggregate 동시 변경을 보호한다고 믿었던 `@Transactional` 이 실제로는 별도 커밋 중일 수 있음 → 데이터 불일치
+- **해결**: 트랜잭셔널 메서드를 별도 `@Component` 로 추출해 주입받아 호출 (프록시 경유)
+- **검사**: `grep -rn -B1 "protected\|private" | grep -A1 "@Transactional"` 로 의심 후보 탐지
+
+### CR 갭 보강 — 2026-04-10 PR#24
+
+- [ ] **벌크 쿼리 `@Modifying(flushAutomatically=true, clearAutomatically=true)`**: 누락 시 같은 트랜잭션 내 영속성 컨텍스트의 stale 데이터가 쿼리 결과에 반영되지 않거나, DELETE/UPDATE 이후 오래된 엔티티가 남음
+- [ ] **외부 HTTP 클라이언트 timeout 필수**: `RestClient.create()` 는 기본 timeout 없음 → 스케줄러 스레드 무한 블로킹 위험. `ClientHttpRequestFactory` 로 connect/read timeout 명시

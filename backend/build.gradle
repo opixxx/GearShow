@@ -48,6 +48,10 @@ dependencies {
 	// Kafka
 	implementation 'org.springframework.kafka:spring-kafka'
 
+	// Resilience4j (Circuit Breaker for Tripo API)
+	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
+	implementation 'org.springframework.boot:spring-boot-starter-aop'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -114,17 +118,25 @@ ext.jacocoExcludes = [
 	'**/DevLoginService.*',
 	// Kafka 인프라 (테스트에서 Mock 사용, 실제 브로커 필요)
 	'**/infrastructure/config/Kafka*.*',
-	'**/infrastructure/config/NoOpKafkaConfig.*',
+	'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.*',
 	'**/messaging/kafka/**',
 	'**/messaging/dto/**',
-	// Fake 3D 모델 클라이언트 (Kafka 활성화 시에만 동작)
+	'**/platform/outbox/adapter/out/kafka/**',
+	// 3D 모델 클라이언트 (Fake: Kafka 활성화 시만 동작, Tripo: 외부 API 필요)
 	'**/model3d/fake/**',
+	'**/model3d/tripo/**',
 	// S3 인프라 (테스트에서 Mock 사용, 실제 AWS SDK 호출 코드)
 	'**/infrastructure/config/S3Config.*',
 	'**/storage/s3/**',
 	'**/user/adapter/out/storage/**',
+	// 스케줄러 얇은 어댑터 (@Scheduled → UseCase 단순 위임)
+	'**/platform/outbox/adapter/in/scheduler/**',
+	// 플랫폼 Outbox 예외 클래스 (super(ErrorCode) 호출만 있는 boilerplate)
+	'**/platform/outbox/application/exception/**',
 	// Port 인터페이스 (구현체에서 간접 커버)
 	'**/port/out/ModelGenerationClient.*',
+	'**/port/out/ModelGenerationEventPublisher.*',
+	'**/platform/outbox/application/port/out/OutboxMessageBroker.*',
 	'**/port/in/ManageShowcaseImageUseCase.*'
 ]
 
@@ -183,14 +195,20 @@ sonar {
 			'**/DevAuthController.java',
 			'**/DevLoginService.java',
 			'**/infrastructure/config/Kafka*.java',
-			'**/infrastructure/config/NoOpKafkaConfig.java',
+			'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.java',
 			'**/messaging/kafka/**',
 			'**/messaging/dto/**',
+			'**/platform/outbox/adapter/out/kafka/**',
 			'**/model3d/fake/**',
+			'**/model3d/tripo/**',
 			'**/infrastructure/config/S3Config.java',
 			'**/storage/s3/**',
 			'**/user/adapter/out/storage/**',
+			'**/platform/outbox/adapter/in/scheduler/**',
+			'**/platform/outbox/application/exception/**',
 			'**/port/out/ModelGenerationClient.java',
+			'**/port/out/ModelGenerationEventPublisher.java',
+			'**/platform/outbox/application/port/out/OutboxMessageBroker.java',
 			'**/port/in/ManageShowcaseImageUseCase.java'
 		].join(',')
 	}

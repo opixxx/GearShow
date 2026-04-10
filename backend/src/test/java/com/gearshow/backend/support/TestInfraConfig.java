@@ -2,7 +2,6 @@ package com.gearshow.backend.support;
 
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
-import com.gearshow.backend.showcase.application.port.out.ModelGenerationPort;
 import com.gearshow.backend.showcase.application.port.out.PresignedUrlPort;
 import com.gearshow.backend.user.application.port.out.ProfileImageStoragePort;
 import java.util.ArrayList;
@@ -79,18 +78,12 @@ public class TestInfraConfig {
     }
 
     /**
-     * 테스트용 Kafka Producer Mock.
-     * 실제 Kafka 발행 대신 로그만 남긴다.
-     */
-    @Bean
-    @Primary
-    public ModelGenerationPort testModelGenerationPort() {
-        return mock(ModelGenerationPort.class);
-    }
-
-    /**
      * 테스트용 3D 모델 생성 클라이언트 Mock.
      * 실제 외부 3D 생성 API 호출 대신 Mock을 사용한다.
+     *
+     * <p>Kafka Producer/Port Mock 은 Transactional Outbox 패턴 도입으로
+     * 더 이상 테스트 인프라에 필요하지 않다. Outbox 는 DB 레이어만 사용하므로
+     * 통합 테스트에서도 실제 구현을 그대로 쓰면 된다.</p>
      */
     @Bean
     @Primary
