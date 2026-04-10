@@ -17,8 +17,10 @@ public class Showcase3dModelMapper {
                 .previewImageUrl(model.getPreviewImageUrl())
                 .modelStatus(model.getModelStatus())
                 .generationProvider(model.getGenerationProvider())
+                .generationTaskId(model.getGenerationTaskId())
                 .requestedAt(model.getRequestedAt())
                 .generatedAt(model.getGeneratedAt())
+                .lastPolledAt(model.getLastPolledAt())
                 .failureReason(model.getFailureReason())
                 .createdAt(model.getCreatedAt())
                 .build();
@@ -32,8 +34,10 @@ public class Showcase3dModelMapper {
                 .previewImageUrl(entity.getPreviewImageUrl())
                 .modelStatus(entity.getModelStatus())
                 .generationProvider(entity.getGenerationProvider())
+                .generationTaskId(entity.getGenerationTaskId())
                 .requestedAt(entity.getRequestedAt())
                 .generatedAt(entity.getGeneratedAt())
+                .lastPolledAt(entity.getLastPolledAt())
                 .failureReason(entity.getFailureReason())
                 .createdAt(entity.getCreatedAt())
                 .build();

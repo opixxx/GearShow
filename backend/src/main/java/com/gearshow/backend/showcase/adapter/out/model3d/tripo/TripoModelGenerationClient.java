@@ -20,16 +20,16 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Tripo API를 사용한 3D 모델 생성 클라이언트.
+ * Tripo API 를 사용한 3D 모델 생성 클라이언트.
  *
- * <p>전체 흐름:
- * 1. DB에서 소스 이미지 목록 조회
- * 2. S3에서 소스 이미지 다운로드
- * 3. Tripo에 이미지 업로드 → image_token 획득
- * 4. Multiview Task 생성 → task_id 획득
- * 5. Task 상태 폴링 (3초 간격, 최대 5분)
- * 6. 성공 시 GLB/프리뷰 다운로드 → S3에 영구 저장
- * 7. GenerationResult 반환</p>
+ * <p><b>폴링 분리 아키텍처</b> 적용:</p>
+ * <ul>
+ *   <li>{@link #startGeneration(Long, Long)} — Worker 에서 호출, Tripo task 생성까지만 수행.
+ *       이전 구조에서 "Worker 스레드가 5분 블로킹" 문제를 여기서 제거한다.</li>
+ *   <li>{@link #fetchStatus(String)} — 폴링 스케줄러에서 주기적으로 호출. 1회 HTTP 로 상태만 확인.</li>
+ *   <li>{@link #fetchResult(String, Long)} — Tripo 가 success 로 떨어진 후, 결과 파일을
+ *       S3 에 저장하는 단계. 같은 S3 key 를 사용하므로 재실행해도 멱등적이다.</li>
+ * </ul>
  */
 @Slf4j
 @Component
@@ -44,47 +44,86 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     private final RestClient downloadRestClient = RestClient.create();
 
     @Override
-    public GenerationResult generate(Long showcase3dModelId, Long showcaseId) {
-        try {
-            log.info("Tripo 3D 모델 생성 시작 - showcase3dModelId: {}, showcaseId: {}",
-                    showcase3dModelId, showcaseId);
+    public String startGeneration(Long showcase3dModelId, Long showcaseId) {
+        log.info("Tripo startGeneration - showcase3dModelId: {}, showcaseId: {}",
+                showcase3dModelId, showcaseId);
 
-            // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서)
-            List<ModelSourceImage> sourceImages = modelSourceImagePort
-                    .findByShowcase3dModelId(showcase3dModelId)
-                    .stream()
-                    .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
-                    .toList();
+        // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서)
+        List<ModelSourceImage> sourceImages = modelSourceImagePort
+                .findByShowcase3dModelId(showcase3dModelId)
+                .stream()
+                .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
+                .toList();
 
-            // 2. S3 다운로드 → Tripo 업로드 → image_token 획득
-            List<String> imageTokens = uploadImagesToTripo(sourceImages);
+        // 2. S3 다운로드 → Tripo 업로드 → image_token 획득
+        List<String> imageTokens = uploadImagesToTripo(sourceImages);
 
-            // 3. Multiview Task 생성
-            TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
-                    tripoConfig.getModelVersion(), imageTokens);
-            String taskId = tripoApiClient.createTask(taskRequest);
+        // 3. Multiview Task 생성 (여기서 과금 발생 — 정확히 1회만 호출)
+        TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
+                tripoConfig.getModelVersion(), imageTokens);
+        String taskId = tripoApiClient.createTask(taskRequest);
+        log.info("Tripo task 생성 성공 - showcase3dModelId: {}, taskId: {}",
+                showcase3dModelId, taskId);
+        return taskId;
+    }
 
-            // 4. 폴링하여 완료 대기
-            TripoTaskStatusResponse status = pollUntilComplete(taskId);
+    @Override
+    public GenerationStatus fetchStatus(String taskId) {
+        TripoTaskStatusResponse response = tripoApiClient.getTaskStatus(taskId);
 
-            // 5. 성공/실패 처리
-            if (status.isSuccess()) {
-                return handleSuccess(status, showcaseId);
-            }
-            return GenerationResult.failure(
-                    "Tripo 모델 생성 실패 - 상태: " + status.data().status());
-
-        } catch (TripoApiException e) {
-            log.error("Tripo API 호출 실패 - showcase3dModelId: {}", showcase3dModelId, e);
-            return GenerationResult.failure("Tripo API 호출 실패: " + e.getMessage());
-        } catch (Exception e) {
-            log.error("3D 모델 생성 중 예외 발생 - showcase3dModelId: {}", showcase3dModelId, e);
-            return GenerationResult.failure("3D 모델 생성 중 예외 발생: " + e.getMessage());
+        if (!response.isTerminal()) {
+            log.debug("Tripo task 진행 중 - taskId: {}, status: {}, progress: {}%",
+                    taskId, response.data().status(), response.data().progress());
+            return GenerationStatus.running();
         }
+
+        if (response.isSuccess()) {
+            log.info("Tripo task 완료 - taskId: {}", taskId);
+            return GenerationStatus.success();
+        }
+
+        String reason = "Tripo 모델 생성 실패 - 상태: " + response.data().status();
+        log.warn("Tripo task 실패 - taskId: {}, reason: {}", taskId, reason);
+        return GenerationStatus.failed(reason);
+    }
+
+    @Override
+    public GenerationResult fetchResult(String taskId, Long showcaseId) {
+        TripoTaskStatusResponse status = tripoApiClient.getTaskStatus(taskId);
+
+        if (status.data().output() == null) {
+            throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
+        }
+
+        var output = status.data().output();
+        // multiview → pbr_model, image_to_model → model 에 GLB URL 이 반환된다.
+        String tripoModelUrl = output.pbr_model() != null ? output.pbr_model() : output.model();
+        log.info("Tripo 출력 확인 - model 존재: {}, pbr_model 존재: {}, rendered_image 존재: {}",
+                output.model() != null, output.pbr_model() != null, output.rendered_image() != null);
+
+        if (tripoModelUrl == null) {
+            throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
+        }
+
+        // GLB 다운로드 + S3 저장 (S3 key 고정 → 재실행 시 덮어쓰기, 멱등)
+        byte[] modelBytes = downloadFromUrl(tripoModelUrl);
+        String modelS3Key = "models/" + showcaseId + "/model.glb";
+        String modelUrl = imageStoragePort.upload(modelS3Key, modelBytes, "model/gltf-binary");
+
+        // 프리뷰 다운로드 + S3 저장 (있으면)
+        String previewUrl = null;
+        if (output.rendered_image() != null) {
+            byte[] previewBytes = downloadFromUrl(output.rendered_image());
+            String previewS3Key = "models/" + showcaseId + "/preview.png";
+            previewUrl = imageStoragePort.upload(previewS3Key, previewBytes, "image/png");
+        }
+
+        log.info("Tripo 결과 저장 완료 - showcaseId: {}, modelUrl: {}", showcaseId, modelUrl);
+        return new GenerationResult(modelUrl, previewUrl);
     }
 
     /**
-     * 소스 이미지를 S3에서 다운로드하여 Tripo에 업로드한다.
+     * 소스 이미지를 S3 에서 다운로드하여 Tripo 에 업로드한다.
      */
     private List<String> uploadImagesToTripo(List<ModelSourceImage> sourceImages) {
         List<String> tokens = new ArrayList<>();
@@ -99,82 +138,17 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     }
 
     /**
-     * Task 상태를 폴링하여 완료(성공/실패)될 때까지 대기한다.
-     */
-    private TripoTaskStatusResponse pollUntilComplete(String taskId) {
-        long startTime = System.currentTimeMillis();
-        long timeoutMs = tripoConfig.getTimeoutMs();
-        long pollIntervalMs = tripoConfig.getPollIntervalMs();
-
-        while (true) {
-            TripoTaskStatusResponse status = tripoApiClient.getTaskStatus(taskId);
-
-            if (status.isTerminal()) {
-                log.info("Tripo Task 완료 - taskId: {}, status: {}, progress: {}%",
-                        taskId, status.data().status(), status.data().progress());
-                return status;
-            }
-
-            // 타임아웃 확인
-            long elapsed = System.currentTimeMillis() - startTime;
-            if (elapsed > timeoutMs) {
-                throw new TripoApiException(ErrorCode.TRIPO_TASK_TIMEOUT);
-            }
-
-            log.debug("Tripo Task 진행 중 - taskId: {}, status: {}, progress: {}%",
-                    taskId, status.data().status(), status.data().progress());
-
-            sleep(pollIntervalMs);
-        }
-    }
-
-    /**
-     * 생성 성공 시 GLB/프리뷰를 S3에 저장하고 URL을 반환한다.
-     */
-    private GenerationResult handleSuccess(TripoTaskStatusResponse status, Long showcaseId) {
-        var output = status.data().output();
-
-        if (output == null) {
-            return GenerationResult.failure("Tripo 모델 output이 없습니다");
-        }
-
-        // multiview → pbr_model, image_to_model → model에 GLB URL이 반환된다
-        String tripoModelUrl = output.pbr_model() != null ? output.pbr_model() : output.model();
-        log.info("Tripo 출력 확인 - model 존재: {}, pbr_model 존재: {}, rendered_image 존재: {}",
-                output.model() != null, output.pbr_model() != null, output.rendered_image() != null);
-
-        if (tripoModelUrl == null) {
-            return GenerationResult.failure("Tripo 모델 URL이 없습니다 - model과 pbr_model 모두 null");
-        }
-
-        // Tripo에서 GLB 모델 다운로드
-        byte[] modelBytes = downloadFromUrl(tripoModelUrl);
-        String modelS3Key = "models/" + showcaseId + "/model.glb";
-        String modelUrl = imageStoragePort.upload(modelS3Key, modelBytes, "model/gltf-binary");
-
-        // Tripo에서 프리뷰 이미지 다운로드
-        String previewUrl = null;
-        if (output.rendered_image() != null) {
-            byte[] previewBytes = downloadFromUrl(output.rendered_image());
-            String previewS3Key = "models/" + showcaseId + "/preview.png";
-            previewUrl = imageStoragePort.upload(previewS3Key, previewBytes, "image/png");
-        }
-
-        log.info("Tripo 3D 모델 S3 저장 완료 - showcaseId: {}, modelUrl: {}", showcaseId, modelUrl);
-        return GenerationResult.success(modelUrl, previewUrl);
-    }
-
-    /**
-     * 외부 URL에서 바이트 데이터를 다운로드한다.
-     * Tripo의 임시 다운로드 URL(5분 만료)에서 파일을 가져온다.
+     * 외부 URL 에서 바이트 데이터를 다운로드한다.
+     * Tripo 의 임시 다운로드 URL (5분 만료) 에서 파일을 가져온다.
      */
     private byte[] downloadFromUrl(String url) {
         if (url == null || url.isBlank()) {
             throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
         }
-        // Tripo가 scheme 없는 URL을 반환할 수 있으므로 보정
         String resolvedUrl = url.startsWith("http") ? url : "https://" + url;
-        String safeUrl = resolvedUrl.contains("?") ? resolvedUrl.substring(0, resolvedUrl.indexOf("?")) : resolvedUrl;
+        String safeUrl = resolvedUrl.contains("?")
+                ? resolvedUrl.substring(0, resolvedUrl.indexOf("?"))
+                : resolvedUrl;
         log.info("Tripo 파일 다운로드 시작 - URL: {}", safeUrl);
         try {
             byte[] body = downloadRestClient.get()
@@ -190,15 +164,6 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
         } catch (Exception e) {
             log.error("Tripo 파일 다운로드 실패 - URL: {}", safeUrl, e);
             throw new TripoApiException(ErrorCode.TRIPO_DOWNLOAD_FAILED);
-        }
-    }
-
-    private void sleep(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new TripoApiException(ErrorCode.TRIPO_TASK_TIMEOUT);
         }
     }
 }

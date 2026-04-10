@@ -16,7 +16,9 @@ import java.util.List;
 /**
  * 3D 모델 생성 요청 트랜잭션 서비스.
  *
- * <p>DB 저장만 담당한다. 외부 I/O(S3, Kafka)는 {@link RequestModelGenerationFacade}에서 수행한다.</p>
+ * <p>DB 저장과 Outbox 이벤트 기록을 단일 트랜잭션으로 묶어 원자성을 보장한다.
+ * 실제 Kafka 발행은 Outbox Relay 스케줄러가 별도 스레드에서 수행한다.
+ * 외부 I/O(S3 키 변환 등)는 {@link RequestModelGenerationFacade}에서 트랜잭션 밖에서 수행한다.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -27,19 +29,25 @@ public class RequestModelGenerationService {
 
     private final Showcase3dModelPort showcase3dModelPort;
     private final ModelSourceImagePort modelSourceImagePort;
+    private final ModelGenerationEventPublisher modelGenerationEventPublisher;
 
     /**
-     * 신규 3D 모델과 소스 이미지를 저장한다.
+     * 신규 3D 모델과 소스 이미지를 저장하고 Outbox 이벤트를 기록한다.
+     *
+     * <p>세 작업이 같은 트랜잭션 안에서 수행되어, 커밋 성공 = 이후 Kafka 발행이
+     * Relay 에 의해 반드시 시도됨을 보장한다 (Transactional Outbox 패턴).</p>
      */
     @Transactional
     public Showcase3dModel saveModelAndSourceImages(Long showcaseId, List<String> imageUrls) {
         Showcase3dModel model = createAndSaveModel(showcaseId);
         saveSourceImages(model.getId(), imageUrls);
+        modelGenerationEventPublisher.publishRequested(model.getId(), showcaseId);
         return model;
     }
 
     /**
-     * 기존 3D 모델을 REQUESTED 상태로 재설정하거나, 없으면 새로 생성하고 소스 이미지를 저장한다.
+     * 기존 3D 모델을 REQUESTED 상태로 재설정하거나, 없으면 새로 생성하고,
+     * 소스 이미지 저장 및 Outbox 이벤트 기록까지 단일 트랜잭션으로 처리한다.
      */
     @Transactional
     public Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
@@ -48,6 +56,7 @@ public class RequestModelGenerationService {
                         existing.resetRequest(GENERATION_PROVIDER)))
                 .orElseGet(() -> createAndSaveModel(showcaseId));
         saveSourceImages(model.getId(), imageUrls);
+        modelGenerationEventPublisher.publishRequested(model.getId(), showcaseId);
         return model;
     }
 

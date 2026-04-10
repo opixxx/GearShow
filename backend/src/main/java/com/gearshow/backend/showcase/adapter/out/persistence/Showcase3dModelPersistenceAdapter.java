@@ -2,9 +2,12 @@ package com.gearshow.backend.showcase.adapter.out.persistence;
 
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
+import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -47,5 +50,23 @@ public class Showcase3dModelPersistenceAdapter implements Showcase3dModelPort {
     @Override
     public Set<Long> findShowcaseIdsWithModel(List<Long> showcaseIds) {
         return new HashSet<>(showcase3dModelJpaRepository.findShowcaseIdsByShowcaseIds(showcaseIds));
+    }
+
+    @Override
+    public List<Showcase3dModel> findPollableGeneratingTasks(int limit) {
+        return showcase3dModelJpaRepository
+                .findPollableGeneratingTasks(PageRequest.of(0, limit))
+                .stream()
+                .map(showcase3dModelMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Showcase3dModel> findStaleByStatus(ModelStatus status, Instant referenceAt, int limit) {
+        return showcase3dModelJpaRepository
+                .findByStatusAndRequestedBefore(status, referenceAt, PageRequest.of(0, limit))
+                .stream()
+                .map(showcase3dModelMapper::toDomain)
+                .toList();
     }
 }

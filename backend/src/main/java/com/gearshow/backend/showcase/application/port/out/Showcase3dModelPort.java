@@ -1,7 +1,10 @@
 package com.gearshow.backend.showcase.application.port.out;
 
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
+import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -36,4 +39,22 @@ public interface Showcase3dModelPort {
      * @return 3D 모델이 존재하는 쇼케이스 ID Set
      */
     java.util.Set<Long> findShowcaseIdsWithModel(java.util.List<Long> showcaseIds);
+
+    /**
+     * Tripo task_id 가 설정된 GENERATING 상태의 모델을 배치로 조회한다.
+     * 폴링 스케줄러가 사용한다.
+     *
+     * @param limit 최대 반환 수
+     */
+    List<Showcase3dModel> findPollableGeneratingTasks(int limit);
+
+    /**
+     * 지정 상태이면서 {@code referenceAt} 이전에 마지막 변경된 모델을 조회한다.
+     * stuck task 감지 스케줄러가 사용한다.
+     *
+     * @param status      대상 상태
+     * @param referenceAt 이 시각 이전에 변경된 모델만 조회
+     * @param limit       최대 반환 수
+     */
+    List<Showcase3dModel> findStaleByStatus(ModelStatus status, Instant referenceAt, int limit);
 }
