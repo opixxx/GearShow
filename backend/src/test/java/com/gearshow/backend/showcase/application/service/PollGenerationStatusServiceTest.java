@@ -4,7 +4,6 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationStatus;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
-import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
@@ -23,7 +22,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -43,6 +41,9 @@ import static org.mockito.Mockito.verify;
  *   <li>FAILED → fail + has3dModel=false</li>
  *   <li>한 모델의 예외가 배치 전체에 전파되지 않는 격리 동작</li>
  * </ul>
+ *
+ * <p>상태 전이 + 쇼케이스 동기화는 {@link ModelGenerationStateWriter} 에 위임되므로
+ * 해당 빈을 mock 하고 올바른 호출 여부를 검증한다.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class PollGenerationStatusServiceTest {
@@ -56,10 +57,10 @@ class PollGenerationStatusServiceTest {
     private Showcase3dModelPort showcase3dModelPort;
 
     @Mock
-    private ShowcasePort showcasePort;
+    private ModelGenerationClient modelGenerationClient;
 
     @Mock
-    private ModelGenerationClient modelGenerationClient;
+    private ModelGenerationStateWriter stateWriter;
 
     private PollGenerationStatusService service;
 
@@ -68,7 +69,7 @@ class PollGenerationStatusServiceTest {
         // record 는 mock 할 필요 없이 직접 생성
         TripoPollingProperties properties = new TripoPollingProperties(3_000L, BATCH_SIZE, TIMEOUT_MINUTES);
         service = new PollGenerationStatusService(
-                showcase3dModelPort, showcasePort, modelGenerationClient, properties);
+                showcase3dModelPort, modelGenerationClient, stateWriter, properties);
     }
 
     /**
@@ -94,32 +95,28 @@ class PollGenerationStatusServiceTest {
     class HappyPath {
 
         @Test
-        @DisplayName("SUCCESS 상태면 fetchResult 호출 후 complete + has3dModel=true 가 저장된다")
-        void pollOnce_successStatus_completesModelAndUpdatesShowcase() {
+        @DisplayName("SUCCESS 상태면 fetchResult 후 stateWriter.markCompleted 에 위임된다")
+        void pollOnce_successStatus_delegatesToMarkCompleted() {
             // Given
             Showcase3dModel model = generatingModel(1L, 2);
+            GenerationResult result = new GenerationResult("https://cdn/m.glb", "https://cdn/p.jpg");
             given(showcase3dModelPort.findPollableGeneratingTasks(BATCH_SIZE)).willReturn(List.of(model));
             given(modelGenerationClient.fetchStatus(anyString())).willReturn(GenerationStatus.success());
-            given(modelGenerationClient.fetchResult(anyString(), eq(SHOWCASE_ID)))
-                    .willReturn(new GenerationResult("https://cdn/m.glb", "https://cdn/p.jpg"));
+            given(modelGenerationClient.fetchResult(anyString(), eq(SHOWCASE_ID))).willReturn(result);
 
             // When
             int terminalCount = service.pollOnce();
 
             // Then
             assertThat(terminalCount).isEqualTo(1);
-            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
-            verify(showcase3dModelPort, times(1)).save(captor.capture());
-            Showcase3dModel saved = captor.getValue();
-            assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.COMPLETED);
-            assertThat(saved.getModelFileUrl()).isEqualTo("https://cdn/m.glb");
-            assertThat(saved.getPreviewImageUrl()).isEqualTo("https://cdn/p.jpg");
-            verify(showcasePort, times(1)).updateHas3dModel(SHOWCASE_ID, true);
+            verify(stateWriter, times(1)).markCompleted(model, result);
+            verify(stateWriter, never()).markFailed(any(), anyString());
+            verify(stateWriter, never()).markPolled(any());
         }
 
         @Test
-        @DisplayName("RUNNING + 타임아웃 전이면 markPolled 만 저장하고 카운트는 0이다")
-        void pollOnce_runningNotTimedOut_marksPolledOnly() {
+        @DisplayName("RUNNING + 타임아웃 전이면 stateWriter.markPolled 에 위임되고 카운트는 0")
+        void pollOnce_runningNotTimedOut_delegatesToMarkPolled() {
             // Given
             Showcase3dModel model = generatingModel(1L, 2); // 2분 전 → 타임아웃 아님
             given(showcase3dModelPort.findPollableGeneratingTasks(BATCH_SIZE)).willReturn(List.of(model));
@@ -130,13 +127,10 @@ class PollGenerationStatusServiceTest {
 
             // Then
             assertThat(terminalCount).isZero();
-            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
-            verify(showcase3dModelPort, times(1)).save(captor.capture());
-            // 상태는 여전히 GENERATING, lastPolledAt 만 채워짐
-            assertThat(captor.getValue().getModelStatus()).isEqualTo(ModelStatus.GENERATING);
-            assertThat(captor.getValue().getLastPolledAt()).isNotNull();
+            verify(stateWriter, times(1)).markPolled(model);
+            verify(stateWriter, never()).markCompleted(any(), any());
+            verify(stateWriter, never()).markFailed(any(), anyString());
             verify(modelGenerationClient, never()).fetchResult(anyString(), anyLong());
-            verify(showcasePort, never()).updateHas3dModel(anyLong(), anyBoolean());
         }
     }
 
@@ -145,7 +139,7 @@ class PollGenerationStatusServiceTest {
     class Empty {
 
         @Test
-        @DisplayName("폴링 대상이 없으면 0을 반환하고 Tripo 호출을 시도하지 않는다")
+        @DisplayName("폴링 대상이 없으면 0을 반환하고 Tripo/stateWriter 호출을 시도하지 않는다")
         void pollOnce_noTargets_returnsZero() {
             // Given
             given(showcase3dModelPort.findPollableGeneratingTasks(BATCH_SIZE)).willReturn(List.of());
@@ -156,7 +150,9 @@ class PollGenerationStatusServiceTest {
             // Then
             assertThat(terminalCount).isZero();
             verify(modelGenerationClient, never()).fetchStatus(anyString());
-            verify(showcase3dModelPort, never()).save(any());
+            verify(stateWriter, never()).markPolled(any());
+            verify(stateWriter, never()).markCompleted(any(), any());
+            verify(stateWriter, never()).markFailed(any(), anyString());
         }
     }
 
@@ -165,8 +161,8 @@ class PollGenerationStatusServiceTest {
     class UnhappyPath {
 
         @Test
-        @DisplayName("RUNNING + 타임아웃이면 fail + has3dModel=false 로 전환된다")
-        void pollOnce_runningTimedOut_failsAndUpdatesShowcase() {
+        @DisplayName("RUNNING + 타임아웃이면 stateWriter.markFailed 가 \"시간 초과\" 사유로 호출된다")
+        void pollOnce_runningTimedOut_delegatesToMarkFailed() {
             // Given: 타임아웃 기준(15분) 을 넘긴 모델
             Showcase3dModel model = generatingModel(1L, 16);
             given(showcase3dModelPort.findPollableGeneratingTasks(BATCH_SIZE)).willReturn(List.of(model));
@@ -177,18 +173,16 @@ class PollGenerationStatusServiceTest {
 
             // Then
             assertThat(terminalCount).isEqualTo(1);
-            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
-            verify(showcase3dModelPort, times(1)).save(captor.capture());
-            Showcase3dModel saved = captor.getValue();
-            assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.FAILED);
-            assertThat(saved.getFailureReason()).contains("시간 초과");
-            verify(showcasePort, times(1)).updateHas3dModel(SHOWCASE_ID, false);
+            ArgumentCaptor<String> reasonCaptor = ArgumentCaptor.forClass(String.class);
+            verify(stateWriter, times(1)).markFailed(eq(model), reasonCaptor.capture());
+            assertThat(reasonCaptor.getValue()).contains("시간 초과");
+            verify(stateWriter, never()).markCompleted(any(), any());
             verify(modelGenerationClient, never()).fetchResult(anyString(), anyLong());
         }
 
         @Test
-        @DisplayName("FAILED 상태면 실패 사유가 저장되고 has3dModel=false 로 갱신된다")
-        void pollOnce_failedStatus_savesFailureReason() {
+        @DisplayName("FAILED 상태면 stateWriter.markFailed 가 Tripo 실패 사유로 호출된다")
+        void pollOnce_failedStatus_delegatesToMarkFailedWithReason() {
             // Given
             Showcase3dModel model = generatingModel(1L, 2);
             given(showcase3dModelPort.findPollableGeneratingTasks(BATCH_SIZE)).willReturn(List.of(model));
@@ -200,12 +194,8 @@ class PollGenerationStatusServiceTest {
 
             // Then
             assertThat(terminalCount).isEqualTo(1);
-            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
-            verify(showcase3dModelPort, times(1)).save(captor.capture());
-            Showcase3dModel saved = captor.getValue();
-            assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.FAILED);
-            assertThat(saved.getFailureReason()).isEqualTo("이미지 품질 부족");
-            verify(showcasePort, times(1)).updateHas3dModel(SHOWCASE_ID, false);
+            verify(stateWriter, times(1)).markFailed(model, "이미지 품질 부족");
+            verify(stateWriter, never()).markCompleted(any(), any());
         }
     }
 
@@ -241,8 +231,8 @@ class PollGenerationStatusServiceTest {
 
             // Then: 2건만 terminal, m2 는 예외로 스킵되었어도 전체 배치는 계속 진행됨
             assertThat(terminalCount).isEqualTo(2);
-            verify(showcase3dModelPort, times(2)).save(any());
-            verify(showcasePort, times(2)).updateHas3dModel(SHOWCASE_ID, true);
+            verify(stateWriter, times(2)).markCompleted(any(), any());
+            verify(stateWriter, never()).markFailed(any(), anyString());
         }
     }
 }

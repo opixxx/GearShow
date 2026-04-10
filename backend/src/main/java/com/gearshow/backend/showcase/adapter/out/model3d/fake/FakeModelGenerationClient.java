@@ -19,6 +19,11 @@ import java.util.concurrent.ThreadLocalRandom;
  *   <li>fetchStatus: 80% 확률 SUCCESS, 20% 확률 FAILED 반환</li>
  *   <li>fetchResult: 쇼케이스 ID 기반 가짜 URL 반환</li>
  * </ul>
+ *
+ * <p><b>보안 관련 정적 분석 힌트</b>: 이 클래스는 {@code tripo.enabled=false} 일 때만
+ * 로드되는 로컬/개발 전용 Fake 이며, {@link ThreadLocalRandom} 사용처는 오로지 성공률
+ * 시뮬레이션(80%/20%) 이다. 보안 결정(토큰, 패스워드, nonce 등) 과 무관하므로
+ * Sonar rule {@code java:S2245} 는 여기서 적용 대상이 아니다.</p>
  */
 @Slf4j
 @Component
@@ -37,10 +42,12 @@ public class FakeModelGenerationClient implements ModelGenerationClient {
     }
 
     @Override
+    @SuppressWarnings("java:S2245") // Fake 시뮬레이션용 — 보안 컨텍스트 아님
     public GenerationStatus fetchStatus(String taskId) {
         // 실제로는 task_id 별로 상태가 일정해야 하지만,
         // Fake 구현은 폴링 스케줄러의 1회 호출에서 즉시 결과가 나오도록 한다.
         // ThreadLocalRandom 은 멀티 스레드 환경에서 Random 보다 contention 이 낮다.
+        // 보안 결정에 쓰이는 난수가 아니므로 SecureRandom 불필요.
         if (ThreadLocalRandom.current().nextDouble() < SUCCESS_RATE) {
             log.debug("Fake fetchStatus SUCCESS - taskId: {}", taskId);
             return GenerationStatus.success();
