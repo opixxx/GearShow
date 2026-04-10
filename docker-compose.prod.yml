@@ -20,6 +20,10 @@ services:
   kafka:
     image: apache/kafka:3.9.0
     container_name: gearshow-kafka
+    # 컨테이너 hostname 을 명시해야 CONTROLLER 리스너를 gearshow-kafka:9093 로
+    # 바인딩할 수 있다. container_name 은 docker ps 이름일 뿐 컨테이너의 /etc/hostname 을
+    # 바꾸지 않으므로 별도 설정 필수.
+    hostname: gearshow-kafka
     # 포트 노출 없음: EC2 외부/호스트에서 직접 접근 불가.
     # 디버깅이 필요하면 `docker exec gearshow-kafka ...` 로 들어가서 확인한다.
     environment:
@@ -29,10 +33,12 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@gearshow-kafka:9093
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
-      # --- 이중 리스너 ---
-      # 백엔드 컨테이너는 INTERNAL(29092)로 접속한다.
-      # EXTERNAL은 정의만 해두고 포트는 노출하지 않음 (현재는 사실상 미사용).
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      # --- 리스너 바인딩 ---
+      # INTERNAL  : 모든 인터페이스(0.0.0.0)에 바인딩하여 healthcheck 의 localhost:29092 접근 허용
+      # CONTROLLER: 컨테이너 hostname 에 바인딩. 0.0.0.0 으로 두면 Kafka 가 advertised.listeners
+      #             자동 유도 시 nonroutable 로 판정하여 기동 실패한다 (Kafka 3.9 검증 규칙).
+      # EXTERNAL  : 정의만 해두고 포트 노출 없음 (미사용)
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://gearshow-kafka:9093,EXTERNAL://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://gearshow-kafka:29092,EXTERNAL://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER

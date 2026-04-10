@@ -44,6 +44,8 @@ services:
     # Apache 공식 이미지, KRaft 모드 (Zookeeper 불필요)
     image: apache/kafka:3.9.0
     container_name: gearshow-kafka
+    # CONTROLLER 리스너를 hostname 으로 바인딩하기 위해 명시적으로 설정
+    hostname: gearshow-kafka
     ports:
       # 로컬 개발자가 IDE에서 실행하는 백엔드가 접속할 수 있도록 호스트 노출
       - "9092:9092"
@@ -54,11 +56,11 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@gearshow-kafka:9093
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
-      # --- 이중 리스너 설정 ---
-      # INTERNAL : 같은 docker 네트워크의 다른 컨테이너가 접속하는 용도
-      # EXTERNAL : 호스트(로컬 PC)에서 접속하는 용도 (IDE 디버깅 등)
-      # CONTROLLER : KRaft 컨트롤러 전용 (클라이언트가 붙으면 안 됨)
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      # --- 리스너 바인딩 ---
+      # INTERNAL   : 0.0.0.0 에 바인딩 (healthcheck 의 localhost:29092 접근 + 컨테이너 간 통신)
+      # CONTROLLER : 컨테이너 hostname 에 바인딩 (0.0.0.0 이면 Kafka 3.9 검증 규칙에 의해 기동 거부)
+      # EXTERNAL   : 0.0.0.0 에 바인딩 (호스트 포트 매핑으로 IDE 연결 허용)
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://gearshow-kafka:9093,EXTERNAL://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://gearshow-kafka:29092,EXTERNAL://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
