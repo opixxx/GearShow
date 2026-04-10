@@ -20,3 +20,22 @@ logging:
   level:
     root: INFO
     org.hibernate.SQL: WARN
+
+# ===========================================
+# 멱등성 이력 정리 설정 (CleanupProcessedMessageService)
+# 값은 @Validated + @Min으로 Bean 생성 시점에 검증된다
+# ===========================================
+app:
+  idempotency:
+    retention-days: 7
+    cleanup-batch-size: 1000
+    cleanup-batch-sleep-ms: 50
+    # 매일 새벽 3시 정리
+    cleanup-cron: "0 0 3 * * *"
+    cleanup-zone: Asia/Seoul
+
+# ===========================================
+# Kafka 운영 메모
+# acks=all이 실제 내구성을 보장하려면 브로커/토픽의 min.insync.replicas >= 2 필수
+# MSK 도입 시 토픽 생성 옵션에서 설정: --config min.insync.replicas=2
+# ===========================================

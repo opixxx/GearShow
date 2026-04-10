@@ -1,15 +1,14 @@
 package com.gearshow.backend.platform.idempotency.application.service;
 
 import com.gearshow.backend.platform.idempotency.application.port.out.ProcessedMessagePort;
+import com.gearshow.backend.platform.idempotency.infrastructure.config.IdempotencyCleanupProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 
@@ -31,17 +30,16 @@ class CleanupProcessedMessageServiceTest {
     @Mock
     private ProcessedMessagePort processedMessagePort;
 
-    @InjectMocks
     private CleanupProcessedMessageService service;
 
     private static final int BATCH_SIZE = 1000;
 
     @BeforeEach
-    void setUpProperties() {
-        // @Value 필드는 Mockito가 주입하지 않으므로 ReflectionTestUtils로 직접 설정한다
-        ReflectionTestUtils.setField(service, "retentionDays", 7);
-        ReflectionTestUtils.setField(service, "batchSize", BATCH_SIZE);
-        ReflectionTestUtils.setField(service, "batchSleepMs", 0L); // 테스트 속도를 위해 sleep 제거
+    void setUpService() {
+        // 테스트 속도를 위해 sleep=0으로 설정한 properties를 생성자로 주입한다
+        IdempotencyCleanupProperties properties =
+                new IdempotencyCleanupProperties(7, BATCH_SIZE, 0L);
+        service = new CleanupProcessedMessageService(processedMessagePort, properties);
     }
 
     @Nested

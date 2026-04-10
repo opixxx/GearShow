@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.adapter.out.messaging.dto;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -18,6 +19,17 @@ public record ModelGenerationRequestMessage(
         Long showcaseId,
         Instant requestedAt
 ) {
+
+    /**
+     * 레코드 생성 시점에 필수 필드 불변식을 강제한다.
+     * Kafka 직렬화/역직렬화 및 팩토리 메서드 양쪽 모두에서 null 주입을 차단한다.
+     */
+    public ModelGenerationRequestMessage {
+        Objects.requireNonNull(messageId, "messageId는 필수입니다");
+        Objects.requireNonNull(showcase3dModelId, "showcase3dModelId는 필수입니다");
+        Objects.requireNonNull(showcaseId, "showcaseId는 필수입니다");
+        Objects.requireNonNull(requestedAt, "requestedAt은 필수입니다");
+    }
 
     public static ModelGenerationRequestMessage of(Long showcase3dModelId, Long showcaseId) {
         return new ModelGenerationRequestMessage(
