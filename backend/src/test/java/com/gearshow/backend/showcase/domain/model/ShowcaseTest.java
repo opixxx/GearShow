@@ -194,4 +194,57 @@ class ShowcaseTest {
                     .isInstanceOf(InvalidShowcaseStatusTransitionException.class);
         }
     }
+
+    @Nested
+    @DisplayName("update")
+    class Update {
+
+        @Test
+        @DisplayName("modelCode를 포함한 모든 필드를 변경한다")
+        void update_allFieldsIncludingModelCode_changesAll() {
+            // Given
+            Showcase showcase = createShowcase();
+
+            // When
+            Showcase updated = showcase.update(
+                    "새 제목", "새 설명", "NEW-CODE-123",
+                    "280", ConditionGrade.S, 10, true);
+
+            // Then
+            assertThat(updated.getTitle()).isEqualTo("새 제목");
+            assertThat(updated.getDescription()).isEqualTo("새 설명");
+            assertThat(updated.getModelCode()).isEqualTo("NEW-CODE-123");
+            assertThat(updated.getUserSize()).isEqualTo("280");
+            assertThat(updated.getConditionGrade()).isEqualTo(ConditionGrade.S);
+            assertThat(updated.getWearCount()).isEqualTo(10);
+            assertThat(updated.isForSale()).isTrue();
+        }
+
+        @Test
+        @DisplayName("modelCode가 null이면 기존 값을 유지한다")
+        void update_nullModelCode_keepsOriginal() {
+            // Given
+            Showcase showcase = createShowcase();
+            String original = showcase.getModelCode();
+
+            // When
+            Showcase updated = showcase.update(
+                    "새 제목", null, null, null, null, null, null);
+
+            // Then
+            assertThat(updated.getModelCode()).isEqualTo(original);
+            assertThat(updated.getTitle()).isEqualTo("새 제목");
+        }
+
+        @Test
+        @DisplayName("title이 빈 문자열이면 예외가 발생한다")
+        void update_blankTitle_throwsException() {
+            // Given
+            Showcase showcase = createShowcase();
+
+            // When & Then
+            assertThatThrownBy(() -> showcase.update("   ", null, null, null, null, null, null))
+                    .isInstanceOf(InvalidShowcaseException.class);
+        }
+    }
 }

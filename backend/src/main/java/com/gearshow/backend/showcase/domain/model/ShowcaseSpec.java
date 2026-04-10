@@ -55,26 +55,6 @@ public class ShowcaseSpec {
     }
 
     /**
-     * 스펙 데이터를 변경한다.
-     *
-     * @param newSpecData 새로운 JSON 형태의 스펙 데이터
-     * @return 변경된 쇼케이스 스펙
-     */
-    public ShowcaseSpec updateSpecData(String newSpecData) {
-        if (newSpecData == null || newSpecData.isBlank()) {
-            throw new InvalidShowcaseException();
-        }
-        return ShowcaseSpec.builder()
-                .id(this.id)
-                .showcaseId(this.showcaseId)
-                .specType(this.specType)
-                .specData(newSpecData)
-                .createdAt(this.createdAt)
-                .updatedAt(Instant.now())
-                .build();
-    }
-
-    /**
      * 필수 파라미터를 검증한다.
      */
     private static void validate(Long showcaseId, SpecType specType, String specData) {

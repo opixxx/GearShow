@@ -1,5 +1,6 @@
 package com.gearshow.backend.user.application.service;
 
+import com.gearshow.backend.support.TestInfraConfig;
 import com.gearshow.backend.support.TestOAuthConfig;
 import com.gearshow.backend.user.adapter.out.persistence.UserJpaRepository;
 import com.gearshow.backend.user.application.dto.*;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@Import(TestOAuthConfig.class)
+@Import({TestOAuthConfig.class, TestInfraConfig.class})
 @Transactional
 class UserProfileServiceIntegrationTest {
 
@@ -132,6 +133,60 @@ class UserProfileServiceIntegrationTest {
             // When & Then
             assertThatThrownBy(() -> updateProfileUseCase.updateProfile(userId2, command))
                     .isInstanceOf(DuplicateNicknameException.class);
+        }
+
+        @Test
+        @DisplayName("프로필 이미지를 업로드하면 CDN URL이 저장된다")
+        void updateProfile_uploadsImage_savesCdnUrl() {
+            // Given
+            Long userId = createUser("valid-code-img1");
+            byte[] imageBytes = new byte[]{1, 2, 3, 4};
+            UpdateProfileCommand command = new UpdateProfileCommand(
+                    null, imageBytes, "image/jpeg", "photo.jpg");
+
+            // When
+            UpdateProfileResult result = updateProfileUseCase.updateProfile(userId, command);
+
+            // Then
+            assertThat(result.profileImageUrl())
+                    .startsWith("https://test-cdn.gearshow.com/profiles/");
+        }
+
+        @Test
+        @DisplayName("기존 이미지가 있는 상태에서 새 이미지를 업로드하면 기존 이미지가 삭제된다")
+        void updateProfile_replacesImage_deletesOldImage() {
+            // Given
+            Long userId = createUser("valid-code-img2");
+            // 첫 업로드
+            updateProfileUseCase.updateProfile(userId, new UpdateProfileCommand(
+                    null, new byte[]{1}, "image/jpeg", "first.jpg"));
+            // 두 번째 업로드
+            UpdateProfileResult result = updateProfileUseCase.updateProfile(userId, new UpdateProfileCommand(
+                    null, new byte[]{2}, "image/jpeg", "second.jpg"));
+
+            // Then: 새 이미지 URL이 반환되고 첫 번째와 다르다
+            assertThat(result.profileImageUrl())
+                    .startsWith("https://test-cdn.gearshow.com/profiles/")
+                    .doesNotContain("first.jpg");
+        }
+
+        @Test
+        @DisplayName("이미지 없이 닉네임만 수정하면 기존 이미지가 유지된다")
+        void updateProfile_nicknameOnly_keepsImage() {
+            // Given
+            Long userId = createUser("valid-code-img3");
+            // 이미지 업로드
+            UpdateProfileResult firstResult = updateProfileUseCase.updateProfile(userId, new UpdateProfileCommand(
+                    null, new byte[]{1}, "image/jpeg", "photo.jpg"));
+            String oldImageUrl = firstResult.profileImageUrl();
+
+            // When: 닉네임만 변경
+            UpdateProfileResult result = updateProfileUseCase.updateProfile(userId, new UpdateProfileCommand(
+                    "닉네임바뀜", null, null, null));
+
+            // Then
+            assertThat(result.nickname()).isEqualTo("닉네임바뀜");
+            assertThat(result.profileImageUrl()).isEqualTo(oldImageUrl);
         }
     }
 
