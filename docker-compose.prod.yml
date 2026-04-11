@@ -65,6 +65,7 @@ services:
   backend:
     image: ${ECR_REGISTRY}/gearshow-backend:${IMAGE_TAG:-latest}
     container_name: gearshow-backend
+    hostname: backend
     # .env 파일에서 DB_URL/DB_USERNAME/DB_PASSWORD/JWT/OAuth/S3/Tripo 등 주입
     env_file:
       - .env
@@ -80,5 +81,76 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ===========================================
+  # Observability Stack (Prometheus + Grafana + Node Exporter)
+  # ===========================================
+  # t3.small (RAM 2GB) 환경을 고려해 각 서비스에 mem_limit 을 엄격히 걸었다.
+  # 총 메모리 예산: Prometheus 256m + Grafana 192m + Node-exporter 64m = 512m
+  # 기존 Backend(~550m) + Kafka(~370m) + OS(~80m) = 1000m 에 추가되어 최대 1512m,
+  # 여유 480m (swap 1G 까지 합치면 thrashing 방어 충분).
+  # ===========================================
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: gearshow-prometheus
+    hostname: prometheus
+    volumes:
+      # 스크래핑 설정은 Git 에서 CD 가 배포한 파일을 마운트
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - gearshow-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # 보존 기간 7일 + 디스크 512MB 상한 — t3.small 디스크 보호
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=512MB'
+      - '--web.enable-lifecycle'
+    mem_limit: 256m
+    mem_reservation: 128m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: gearshow-grafana
+    hostname: grafana
+    # 외부에서 대시보드 접근. 보안 그룹에서 포트 3000 을 본인 IP 로만 제한할 것.
+    ports:
+      - "3000:3000"
+    environment:
+      # 운영 전환 시 .env 의 GF_ADMIN_PASSWORD 를 강한 값으로 덮어쓴다
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_LOG_LEVEL: "warn"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - gearshow-grafana-data:/var/lib/grafana
+    mem_limit: 192m
+    mem_reservation: 96m
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: gearshow-node-exporter
+    hostname: node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      # 컨테이너 안에서 호스트의 CPU/Memory/Disk/Net 지표를 읽어들임
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    mem_limit: 64m
+    mem_reservation: 32m
+    restart: unless-stopped
+
 volumes:
   gearshow-kafka-data:
+  gearshow-prometheus-data:
+  gearshow-grafana-data:

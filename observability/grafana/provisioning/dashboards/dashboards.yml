@@ -1,0 +1,22 @@
+# ===========================================
+# Grafana 대시보드 자동 프로비저닝 설정
+# ===========================================
+# /etc/grafana/provisioning/dashboards/ 아래의 JSON 파일들을
+# 자동으로 Grafana 에 로드한다.
+# 대시보드 파일은 나중에 추가하면 Grafana 재시작 없이 반영된다
+# (updateIntervalSeconds 주기로 감지).
+# ===========================================
+
+apiVersion: 1
+
+providers:
+  - name: gearshow-default
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: true

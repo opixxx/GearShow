@@ -1,0 +1,35 @@
+# ===========================================
+# Prometheus 스크래핑 설정 (로컬 개발 환경)
+# ===========================================
+# 로컬에서 IDE 로 직접 백엔드를 실행하는 구조:
+#   backend  -> host 에서 실행 (localhost:8080)
+#   prometheus -> docker compose 네트워크
+# 따라서 backend 는 host.docker.internal:8080 으로 스크래핑한다.
+# ===========================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: gearshow
+    env: local
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [ 'localhost:9090' ]
+
+  - job_name: gearshow-backend
+    metrics_path: /actuator/prometheus
+    scrape_interval: 10s
+    static_configs:
+      - targets: [ 'host.docker.internal:8080' ]
+        labels:
+          application: gearshow-backend
+          component: api
+
+  - job_name: node-exporter
+    static_configs:
+      - targets: [ 'node-exporter:9100' ]
+        labels:
+          host: local-dev

@@ -106,6 +106,17 @@ jobs:
           source: "docker-compose.prod.yml"
           target: ${{ env.EC2_APP_DIR }}
 
+      # Prometheus 스크래핑 설정 + Grafana 프로비저닝 파일도 함께 배포.
+      # strip_components 없이 observability/ 디렉토리 구조를 그대로 복제한다.
+      - name: observability 디렉토리를 EC2로 전송
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "observability"
+          target: ${{ env.EC2_APP_DIR }}
+
       - name: EC2 에서 backend 컨테이너 재기동
         uses: appleboy/ssh-action@v1
         env:
@@ -136,6 +147,11 @@ jobs:
 
             # Kafka 가 아직 안 떠 있으면 먼저 기동 (이미 healthy 면 no-op)
             docker compose -f docker-compose.prod.yml up -d kafka
+
+            # Observability 스택 기동 (idempotent — 이미 떠 있으면 no-op)
+            # Prometheus 설정이 바뀌면 컨테이너를 재생성해서 새 설정 반영
+            docker compose -f docker-compose.prod.yml up -d \
+              prometheus grafana node-exporter
 
             # 새 backend 이미지 pull 후 교체
             docker compose -f docker-compose.prod.yml pull backend

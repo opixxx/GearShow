@@ -82,6 +82,69 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # ===========================================
+  # Observability Stack (로컬 개발용)
+  # ===========================================
+  # IDE 에서 실행되는 백엔드가 localhost:8080 으로 노출한 /actuator/prometheus 를
+  # 도커 네트워크 내부에서 스크래핑하기 위해 host.docker.internal 을 사용한다.
+  # (macOS/Windows 에서는 기본 지원, Linux 에서는 extra_hosts 로 별칭 부여)
+  # ===========================================
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: gearshow-prometheus
+    hostname: prometheus
+    ports:
+      - "9090:9090"  # 로컬에서 직접 Prometheus UI 접근 가능
+    volumes:
+      - ./observability/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+      - gearshow-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=3d'
+      - '--web.enable-lifecycle'
+    extra_hosts:
+      # Linux 도커에서 host.docker.internal 을 호스트 IP 로 매핑
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: gearshow-grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"  # 로컬만. 운영은 꺼야 함
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - gearshow-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: gearshow-node-exporter
+    hostname: node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    restart: unless-stopped
+
 volumes:
   gearshow-mysql-data:
   gearshow-kafka-data:
+  gearshow-prometheus-data:
+  gearshow-grafana-data:

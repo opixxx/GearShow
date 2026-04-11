@@ -38,6 +38,10 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Observability 엔드포인트 (Prometheus 스크래핑용).
+                        // 운영 전환 시에는 관리 포트 분리(management.server.port) 또는
+                        // VPC 내부 IP 제한을 검토한다. 현재는 포트폴리오 단계라 허용.
+                        .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                         // 인증 없이 접근 가능한 엔드포인트
                         .requestMatchers("/api/v1/auth/login/**").permitAll()
                         .requestMatchers("/api/v1/auth/dev-login").permitAll()
