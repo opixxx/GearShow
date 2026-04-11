@@ -52,6 +52,13 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_MIN_INSYNC_REPLICAS: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      # --- JVM heap 캡 (t3.small 메모리 보호) ---
+      # Kafka 는 KAFKA_HEAP_OPTS 를 읽어 JVM 옵션을 적용한다.
+      # Xms=Xmx 로 고정해 점진 확장을 금지하고, 부하 테스트 중 다른 프로세스의
+      # 메모리 여유가 안정적으로 유지되도록 한다. 기본값(약 1GB 목표)을 그대로 두면
+      # t3.small 2GB 에서 Backend/Prometheus/Grafana 와 경쟁하여 thrashing 유발 가능.
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
     volumes:
       - gearshow-kafka-data:/var/lib/kafka/data
     healthcheck:
@@ -74,6 +81,16 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: gearshow-kafka:29092
+
+      # --- JVM heap 캡 (t3.small 메모리 보호) ---
+      # JDK 9+ 는 JDK_JAVA_OPTIONS 환경변수를 자동 인식한다 (Dockerfile 수정 불필요).
+      # - Xms=Xmx=384m : 시작부터 고정 크기로 JVM 이 런타임에 heap 을 확장하지 않게 한다.
+      # - MaxDirectMemorySize=64m : Netty/NIO 등이 쓰는 off-heap 을 제한해 예측 불가능한
+      #   메모리 증가를 막는다.
+      # - MaxMetaspaceSize=128m : 클래스 로딩 영역 상한으로 metaspace 폭주 방지.
+      # 총 Java 프로세스 메모리 예산: 384(heap) + 64(direct) + 128(metaspace) + ~80(stack/native)
+      # = 약 656 MB. Kafka 256m 과 합쳐 약 912 MB 로 고정된다.
+      JDK_JAVA_OPTIONS: "-Xms384m -Xmx384m -XX:MaxDirectMemorySize=64m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8080:8080"
     depends_on:
