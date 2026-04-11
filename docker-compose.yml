@@ -95,7 +95,8 @@ services:
     container_name: gearshow-prometheus
     hostname: prometheus
     ports:
-      - "9090:9090"  # 로컬에서 직접 Prometheus UI 접근 가능
+      # 로컬 호스트에서만 접근 가능 (127.0.0.1 에만 바인딩). 공용 Wi-Fi 에서도 안전.
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./observability/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
       - gearshow-prometheus-data:/prometheus
@@ -114,13 +115,16 @@ services:
     container_name: gearshow-grafana
     hostname: grafana
     ports:
-      - "3000:3000"
+      # 로컬 호스트에서만 접근 가능 (127.0.0.1). 카페/사내 네트워크에서 대시보드 노출 방지.
+      - "127.0.0.1:3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      # 로컬 전용 기본값. 운영 compose 에서는 기본값 없이 필수 주입으로 강제.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_AUTH_ANONYMOUS_ENABLED: "true"  # 로컬만. 운영은 꺼야 함
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # 익명 접근 비활성 — 로컬에서도 `admin/admin` 로 로그인하도록 강제한다.
+      # 혹시 loopback 바인딩이 풀려도 인증이 한 번 더 막는 defense-in-depth.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - gearshow-grafana-data:/var/lib/grafana

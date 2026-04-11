@@ -16,7 +16,10 @@ providers:
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30
-    allowUiUpdates: true
+    # 프로비저닝 파일을 유일한 소스로 삼는다. UI 에서 편집해도 재프로비저닝 시
+    # 파일 내용으로 덮어쓰기되어 혼란이 생기는 것을 막기 위해 UI 편집을 차단한다.
+    # 대시보드 수정이 필요하면 JSON 파일을 직접 수정 → Git 커밋 → Grafana 가 자동 재로드.
+    allowUiUpdates: false
     options:
       path: /etc/grafana/provisioning/dashboards
       foldersFromFilesStructure: true

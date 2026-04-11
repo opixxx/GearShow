@@ -22,11 +22,15 @@ scrape_configs:
 
   # Spring Boot 백엔드 — Micrometer 가 노출하는 /actuator/prometheus
   # http.server.requests, jvm.memory.*, hikaricp.*, kafka.consumer.* 등
+  #
+  # 포트 9091 은 application-prod.yml 의 management.server.port 설정에 의해
+  # 메인 API 포트(8080) 와 분리된 관리 전용 포트이다. docker compose 내부 네트워크에서만
+  # 접근 가능하며, EC2 보안 그룹/인터넷에는 노출되지 않는다.
   - job_name: gearshow-backend
     metrics_path: /actuator/prometheus
     scrape_interval: 10s
     static_configs:
-      - targets: [ 'backend:8080' ]
+      - targets: [ 'backend:9091' ]
         labels:
           application: gearshow-backend
           component: api

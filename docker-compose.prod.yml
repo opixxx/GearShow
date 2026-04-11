@@ -117,9 +117,18 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # 운영 전환 시 .env 의 GF_ADMIN_PASSWORD 를 강한 값으로 덮어쓴다
-      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
+      # GF_SECURITY_ADMIN_PASSWORD 는 .env 파일에서 반드시 주입해야 한다.
+      # 기본값을 두지 않는 이유: "admin/admin" 으로 조용히 기동되어 노출되는 사고를 막기 위함.
+      # 미설정 시 docker compose 가 warning 을 출력하고 컨테이너 기동을 거부한다.
+      #
+      # ⚠️ Grafana 의 함정: 이 환경변수는 **첫 부팅 시에만** 적용된다.
+      # 한 번 기동된 이후에는 /var/lib/grafana 볼륨의 SQLite 에 해시된 비밀번호가 저장되고
+      # 이후 GF_SECURITY_ADMIN_PASSWORD 변경은 무시된다.
+      # 비밀번호 교체가 필요하면 다음 중 하나:
+      #   (a) docker compose exec grafana grafana-cli admin reset-admin-password '<NEW>'
+      #   (b) gearshow-grafana-data 볼륨 삭제 후 재기동 (대시보드/데이터소스 재구성 필요)
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:?GF_ADMIN_USER must be set in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:?GF_ADMIN_PASSWORD must be set in .env}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_LOG_LEVEL: "warn"
