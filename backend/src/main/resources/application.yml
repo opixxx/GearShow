@@ -30,6 +30,45 @@ spring:
 server:
   port: 8080
 
+# ===========================================
+# Spring Boot Actuator / Micrometer 설정 (Observability)
+# ===========================================
+# - /actuator/prometheus : Prometheus 가 스크래핑할 지표 엔드포인트
+# - /actuator/health     : 헬스체크 (로드밸런서/스크래핑용, details 비공개)
+# - /actuator/info       : 빌드 정보 등 공개 메타데이터
+# 보안: /actuator/metrics 는 노출하지 않음 (내부 메트릭 정보 노출 방지).
+#      /actuator/prometheus 는 Security 에서 permitAll 로 열지만,
+#      운영 전환 시에는 관리 포트 분리 또는 인증 게이팅을 검토해야 한다.
+# ===========================================
+management:
+  endpoints:
+    web:
+      exposure:
+        # 화이트리스트 방식: 명시한 것만 노출
+        include: health,info,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      # 상세 정보(DB / Kafka / CircuitBreaker 상태)는 인증된 사용자에게만 노출
+      show-details: when-authorized
+      show-components: when-authorized
+  metrics:
+    tags:
+      # 여러 서비스가 같은 Prometheus 로 스크래핑될 때를 대비한 식별 라벨
+      application: ${spring.application.name}
+    distribution:
+      # HTTP 요청 지연시간 히스토그램을 Prometheus 네이티브 형식으로 내보낸다.
+      # Grafana 에서 histogram_quantile() 함수로 p50/p95/p99 를 서버 측 계산한다.
+      #
+      # 주의: 이전 버전에서 함께 설정했던 `percentiles` (클라이언트 측 사전계산) 는 제거했다.
+      # Micrometer 공식 문서 기준 "히스토그램이 있으면 클라이언트 백분위는 불필요" 이며,
+      # 각 백분위마다 별도 시계열이 생성되어 카디널리티 비용만 낭비되기 때문이다.
+      percentiles-histogram:
+        http.server.requests: true
+      # SLO 버킷 — 이 경계값들이 Grafana 에서 heatmap/apdex 계산 기반이 된다
+      slo:
+        http.server.requests: 100ms, 300ms, 500ms, 1s, 3s
+
 # AWS S3 설정
 cloud:
   aws:

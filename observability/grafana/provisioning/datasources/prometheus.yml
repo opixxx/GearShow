@@ -1,0 +1,20 @@
+# ===========================================
+# Grafana 데이터소스 자동 프로비저닝
+# ===========================================
+# Grafana 컨테이너가 처음 기동될 때 이 파일을 읽어
+# Prometheus 를 기본 데이터소스로 자동 등록한다.
+# 수동으로 UI 에서 추가할 필요 없음.
+# ===========================================
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s

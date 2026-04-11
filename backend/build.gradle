@@ -52,6 +52,11 @@ dependencies {
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 
+	// Observability — Prometheus 스크래핑용 Actuator + Micrometer
+	// /actuator/prometheus 엔드포인트로 JVM, HTTP, DB, Kafka 지표를 노출한다
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
