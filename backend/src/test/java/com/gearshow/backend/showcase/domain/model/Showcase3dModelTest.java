@@ -314,6 +314,31 @@ class Showcase3dModelTest {
         }
 
         @Test
+        @DisplayName("FAILED 상태에서 resetForRetry 하면 예외가 발생한다 (source 분리)")
+        void resetForRetry_fromFailed_throwsException() {
+            // Given — FAILED 에서는 resetRequest 만 허용, resetForRetry 는 금지
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
+                    .fail("테스트 실패");
+
+            // When & Then
+            assertThatThrownBy(() -> model.resetForRetry("fake-tripo"))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("PREPARING 상태에서 resetRequest 하면 예외가 발생한다 (source 분리)")
+        void resetRequest_fromPreparing_throwsException() {
+            // Given — PREPARING 에서는 resetForRetry 만 허용, resetRequest 는 금지
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
+
+            // When & Then
+            assertThatThrownBy(() -> model.resetRequest("fake-tripo"))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
         @DisplayName("retryCount 가 3 이상이면 isMaxRetryExceeded 가 true 를 반환한다")
         void isMaxRetryExceeded_whenCountIs3_returnsTrue() {
             // Given

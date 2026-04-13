@@ -89,11 +89,18 @@ public class Showcase3dModel {
      * <p>{@link ModelStatus#FAILED} 또는 {@link ModelStatus#UNAVAILABLE} 상태에서만 가능하다.
      * UNAVAILABLE 허용 사유: Tripo 서비스 장애 복구 후 사용자가 수동으로 재시도할 수 있어야 함.</p>
      *
+     * <p><b>주의:</b> {@link #resetForRetry(String)} 와 target 상태(REQUESTED)가 같지만
+     * 허용 source 가 다르다. 이 메서드는 사용자 수동 재요청이므로 retryCount 를 0 으로 초기화하고,
+     * resetForRetry 는 Recovery 자동 재시도이므로 retryCount 를 증가시킨다.
+     * {@code validateStatusTransition} 을 공유하지 않고 각각 source 를 직접 검증한다.</p>
+     *
      * @param generationProvider 생성 제공자
      * @return 재요청된 3D 모델
      */
     public Showcase3dModel resetRequest(String generationProvider) {
-        validateStatusTransition(ModelStatus.REQUESTED);
+        if (this.modelStatus != ModelStatus.FAILED && this.modelStatus != ModelStatus.UNAVAILABLE) {
+            throw new InvalidShowcaseModelStatusTransitionException();
+        }
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)
@@ -261,7 +268,9 @@ public class Showcase3dModel {
      * @return retryCount 가 증가된 REQUESTED 상태의 모델
      */
     public Showcase3dModel resetForRetry(String generationProvider) {
-        validateStatusTransition(ModelStatus.REQUESTED);
+        if (this.modelStatus != ModelStatus.PREPARING) {
+            throw new InvalidShowcaseModelStatusTransitionException();
+        }
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)
