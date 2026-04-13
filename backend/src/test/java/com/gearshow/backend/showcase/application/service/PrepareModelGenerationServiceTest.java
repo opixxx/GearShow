@@ -1,8 +1,8 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.common.exception.ErrorCode;
-import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoNonRetryableException;
-import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
@@ -26,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
@@ -153,11 +152,11 @@ class PrepareModelGenerationServiceTest {
         }
 
         @Test
-        @DisplayName("TripoNonRetryableException → 즉시 FAILED (설계 결정 #4)")
+        @DisplayName("ModelGenerationNonRetryableException → 즉시 FAILED (설계 결정 #4)")
         void prepare_nonRetryableException_savesFailed() {
             // Given
             stubAtomicTransitionSuccess();
-            willThrow(new TripoNonRetryableException(ErrorCode.TRIPO_INSUFFICIENT_CREDIT, true))
+            willThrow(new ModelGenerationNonRetryableException(ErrorCode.TRIPO_INSUFFICIENT_CREDIT, true))
                     .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
 
             // When
@@ -170,11 +169,11 @@ class PrepareModelGenerationServiceTest {
         }
 
         @Test
-        @DisplayName("TripoRetryableException → PREPARING 유지, Recovery 대기 (설계 결정 #4)")
+        @DisplayName("ModelGenerationRetryableException → PREPARING 유지, Recovery 대기 (설계 결정 #4)")
         void prepare_retryableException_keepsPreparing() {
             // Given
             stubAtomicTransitionSuccess();
-            willThrow(new TripoRetryableException(ErrorCode.TRIPO_RATE_LIMITED))
+            willThrow(new ModelGenerationRetryableException(ErrorCode.TRIPO_RATE_LIMITED))
                     .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
 
             // When

@@ -198,7 +198,7 @@ class Showcase3dModelTest {
                     .complete("url", "preview");
 
             // When & Then
-            assertThatThrownBy(() -> model.markPreparing())
+            assertThatThrownBy(model::markPreparing)
                     .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
             assertThatThrownBy(() -> model.markGenerating("another-task"))
                     .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
