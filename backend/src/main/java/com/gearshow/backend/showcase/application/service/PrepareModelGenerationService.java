@@ -51,26 +51,29 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
 
     @Override
     public void prepare(Long showcase3dModelId, Long showcaseId) {
-        Showcase3dModel model = showcase3dModelPort.findById(showcase3dModelId)
-                .orElse(null);
+        // [설계 결정 #1] PREPARING 상태로 원자적 선행 전환.
+        // WHERE model_status = REQUESTED 조건으로 DB 레벨에서 1 Worker 만 성공하도록 보장한다.
+        // check-then-act race (findById → 상태 확인 → save) 를 제거하여
+        // 두 Worker 가 동시에 PREPARING 전환에 성공하는 것을 원천 차단한다.
+        int updated = showcase3dModelPort.updateStatusIfCurrent(
+                showcase3dModelId, ModelStatus.REQUESTED, ModelStatus.PREPARING);
 
-        if (model == null) {
-            log.warn("3D 모델을 찾을 수 없습니다 - showcase3dModelId: {}", showcase3dModelId);
+        if (updated == 0) {
+            // 다른 Worker 가 이미 PREPARING 으로 전환했거나, 모델이 없거나, 다른 상태
+            log.info("REQUESTED→PREPARING 원자적 전환 실패 (이미 처리 중 또는 대상 없음) "
+                    + "- showcase3dModelId: {}", showcase3dModelId);
             return;
         }
 
-        if (model.getModelStatus() != ModelStatus.REQUESTED) {
-            // 중복 메시지/재전달 시나리오: 이미 PREPARING/GENERATING/COMPLETED/FAILED 면 skip
-            log.info("REQUESTED 상태가 아니어서 처리를 건너뜁니다 - showcase3dModelId: {}, status: {}",
-                    showcase3dModelId, model.getModelStatus());
-            return;
-        }
-
-        // [설계 결정 #1] PREPARING 상태로 선행 전환 — "의도 기록"
-        // 이 시점 이후로 Recovery 가 이 모델을 "REQUESTED stuck" 으로 오판하지 않는다.
-        Showcase3dModel preparing = model.markPreparing();
-        showcase3dModelPort.save(preparing);
         log.info("PREPARING 전환 완료 - showcase3dModelId: {}", showcase3dModelId);
+
+        // 원자적 전환 성공 → 최신 도메인 모델을 다시 읽어서 이후 로직에 사용
+        Showcase3dModel preparing = showcase3dModelPort.findById(showcase3dModelId)
+                .orElse(null);
+        if (preparing == null) {
+            log.error("PREPARING 전환 후 모델 조회 실패 - showcase3dModelId: {}", showcase3dModelId);
+            return;
+        }
 
         // Tripo API 호출 (이미지 업로드 + task 생성)
         String taskId;

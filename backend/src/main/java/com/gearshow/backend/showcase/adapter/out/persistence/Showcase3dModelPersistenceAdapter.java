@@ -39,6 +39,11 @@ public class Showcase3dModelPersistenceAdapter implements Showcase3dModelPort {
     }
 
     @Override
+    public int updateStatusIfCurrent(Long id, ModelStatus expected, ModelStatus newStatus) {
+        return showcase3dModelJpaRepository.updateStatusIfCurrent(id, expected, newStatus);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<Showcase3dModel> findById(Long id) {
         return showcase3dModelJpaRepository.findById(id)
