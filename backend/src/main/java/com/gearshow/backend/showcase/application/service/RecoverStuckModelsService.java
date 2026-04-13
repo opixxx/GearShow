@@ -86,7 +86,7 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
      */
     private int recoverStuckPreparing() {
         Instant threshold = Instant.now()
-                .minus(Duration.ofMinutes(properties.requestedStuckMinutes()));
+                .minus(Duration.ofMinutes(properties.preparingStuckMinutes()));
 
         List<Showcase3dModel> stuck = showcase3dModelPort
                 .findStaleByStatus(ModelStatus.PREPARING, threshold, properties.batchSize());
@@ -110,7 +110,7 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
                             model.getId(), model.getShowcaseId());
                     log.warn("PREPARING stuck 복구 - 자동 재시도 (retryCount: {} → {}) "
                                     + "- showcase3dModelId: {}",
-                            model.getRetryCount(), model.getRetryCount() + 1, model.getId());
+                            model.getRetryCount(), reset.getRetryCount(), model.getId());
                 }
                 recovered++;
             } catch (RuntimeException e) {

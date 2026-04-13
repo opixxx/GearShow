@@ -1,8 +1,7 @@
 package com.gearshow.backend.showcase.application.service;
 
-import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoApiException;
-import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoNonRetryableException;
-import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
 import com.gearshow.backend.showcase.application.port.in.PrepareModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
@@ -33,8 +32,8 @@ import org.springframework.web.client.RestClientException;
  *
  * <p><b>설계 결정 #4 (Tripo 에러 분류)</b>:</p>
  * <ul>
- *   <li>{@link TripoRetryableException} (429, 500) → PREPARING 유지, Recovery 가 자동 재시도</li>
- *   <li>{@link TripoNonRetryableException} (400, 401, 403) → 즉시 FAILED</li>
+ *   <li>{@link ModelGenerationRetryableException} (429, 500) → PREPARING 유지, Recovery 가 자동 재시도</li>
+ *   <li>{@link ModelGenerationNonRetryableException} (400, 401, 403) → 즉시 FAILED</li>
  *   <li>{@link CallNotPermittedException} → UNAVAILABLE (Circuit Breaker)</li>
  * </ul>
  *
@@ -84,7 +83,7 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
             Showcase3dModel unavailable = preparing.markUnavailable("3D 생성 서비스가 일시적으로 이용 불가합니다");
             showcase3dModelPort.save(unavailable);
             return;
-        } catch (TripoNonRetryableException e) {
+        } catch (ModelGenerationNonRetryableException e) {
             // [설계 결정 #4] 영구 실패 — 즉시 FAILED (재시도 무의미)
             log.error("Tripo 영구 실패 (Non-retryable) - showcase3dModelId: {}, errorCode: {}",
                     showcase3dModelId, e.getMessage(), e);
@@ -96,11 +95,15 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
                         + "showcase3dModelId: {}", showcase3dModelId);
             }
             return;
-        } catch (TripoRetryableException e) {
-            // [설계 결정 #4] 일시적 장애 — PREPARING 유지, Recovery 가 자동 재시도
-            log.warn("Tripo 일시적 장애 (Retryable) - PREPARING 유지 - showcase3dModelId: {}, error: {}",
+        } catch (ModelGenerationRetryableException e) {
+            // [설계 결정 #4] 일시적 장애 — PREPARING 유지, Recovery 가 자동 재시도.
+            // 이 경로에서 예외를 Worker 까지 전파하지 않는 것은 의도적 결정이다:
+            // - 예외를 던지면 Worker 의 release() 가 호출되어 Kafka 수준 재시도가 즉시 일어남
+            // - 하지만 429/500 은 수초~수분 후 복구되는 일시적 장애이므로 즉시 재시도보다
+            //   preparingStuckMinutes(기본 2분) 대기 후 Recovery 가 처리하는 것이 적절함
+            // - 이 "의도적 쿨다운" 이 Tripo rate limit 초과를 방지하는 역할도 한다.
+            log.warn("일시적 장애 (Retryable) - PREPARING 유지, Recovery 대기 - showcase3dModelId: {}, error: {}",
                     showcase3dModelId, e.getMessage());
-            // PREPARING + taskId=NULL 상태 유지 → Recovery 가 retryCount 기반으로 재시도
             return;
         } catch (DataAccessException e) {
             // 인프라 일시 장애는 DLT 로 보내 수동 재처리 (비즈니스 FAILED 와 구분)

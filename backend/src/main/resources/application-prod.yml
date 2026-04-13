@@ -73,6 +73,7 @@ app:
     interval-ms: 60000                                # 1분 주기로 stuck 검사
     batch-size: 50
     requested-stuck-minutes: 5                        # REQUESTED 5분 초과 시 Outbox 재등록
+    preparing-stuck-minutes: 2                        # PREPARING 2분 초과 시 자동 재시도 (retryCount 적용)
     generating-without-task-id-stuck-minutes: 5       # GENERATING + task_id 없음 5분 초과 시 FAILED
 
 # ===========================================

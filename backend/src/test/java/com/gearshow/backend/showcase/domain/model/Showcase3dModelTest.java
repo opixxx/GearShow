@@ -328,6 +328,51 @@ class Showcase3dModelTest {
     }
 
     @Nested
+    @DisplayName("markPolled")
+    class MarkPolled {
+
+        @Test
+        @DisplayName("GENERATING 상태에서 markPolled 호출 시 lastPolledAt 이 갱신된다")
+        void markPolled_whenGenerating_updatesLastPolledAt() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
+                    .markGenerating(FAKE_TASK_ID);
+
+            // When
+            Showcase3dModel polled = model.markPolled();
+
+            // Then
+            assertThat(polled.getModelStatus()).isEqualTo(ModelStatus.GENERATING);
+            assertThat(polled.getLastPolledAt()).isNotNull();
+            assertThat(polled.getGenerationTaskId()).isEqualTo(FAKE_TASK_ID);
+        }
+
+        @Test
+        @DisplayName("REQUESTED 상태에서 markPolled 호출 시 예외가 발생한다")
+        void markPolled_whenRequested_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+
+            // When & Then
+            assertThatThrownBy(model::markPolled)
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("PREPARING 상태에서 markPolled 호출 시 예외가 발생한다")
+        void markPolled_whenPreparing_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
+
+            // When & Then
+            assertThatThrownBy(model::markPolled)
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("isGenerating")
     class IsGenerating {
 

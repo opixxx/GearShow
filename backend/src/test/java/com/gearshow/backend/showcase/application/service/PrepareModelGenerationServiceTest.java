@@ -13,6 +13,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.gearshow.backend.common.exception.ErrorCode;
+import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoNonRetryableException;
+import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoRetryableException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -181,6 +184,47 @@ class PrepareModelGenerationServiceTest {
             assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.FAILED);
             assertThat(saved.getFailureReason()).isEqualTo("3D 모델 생성을 시작하지 못했습니다");
             assertThat(saved.getFailureReason()).doesNotContain("connection reset");
+        }
+
+        @Test
+        @DisplayName("TripoNonRetryableException 발생 시 즉시 FAILED 전환 (설계 결정 #4)")
+        void prepare_nonRetryableException_savesFailed() {
+            // Given
+            Showcase3dModel model = existingRequestedModel();
+            given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
+            willThrow(new TripoNonRetryableException(ErrorCode.TRIPO_INSUFFICIENT_CREDIT, true))
+                    .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
+
+            // When
+            service.prepare(MODEL_ID, SHOWCASE_ID);
+
+            // Then — save 2회: PREPARING (1) + FAILED (2)
+            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
+            verify(showcase3dModelPort, times(2)).save(captor.capture());
+
+            Showcase3dModel saved = captor.getAllValues().get(1);
+            assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.FAILED);
+        }
+
+        @Test
+        @DisplayName("TripoRetryableException 발생 시 PREPARING 유지 — Recovery 가 자동 재시도 (설계 결정 #4)")
+        void prepare_retryableException_keepsPreparing() {
+            // Given
+            Showcase3dModel model = existingRequestedModel();
+            given(showcase3dModelPort.findById(MODEL_ID)).willReturn(Optional.of(model));
+            willThrow(new TripoRetryableException(ErrorCode.TRIPO_RATE_LIMITED))
+                    .given(modelGenerationClient).startGeneration(MODEL_ID, SHOWCASE_ID);
+
+            // When
+            service.prepare(MODEL_ID, SHOWCASE_ID);
+
+            // Then — save 1회: PREPARING 전환만. 추가 상태 변경 없음.
+            ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
+            verify(showcase3dModelPort, times(1)).save(captor.capture());
+
+            Showcase3dModel saved = captor.getValue();
+            assertThat(saved.getModelStatus()).isEqualTo(ModelStatus.PREPARING);
+            assertThat(saved.getGenerationTaskId()).isNull();
         }
 
         @Test

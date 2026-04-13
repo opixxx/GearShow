@@ -62,8 +62,16 @@ public class ModelGenerationWorker {
             // 과금 전이므로 재시도해도 이중 과금 위험 없음.
             log.warn("Tripo 호출 전 실패 - 멱등성 레코드 release - messageId: {}, showcase3dModelId: {}",
                     message.messageId(), message.showcase3dModelId());
-            acquireIdempotencyUseCase.release(
-                    message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
+            try {
+                acquireIdempotencyUseCase.release(
+                        message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
+            } catch (Exception releaseEx) {
+                // release 실패해도 원본 예외를 전파해야 한다.
+                // release 실패하면 멱등성 레코드가 남아 DLT 봉쇄가 발생하지만,
+                // Recovery 스케줄러가 PREPARING + 5분 초과로 최종 복구한다 (설계 결정 #5 보험).
+                log.error("멱등성 레코드 release 실패 - Recovery 가 최종 복구 예정 - messageId: {}",
+                        message.messageId(), releaseEx);
+            }
             throw e; // Spring Kafka DefaultErrorHandler 가 재시도 → DLT
         }
     }

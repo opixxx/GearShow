@@ -55,10 +55,12 @@ class RecoverStuckModelsServiceTest {
 
     private RecoverStuckModelsService service;
 
+    private static final int PREPARING_STUCK_MINUTES = 2;
+
     @BeforeEach
     void setUp() {
         StuckRecoveryProperties properties = new StuckRecoveryProperties(
-                60_000L, BATCH_SIZE, REQUESTED_STUCK_MINUTES, GENERATING_STUCK_MINUTES);
+                60_000L, BATCH_SIZE, REQUESTED_STUCK_MINUTES, PREPARING_STUCK_MINUTES, GENERATING_STUCK_MINUTES);
         service = new RecoverStuckModelsService(
                 showcase3dModelPort, modelGenerationEventPublisher, properties);
     }

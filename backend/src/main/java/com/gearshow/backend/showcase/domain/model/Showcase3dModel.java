@@ -93,9 +93,7 @@ public class Showcase3dModel {
      * @return 재요청된 3D 모델
      */
     public Showcase3dModel resetRequest(String generationProvider) {
-        if (this.modelStatus != ModelStatus.FAILED && this.modelStatus != ModelStatus.UNAVAILABLE) {
-            throw new InvalidShowcaseModelStatusTransitionException();
-        }
+        validateStatusTransition(ModelStatus.REQUESTED);
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)
@@ -240,9 +238,7 @@ public class Showcase3dModel {
      * ({@link #resetRequest(String)} 가 UNAVAILABLE 전이를 허용한다).</p>
      */
     public Showcase3dModel markUnavailable(String reason) {
-        if (this.modelStatus != ModelStatus.REQUESTED && this.modelStatus != ModelStatus.PREPARING) {
-            throw new InvalidShowcaseModelStatusTransitionException();
-        }
+        validateStatusTransition(ModelStatus.UNAVAILABLE);
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)
@@ -265,9 +261,7 @@ public class Showcase3dModel {
      * @return retryCount 가 증가된 REQUESTED 상태의 모델
      */
     public Showcase3dModel resetForRetry(String generationProvider) {
-        if (this.modelStatus != ModelStatus.PREPARING) {
-            throw new InvalidShowcaseModelStatusTransitionException();
-        }
+        validateStatusTransition(ModelStatus.REQUESTED);
         return Showcase3dModel.builder()
                 .id(this.id)
                 .showcaseId(this.showcaseId)

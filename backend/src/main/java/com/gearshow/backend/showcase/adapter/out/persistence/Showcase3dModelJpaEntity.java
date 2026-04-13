@@ -86,7 +86,7 @@ public class Showcase3dModelJpaEntity {
     private Instant createdAt;
 
     /** Recovery 자동 재시도 횟수. PREPARING 좀비 복구 시 증가하며 3회 초과 시 FAILED. */
-    @Column(name = "retry_count", nullable = false)
+    @Column(name = "retry_count", nullable = false, columnDefinition = "INT NOT NULL DEFAULT 0")
     private int retryCount;
 
     @Builder
