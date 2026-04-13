@@ -360,7 +360,11 @@ adapter/out/{external}/{provider}/exception/
 CustomException (extends RuntimeException)
 ├── 도메인 예외     ({domain}/domain/exception/)
 ├── 애플리케이션 예외 ({domain}/application/exception/)
+│   ├── ModelGenerationRetryableException     ← 일시적 장애, 재시도 가능
+│   └── ModelGenerationNonRetryableException  ← 영구 실패, 즉시 FAILED
 └── 외부 시스템 예외  ({domain}/adapter/out/{external}/{provider}/exception/)
+    ├── TripoRetryableException     (→ ModelGenerationRetryableException 상속)
+    └── TripoNonRetryableException  (→ ModelGenerationNonRetryableException 상속)
 ```
 
 ### 규칙
@@ -370,6 +374,18 @@ CustomException (extends RuntimeException)
 - 예외 네이밍: `{Reason}{Entity}Exception`
 - ErrorCode 네이밍: `{DOMAIN}_{REASON}` 또는 `{DOMAIN}_{ENTITY}_{REASON}`
 - ErrorCode 메시지는 **한글**로 작성한다.
+
+### 외부 API 에러 분류 규칙
+
+외부 API (Tripo 등) 의 에러는 **Retryable / Non-retryable** 로 분류한다:
+
+| 분류 | 예시 | 처리 |
+|:----|:-----|:-----|
+| **Retryable** (일시적) | 429 Rate Limit, 500 Server Error | 상태 유지, Recovery 가 자동 재시도 (retryCount 적용) |
+| **Non-retryable** (영구) | 400 Invalid Param, 401 Auth, 403 No Credit | 즉시 FAILED. 크레딧 부족/인증 실패는 Alert 필수 |
+
+Application 계층에 추상 예외를 정의하고, 어댑터 예외가 이를 상속한다.
+이를 통해 **application 계층이 구체 어댑터(Tripo, Meshy 등)에 의존하지 않고** 재시도 여부를 판단할 수 있다.
 
 ---
 

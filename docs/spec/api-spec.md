@@ -821,6 +821,24 @@ GET /api/v1/showcases/{showcaseId}/3d-model
 }
 ```
 
+**Response** `200 OK` (생성 준비 중 — Worker 가 잡고 Tripo 호출 준비)
+```json
+{
+  "status": 200,
+  "message": "3D model retrieved successfully",
+  "data": {
+    "showcase3dModelId": 1,
+    "modelFileUrl": null,
+    "previewImageUrl": null,
+    "modelStatus": "PREPARING",
+    "generationProvider": "tripo",
+    "sourceImageCount": 4,
+    "requestedAt": "2026-03-20T14:35:00",
+    "generatedAt": null
+  }
+}
+```
+
 **Response** `200 OK` (생성 실패)
 ```json
 {
@@ -835,10 +853,31 @@ GET /api/v1/showcases/{showcaseId}/3d-model
     "sourceImageCount": 4,
     "requestedAt": "2026-03-20T14:35:00",
     "generatedAt": null,
-    "failureReason": "Insufficient image quality"
+    "failureReason": "Tripo 크레딧이 부족합니다. 크레딧 충전이 필요합니다"
   }
 }
 ```
+
+**Response** `200 OK` (서비스 일시 이용 불가 — Circuit Breaker OPEN)
+```json
+{
+  "status": 200,
+  "message": "3D model retrieved successfully",
+  "data": {
+    "showcase3dModelId": 1,
+    "modelFileUrl": null,
+    "previewImageUrl": null,
+    "modelStatus": "UNAVAILABLE",
+    "generationProvider": "tripo",
+    "sourceImageCount": 4,
+    "requestedAt": "2026-03-20T14:35:00",
+    "generatedAt": null,
+    "failureReason": "3D 생성 서비스가 일시적으로 이용 불가합니다"
+  }
+}
+```
+
+> **modelStatus 전체 값**: `REQUESTED`, `PREPARING`, `GENERATING`, `COMPLETED`, `FAILED`, `UNAVAILABLE`
 
 ---
 
