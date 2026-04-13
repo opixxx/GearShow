@@ -25,12 +25,12 @@ import static org.mockito.Mockito.verify;
 /**
  * ModelGenerationWorker 단위 테스트.
  *
- * <p>Worker 는 어댑터 책임(트리거 + 멱등성 가드)만 담당하므로
- * 비즈니스 로직 위임과 멱등성 흐름만 검증한다.</p>
- *
- * <p>폴링 분리 아키텍처로 전환되면서 release() 호출이 제거되었음에 유의.
- * 한 번 tryAcquire 된 메시지는 재처리되지 않는다 — 실패는 UseCase 내부에서
- * 모델 상태(FAILED/UNAVAILABLE)로 전환되거나, 인프라 예외 시 DLT 로 이동한다.</p>
+ * <p><b>설계 결정 #5 (멱등성 레코드 release 규칙)</b> 반영:</p>
+ * <ul>
+ *   <li>UseCase 가 예외를 던지면 → Tripo 호출 전 실패 → release() 호출 후 예외 전파</li>
+ *   <li>UseCase 가 정상 반환하면 → release 없음 (성공 또는 UseCase 내부에서 처리)</li>
+ *   <li>멱등성 가드에서 이미 처리된 메시지 → release 호출 없이 즉시 반환</li>
+ * </ul>
  */
 @ExtendWith(MockitoExtension.class)
 class ModelGenerationWorkerTest {
@@ -91,8 +91,8 @@ class ModelGenerationWorkerTest {
     class InfraException {
 
         @Test
-        @DisplayName("UseCase 가 RuntimeException 을 던지면 release 하지 않고 그대로 전파한다")
-        void processModelGeneration_useCaseThrows_rethrowsWithoutRelease() {
+        @DisplayName("UseCase 가 예외를 던지면 release 후 그대로 전파한다 (Tripo 호출 전 실패)")
+        void processModelGeneration_useCaseThrows_releasesAndRethrows() {
             // Given
             ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(5L, 100L);
             given(acquireIdempotencyUseCase.tryAcquire(any(), any())).willReturn(true);
@@ -100,12 +100,14 @@ class ModelGenerationWorkerTest {
                     .given(prepareModelGenerationUseCase).prepare(5L, 100L);
 
             // When & Then
-            // 예외는 Spring Kafka DefaultErrorHandler → DLT 로 이동시키도록 그대로 전파
+            // 예외는 Spring Kafka DefaultErrorHandler → 재시도 → DLT 로 이동
             assertThatThrownBy(() -> worker.processModelGeneration(message))
                     .isInstanceOf(QueryTimeoutException.class);
 
-            // release() 호출 없음 — 중복 Tripo 호출 방지를 위해 멱등성 레코드는 유지된다
-            verify(acquireIdempotencyUseCase, never()).release(any(), any());
+            // [설계 결정 #5] 예외가 Worker 까지 전파 = Tripo 호출 전 실패
+            // → release() 호출하여 재시도 시 tryAcquire 가 다시 성공하도록 허용
+            verify(acquireIdempotencyUseCase, times(1)).release(
+                    message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
         }
     }
 }

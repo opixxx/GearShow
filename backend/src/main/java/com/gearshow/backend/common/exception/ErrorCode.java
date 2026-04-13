@@ -72,6 +72,13 @@ public enum ErrorCode {
     TRIPO_TASK_STATUS_FAILED(500, "Tripo Task 상태 조회에 실패했습니다"),
     TRIPO_TASK_TIMEOUT(500, "Tripo 3D 모델 생성 시간이 초과되었습니다"),
     TRIPO_DOWNLOAD_FAILED(500, "Tripo 3D 모델 다운로드에 실패했습니다"),
+    // Tripo Non-retryable 에러 (즉시 FAILED, 재시도 무의미)
+    TRIPO_INSUFFICIENT_CREDIT(403, "Tripo 크레딧이 부족합니다. 크레딧 충전이 필요합니다"),
+    TRIPO_AUTH_FAILED(401, "Tripo 인증에 실패했습니다. API Key 확인이 필요합니다"),
+    TRIPO_INVALID_REQUEST(400, "Tripo 요청이 유효하지 않습니다"),
+    // Tripo Retryable 에러 (일시적 장애, 자동 재시도 가능)
+    TRIPO_RATE_LIMITED(429, "Tripo 요청 한도를 초과했습니다. 잠시 후 자동 재시도됩니다"),
+    TRIPO_SERVER_ERROR(500, "Tripo 서버 오류가 발생했습니다. 잠시 후 자동 재시도됩니다"),
 
     // OUTBOX (Transactional Outbox 패턴)
     OUTBOX_INVALID_MESSAGE(400, "Outbox 메시지 필수 값이 누락되었습니다"),

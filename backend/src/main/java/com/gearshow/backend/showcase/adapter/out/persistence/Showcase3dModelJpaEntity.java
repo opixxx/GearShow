@@ -85,13 +85,17 @@ public class Showcase3dModelJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Recovery 자동 재시도 횟수. PREPARING 좀비 복구 시 증가하며 3회 초과 시 FAILED. */
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
     @Builder
     private Showcase3dModelJpaEntity(Long id, Long showcaseId, String modelFileUrl,
                                      String previewImageUrl, ModelStatus modelStatus,
                                      String generationProvider, String generationTaskId,
                                      Instant requestedAt, Instant generatedAt,
                                      Instant lastPolledAt, String failureReason,
-                                     Instant createdAt) {
+                                     Instant createdAt, int retryCount) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.modelFileUrl = modelFileUrl;
@@ -104,5 +108,6 @@ public class Showcase3dModelJpaEntity {
         this.lastPolledAt = lastPolledAt;
         this.failureReason = failureReason;
         this.createdAt = createdAt;
+        this.retryCount = retryCount;
     }
 }

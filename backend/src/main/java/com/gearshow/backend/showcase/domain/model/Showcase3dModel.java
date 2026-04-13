@@ -13,12 +13,17 @@ import java.time.Instant;
  *
  * <p>SHOWCASE Aggregate에 종속되며, 쇼케이스당 최대 1개만 존재한다.</p>
  *
- * <p><b>폴링 분리 아키텍처</b>: Worker 는 Tripo task 를 생성한 직후 task_id 와 함께
- * GENERATING 상태로 전환하고 즉시 반환한다. 이후 Tripo 폴링은 별도 스케줄러가
- * {@code generationTaskId} 를 기준으로 수행한다.</p>
+ * <p><b>상태 선행 전환 아키텍처</b>: Worker 는 Tripo 호출 전에 PREPARING 상태로 먼저 전환하여
+ * "내가 이제 외부 API 를 호출할 것이다" 라는 의도를 DB 에 기록한다. 이후 Tripo task 를 생성한
+ * 직후 task_id 와 함께 GENERATING 상태로 전환한다.</p>
+ *
+ * <p><b>retryCount</b>: PREPARING 상태에서 크래시 후 Recovery 가 자동 재시도할 때마다 증가한다.
+ * 3회 이상이면 FAILED + Alert 로 전환하여 무한 루프를 방지한다.</p>
  */
 @Getter
 public class Showcase3dModel {
+
+    private static final int MAX_RETRY_COUNT = 3;
 
     private final Long id;
     private final Long showcaseId;
@@ -26,7 +31,7 @@ public class Showcase3dModel {
     private final String previewImageUrl;
     private final ModelStatus modelStatus;
     private final String generationProvider;
-    /** Tripo task_id — 폴링 스케줄러가 상태 조회에 사용한다. */
+    /** Tripo task_id — 폴링 스케줄러가 상태 조회에 사용한다. GENERATING 상태에서만 non-null. */
     private final String generationTaskId;
     private final Instant requestedAt;
     private final Instant generatedAt;
@@ -34,6 +39,8 @@ public class Showcase3dModel {
     private final Instant lastPolledAt;
     private final String failureReason;
     private final Instant createdAt;
+    /** Recovery 자동 재시도 횟수. PREPARING 좀비 복구 시 증가하며 MAX_RETRY_COUNT 초과 시 FAILED. */
+    private final int retryCount;
 
     @Builder
     private Showcase3dModel(Long id, Long showcaseId, String modelFileUrl,
@@ -41,7 +48,7 @@ public class Showcase3dModel {
                             String generationProvider, String generationTaskId,
                             Instant requestedAt, Instant generatedAt,
                             Instant lastPolledAt, String failureReason,
-                            Instant createdAt) {
+                            Instant createdAt, int retryCount) {
         this.id = id;
         this.showcaseId = showcaseId;
         this.modelFileUrl = modelFileUrl;
@@ -54,6 +61,7 @@ public class Showcase3dModel {
         this.lastPolledAt = lastPolledAt;
         this.failureReason = failureReason;
         this.createdAt = createdAt;
+        this.retryCount = retryCount;
     }
 
     /**
@@ -71,6 +79,7 @@ public class Showcase3dModel {
                 .generationProvider(generationProvider)
                 .requestedAt(now)
                 .createdAt(now)
+                .retryCount(0)
                 .build();
     }
 
@@ -94,6 +103,33 @@ public class Showcase3dModel {
                 .generationProvider(generationProvider)
                 .requestedAt(Instant.now())
                 .createdAt(this.createdAt)
+                .retryCount(0)
+                .build();
+    }
+
+    /**
+     * Worker 가 메시지를 잡고 Tripo 호출을 준비하는 PREPARING 상태로 전환한다.
+     *
+     * <p>이 전이는 {@link ModelStatus#REQUESTED} 상태에서만 허용된다.
+     * "외부 API 호출 전에 의도를 기록" 하여 Recovery 스케줄러와 다른 Worker 가
+     * 끼어드는 것을 방지한다.</p>
+     *
+     * <p>PREPARING 상태에서 generationTaskId 는 반드시 NULL 이다.
+     * 이는 Tripo 과금이 아직 발생하지 않았음을 보장하며,
+     * 이 상태에서의 크래시 복구 시 안전하게 재시도할 수 있는 근거가 된다.</p>
+     *
+     * @return PREPARING 상태의 3D 모델
+     */
+    public Showcase3dModel markPreparing() {
+        validateStatusTransition(ModelStatus.PREPARING);
+        return Showcase3dModel.builder()
+                .id(this.id)
+                .showcaseId(this.showcaseId)
+                .modelStatus(ModelStatus.PREPARING)
+                .generationProvider(this.generationProvider)
+                .requestedAt(this.requestedAt)
+                .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
                 .build();
     }
 
@@ -101,7 +137,7 @@ public class Showcase3dModel {
      * Tripo task 생성 성공 후 {@link ModelStatus#GENERATING} 상태로 전환한다.
      * task_id 를 함께 저장하여 이후 폴링 스케줄러가 Tripo 상태를 조회할 수 있게 한다.
      *
-     * <p>이 전이는 {@link ModelStatus#REQUESTED} 상태에서만 허용된다.</p>
+     * <p>이 전이는 {@link ModelStatus#PREPARING} 상태에서만 허용된다.</p>
      */
     public Showcase3dModel markGenerating(String generationTaskId) {
         if (generationTaskId == null || generationTaskId.isBlank()) {
@@ -116,6 +152,7 @@ public class Showcase3dModel {
                 .generationTaskId(generationTaskId)
                 .requestedAt(this.requestedAt)
                 .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
                 .build();
     }
 
@@ -143,6 +180,7 @@ public class Showcase3dModel {
                 .lastPolledAt(Instant.now())
                 .failureReason(this.failureReason)
                 .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
                 .build();
     }
 
@@ -167,11 +205,12 @@ public class Showcase3dModel {
                 .generatedAt(Instant.now())
                 .lastPolledAt(Instant.now())
                 .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
                 .build();
     }
 
     /**
-     * 생성 실패 처리한다. REQUESTED, GENERATING 상태 어디서든 호출 가능하다.
+     * 생성 실패 처리한다. REQUESTED, PREPARING, GENERATING 상태 어디서든 호출 가능하다.
      *
      * @param failureReason 실패 사유
      * @return 실패한 3D 모델
@@ -188,6 +227,7 @@ public class Showcase3dModel {
                 .lastPolledAt(this.lastPolledAt)
                 .failureReason(failureReason)
                 .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
                 .build();
     }
 
@@ -195,11 +235,12 @@ public class Showcase3dModel {
      * 3D 생성 서비스 장애로 일시 이용 불가 상태로 전환한다.
      * Tripo Circuit Breaker 가 OPEN 일 때 호출된다.
      *
-     * <p>사용자는 서비스 복구 후 수동으로 재요청할 수 있다
+     * <p>REQUESTED 또는 PREPARING 상태에서 호출 가능하다.
+     * 사용자는 서비스 복구 후 수동으로 재요청할 수 있다
      * ({@link #resetRequest(String)} 가 UNAVAILABLE 전이를 허용한다).</p>
      */
     public Showcase3dModel markUnavailable(String reason) {
-        if (this.modelStatus != ModelStatus.REQUESTED) {
+        if (this.modelStatus != ModelStatus.REQUESTED && this.modelStatus != ModelStatus.PREPARING) {
             throw new InvalidShowcaseModelStatusTransitionException();
         }
         return Showcase3dModel.builder()
@@ -210,6 +251,31 @@ public class Showcase3dModel {
                 .requestedAt(this.requestedAt)
                 .failureReason(reason)
                 .createdAt(this.createdAt)
+                .retryCount(this.retryCount)
+                .build();
+    }
+
+    /**
+     * PREPARING 좀비 복구: REQUESTED 로 되돌리면서 retryCount 를 증가시킨다.
+     *
+     * <p>PREPARING + taskId=NULL 상태에서만 호출 가능하다.
+     * taskId=NULL 은 Tripo 과금이 발생하지 않았음을 보장하므로 재시도가 안전하다.</p>
+     *
+     * @param generationProvider 생성 제공자
+     * @return retryCount 가 증가된 REQUESTED 상태의 모델
+     */
+    public Showcase3dModel resetForRetry(String generationProvider) {
+        if (this.modelStatus != ModelStatus.PREPARING) {
+            throw new InvalidShowcaseModelStatusTransitionException();
+        }
+        return Showcase3dModel.builder()
+                .id(this.id)
+                .showcaseId(this.showcaseId)
+                .modelStatus(ModelStatus.REQUESTED)
+                .generationProvider(generationProvider)
+                .requestedAt(Instant.now())
+                .createdAt(this.createdAt)
+                .retryCount(this.retryCount + 1)
                 .build();
     }
 
@@ -223,12 +289,21 @@ public class Showcase3dModel {
     }
 
     /**
-     * 상태 머신의 단일 진입점. 모든 전이 메서드(complete/fail/markGenerating/markUnavailable)가
-     * 이 검증을 통과해야 실제 전이가 이뤄진다. 규칙이 한 곳에 모여 있어 관리가 쉬워진다.
+     * 최대 재시도 횟수를 초과했는지 확인한다.
+     *
+     * @return 최대 재시도 초과 여부
+     */
+    public boolean isMaxRetryExceeded() {
+        return this.retryCount >= MAX_RETRY_COUNT;
+    }
+
+    /**
+     * 상태 머신의 단일 진입점. 모든 전이 메서드가 이 검증을 통과해야 실제 전이가 이뤄진다.
      *
      * <p>허용되는 전이:</p>
      * <ul>
-     *   <li>REQUESTED → GENERATING | FAILED | UNAVAILABLE</li>
+     *   <li>REQUESTED → PREPARING | FAILED | UNAVAILABLE</li>
+     *   <li>PREPARING → GENERATING | FAILED | UNAVAILABLE | REQUESTED (retryCount 증가 시)</li>
      *   <li>GENERATING → COMPLETED | FAILED</li>
      *   <li>FAILED | UNAVAILABLE → REQUESTED (사용자 재요청)</li>
      *   <li>COMPLETED → (종결, 어디로도 전이 불가)</li>
@@ -236,9 +311,13 @@ public class Showcase3dModel {
      */
     private void validateStatusTransition(ModelStatus target) {
         boolean valid = switch (this.modelStatus) {
-            case REQUESTED -> target == ModelStatus.GENERATING
+            case REQUESTED -> target == ModelStatus.PREPARING
                     || target == ModelStatus.FAILED
                     || target == ModelStatus.UNAVAILABLE;
+            case PREPARING -> target == ModelStatus.GENERATING
+                    || target == ModelStatus.FAILED
+                    || target == ModelStatus.UNAVAILABLE
+                    || target == ModelStatus.REQUESTED;
             case GENERATING -> target == ModelStatus.COMPLETED || target == ModelStatus.FAILED;
             case FAILED, UNAVAILABLE -> target == ModelStatus.REQUESTED;
             case COMPLETED -> false;

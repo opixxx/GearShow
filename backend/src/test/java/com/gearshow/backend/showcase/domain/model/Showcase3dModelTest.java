@@ -30,6 +30,7 @@ class Showcase3dModelTest {
             assertThat(model.getGenerationProvider()).isEqualTo("fake-tripo");
             assertThat(model.getRequestedAt()).isNotNull();
             assertThat(model.getGenerationTaskId()).isNull();
+            assertThat(model.getRetryCount()).isZero();
         }
     }
 
@@ -38,10 +39,26 @@ class Showcase3dModelTest {
     class StatusTransition {
 
         @Test
-        @DisplayName("REQUESTED에서 task_id 와 함께 GENERATING으로 전이한다")
-        void markGenerating_fromRequested_returnsGeneratingWithTaskId() {
+        @DisplayName("REQUESTED에서 PREPARING으로 전이한다")
+        void markPreparing_fromRequested_returnsPreparing() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+
+            // When
+            Showcase3dModel preparing = model.markPreparing();
+
+            // Then
+            assertThat(preparing.getModelStatus()).isEqualTo(ModelStatus.PREPARING);
+            assertThat(preparing.getGenerationTaskId()).isNull();
+            assertThat(preparing.getRetryCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("PREPARING에서 task_id 와 함께 GENERATING으로 전이한다")
+        void markGenerating_fromPreparing_returnsGeneratingWithTaskId() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
 
             // When
             Showcase3dModel generating = model.markGenerating(FAKE_TASK_ID);
@@ -52,10 +69,22 @@ class Showcase3dModelTest {
         }
 
         @Test
+        @DisplayName("REQUESTED에서 바로 GENERATING으로 전이하면 예외가 발생한다")
+        void markGenerating_fromRequested_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+
+            // When & Then
+            assertThatThrownBy(() -> model.markGenerating(FAKE_TASK_ID))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
         @DisplayName("markGenerating 에 task_id 를 누락하면 예외가 발생한다")
         void markGenerating_withoutTaskId_throwsException() {
             // Given
-            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
 
             // When & Then
             assertThatThrownBy(() -> model.markGenerating(""))
@@ -69,6 +98,7 @@ class Showcase3dModelTest {
         void complete_fromGenerating_returnsCompletedWithUrls() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID);
 
             // When
@@ -90,6 +120,7 @@ class Showcase3dModelTest {
         void fail_fromGenerating_returnsFailedWithReason() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID);
 
             // When
@@ -98,6 +129,21 @@ class Showcase3dModelTest {
             // Then
             assertThat(failed.getModelStatus()).isEqualTo(ModelStatus.FAILED);
             assertThat(failed.getFailureReason()).isEqualTo("이미지 품질 부족");
+        }
+
+        @Test
+        @DisplayName("PREPARING에서 FAILED로 전이할 수 있다 (Tripo Non-retryable 에러)")
+        void fail_fromPreparing_returnsFailedWithReason() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
+
+            // When
+            Showcase3dModel failed = model.fail("크레딧 부족");
+
+            // Then
+            assertThat(failed.getModelStatus()).isEqualTo(ModelStatus.FAILED);
+            assertThat(failed.getFailureReason()).isEqualTo("크레딧 부족");
         }
 
         @Test
@@ -115,7 +161,7 @@ class Showcase3dModelTest {
         }
 
         @Test
-        @DisplayName("REQUESTED에서 UNAVAILABLE로 전이할 수 있다 (Tripo Circuit Breaker OPEN)")
+        @DisplayName("REQUESTED에서 UNAVAILABLE로 전이할 수 있다 (Circuit Breaker OPEN)")
         void markUnavailable_fromRequested_returnsUnavailable() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
@@ -129,23 +175,41 @@ class Showcase3dModelTest {
         }
 
         @Test
+        @DisplayName("PREPARING에서 UNAVAILABLE로 전이할 수 있다 (Circuit Breaker OPEN)")
+        void markUnavailable_fromPreparing_returnsUnavailable() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
+
+            // When
+            Showcase3dModel unavailable = model.markUnavailable("Tripo 서비스 일시 이용 불가");
+
+            // Then
+            assertThat(unavailable.getModelStatus()).isEqualTo(ModelStatus.UNAVAILABLE);
+        }
+
+        @Test
         @DisplayName("COMPLETED에서 다른 상태로 전이하면 예외가 발생한다")
         void anyTransition_fromCompleted_throwsException() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID)
                     .complete("url", "preview");
 
             // When & Then
+            assertThatThrownBy(() -> model.markPreparing())
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
             assertThatThrownBy(() -> model.markGenerating("another-task"))
                     .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
         }
 
         @Test
-        @DisplayName("REQUESTED에서 바로 COMPLETED로 전이하면 예외가 발생한다")
-        void complete_fromRequested_throwsException() {
+        @DisplayName("PREPARING에서 바로 COMPLETED로 전이하면 예외가 발생한다")
+        void complete_fromPreparing_throwsException() {
             // Given
-            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
 
             // When & Then
             assertThatThrownBy(() -> model.complete("url", "preview"))
@@ -162,6 +226,7 @@ class Showcase3dModelTest {
         void resetRequest_fromFailed_returnsRequested() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID)
                     .fail("이미지 품질 부족");
 
@@ -174,6 +239,7 @@ class Showcase3dModelTest {
             assertThat(reset.getRequestedAt()).isNotNull();
             assertThat(reset.getId()).isEqualTo(model.getId());
             assertThat(reset.getGenerationTaskId()).isNull();
+            assertThat(reset.getRetryCount()).isZero();
         }
 
         @Test
@@ -206,12 +272,58 @@ class Showcase3dModelTest {
         void resetRequest_fromCompleted_throwsException() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID)
                     .complete("url", "preview");
 
             // When & Then
             assertThatThrownBy(() -> model.resetRequest("tripo-v2"))
                     .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("resetForRetry")
+    class ResetForRetry {
+
+        @Test
+        @DisplayName("PREPARING 상태에서 retryCount 증가 후 REQUESTED로 재설정한다")
+        void resetForRetry_fromPreparing_returnsRequestedWithIncrementedRetry() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing();
+
+            // When
+            Showcase3dModel reset = model.resetForRetry("fake-tripo");
+
+            // Then
+            assertThat(reset.getModelStatus()).isEqualTo(ModelStatus.REQUESTED);
+            assertThat(reset.getRetryCount()).isEqualTo(1);
+            assertThat(reset.getGenerationTaskId()).isNull();
+        }
+
+        @Test
+        @DisplayName("REQUESTED 상태에서 resetForRetry 하면 예외가 발생한다")
+        void resetForRetry_fromRequested_throwsException() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+
+            // When & Then
+            assertThatThrownBy(() -> model.resetForRetry("fake-tripo"))
+                    .isInstanceOf(InvalidShowcaseModelStatusTransitionException.class);
+        }
+
+        @Test
+        @DisplayName("retryCount 가 3 이상이면 isMaxRetryExceeded 가 true 를 반환한다")
+        void isMaxRetryExceeded_whenCountIs3_returnsTrue() {
+            // Given
+            Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo");
+            Showcase3dModel retry1 = model.markPreparing().resetForRetry("fake-tripo");       // 1
+            Showcase3dModel retry2 = retry1.markPreparing().resetForRetry("fake-tripo");       // 2
+            Showcase3dModel retry3 = retry2.markPreparing().resetForRetry("fake-tripo");       // 3
+
+            // When & Then
+            assertThat(retry3.isMaxRetryExceeded()).isTrue();
         }
     }
 
@@ -224,6 +336,7 @@ class Showcase3dModelTest {
         void isGenerating_whenGenerating_returnsTrue() {
             // Given
             Showcase3dModel model = Showcase3dModel.request(1L, "fake-tripo")
+                    .markPreparing()
                     .markGenerating(FAKE_TASK_ID);
 
             // When & Then
