@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>3D 모델 생성 파이프라인 — 중복 처리 방지 설계</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --bg-card: #1a2028;
+    --bg-elevated: #232c37;
+    --border: #2d3748;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --critical: #ef4444;
+    --critical-bg: #2a1515;
+    --warning: #f59e0b;
+    --warning-bg: #2a2215;
+    --success: #10b981;
+    --success-bg: #0f2420;
+    --info: #3b82f6;
+    --info-bg: #151f2a;
+    --purple: #a78bfa;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Hero */
+  header.hero {
+    background: linear-gradient(135deg, #1a1f2e 0%, #1e2740 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 24px 44px;
+    text-align: center;
+  }
+  header.hero h1 {
+    font-size: 34px; font-weight: 800; margin-bottom: 10px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  header.hero .subtitle { color: var(--text-dim); font-size: 16px; margin-bottom: 32px; }
+  .stats { display: flex; justify-content: center; gap: 32px; flex-wrap: wrap; }
+  .stat {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px 28px; background: rgba(255,255,255,0.03);
+    border-radius: 12px; border: 1px solid var(--border);
+  }
+  .stat-value { font-size: 30px; font-weight: 800; }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+  .stat.critical .stat-value { color: var(--critical); }
+  .stat.warning .stat-value { color: var(--warning); }
+  .stat.success .stat-value { color: var(--success); }
+  .stat.info .stat-value { color: var(--info); }
+
+  /* Section */
+  .section { margin-bottom: 48px; }
+  .section-title {
+    font-size: 13px; font-weight: 700; color: var(--info);
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 20px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--info);
+  }
+  .section-num {
+    display: inline-block; background: var(--info);
+    color: white; width: 28px; height: 28px; line-height: 28px;
+    text-align: center; border-radius: 50%; margin-right: 10px;
+    font-size: 13px; font-weight: 800;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 32px; margin-bottom: 20px;
+  }
+  .card h3 { font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+  .card p { color: var(--text-dim); margin-bottom: 12px; }
+
+  /* Scenario cards */
+  .scenario {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px 28px; margin-bottom: 16px;
+  }
+  .scenario-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .scenario-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 6px; flex-shrink: 0;
+  }
+  .scenario-num.safe { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+  .scenario-num.danger { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical); }
+  .scenario-num.warn { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
+  .scenario h4 { font-size: 16px; font-weight: 600; }
+  .scenario-body { color: var(--text-dim); font-size: 14px; }
+
+  /* Decision cards */
+  .decision {
+    background: var(--bg-card); border: 1px solid var(--info);
+    border-left: 4px solid var(--info);
+    border-radius: 12px; padding: 28px 32px; margin-bottom: 20px;
+  }
+  .decision-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .decision-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    background: var(--info); color: white;
+    padding: 4px 12px; border-radius: 6px;
+  }
+  .decision h3 { font-size: 18px; font-weight: 700; }
+
+  /* Code blocks */
+  pre {
+    background: #0d1117; border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px 22px; margin: 14px 0;
+    font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    overflow-x: auto; color: #c9d1d9;
+  }
+
+  /* Tables */
+  table {
+    width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px;
+  }
+  th {
+    background: var(--bg-elevated); color: var(--text);
+    padding: 10px 16px; text-align: left; font-weight: 600;
+    border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Badges */
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px; margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge-safe { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+  .badge-danger { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical); }
+  .badge-warn { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
+
+  /* Callout */
+  .callout {
+    border-radius: 8px; padding: 16px 20px; margin: 16px 0;
+    font-size: 14px;
+  }
+  .callout-info { background: var(--info-bg); border: 1px solid rgba(59,130,246,0.3); }
+  .callout-warn { background: var(--warning-bg); border: 1px solid rgba(245,158,11,0.3); }
+  .callout-success { background: var(--success-bg); border: 1px solid rgba(16,185,129,0.3); }
+  .callout-danger { background: var(--critical-bg); border: 1px solid rgba(239,68,68,0.3); }
+  .callout strong { color: var(--warning); }
+
+  /* Principle */
+  .principle {
+    background: linear-gradient(135deg, rgba(167,139,250,0.08), rgba(96,165,250,0.08));
+    border: 1px solid rgba(167,139,250,0.3);
+    border-radius: 12px; padding: 24px 28px; margin-bottom: 16px;
+  }
+  .principle-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--purple); margin-bottom: 8px;
+  }
+  .principle h4 { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--purple); }
+  .principle p { color: var(--text-dim); font-size: 14px; }
+
+  /* Flow diagram */
+  .flow {
+    background: #0d1117; border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; margin: 16px 0;
+    overflow-x: auto;
+  }
+  .flow pre { background: transparent; border: none; padding: 0; margin: 0; }
+
+  /* Comparison */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .compare-item {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px;
+  }
+  .compare-item h4 { font-size: 14px; margin-bottom: 10px; }
+  .compare-item.before { border-top: 3px solid var(--critical); }
+  .compare-item.after { border-top: 3px solid var(--success); }
+  .compare-item.before h4 { color: var(--critical); }
+  .compare-item.after h4 { color: var(--success); }
+
+  @media (max-width: 768px) {
+    .compare { grid-template-columns: 1fr; }
+    .stats { gap: 16px; }
+    header.hero { padding: 40px 16px 32px; }
+    .container { padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<header class="hero">
+  <h1>3D 모델 생성 파이프라인 — 중복 처리 방지 설계</h1>
+  <p class="subtitle">외부 API 호출당 $0.6 — 어떤 장애 시나리오에서도 이중 과금을 막는 방법</p>
+  <div class="stats">
+    <div class="stat critical"><span class="stat-value">$0.6</span><span class="stat-label">건당 과금 (취소 불가)</span></div>
+    <div class="stat warning"><span class="stat-value">9</span><span class="stat-label">장애 시나리오</span></div>
+    <div class="stat info"><span class="stat-value">6</span><span class="stat-label">설계 결정</span></div>
+    <div class="stat success"><span class="stat-value">5</span><span class="stat-label">핵심 원칙</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ==================== 1. 배경 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">1</span> 배경 — 왜 중복 처리가 치명적인가</div>
+
+  <div class="card">
+    <h3>Tripo API 특성</h3>
+    <table>
+      <tr><th>특성</th><th>영향</th></tr>
+      <tr><td>호출당 $0.6 과금</td><td>중복 호출 = 직접적 금전 손실</td></tr>
+      <tr><td>taskId 생성 시점 = 과금 시점</td><td>taskId 못 받아도 과금됐을 수 있음</td></tr>
+      <tr><td>Task 취소 API 없음</td><td>한 번 생성된 task 되돌릴 수 없음</td></tr>
+      <tr><td>Idempotency Key 미지원</td><td>같은 요청 보내도 매번 새 task 생성</td></tr>
+      <tr><td>처리 시간 수분</td><td>동기 처리 불가 &rarr; 비동기 파이프라인 필수</td></tr>
+    </table>
+  </div>
+
+  <div class="callout callout-danger">
+    <strong>핵심 제약:</strong> Tripo 는 우리가 통제할 수 없는 외부 API 다. 취소 불가, 멱등성 키 미지원 — 따라서 "우리 쪽에서 절대 2번 호출하지 않는 것" 이 유일한 방어다.
+  </div>
+</div>
+
+<!-- ==================== 2. 아키텍처 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">2</span> 시스템 아키텍처</div>
+
+  <div class="card">
+    <h3>전체 구조 (서버 분리 기준)</h3>
+    <div class="flow"><pre>
+[API Server]                              [3D Worker Server]
+
+  POST /showcases                           Kafka Consumer
+    &rarr; Showcase 저장 (DB)                    &rarr; 멱등성 확인
+    &rarr; Showcase3dModel 저장 (REQUESTED)      &rarr; S3 이미지 다운로드
+    &rarr; Outbox 메시지 저장                     &rarr; Tripo API 호출 ($0.6)
+    &rarr; 응답 반환 (201)                        &rarr; taskId 저장 (GENERATING)
+
+  OutboxRelayScheduler (1초)                PollGenerationStatusService (3초)
+    &rarr; Kafka publish                        &rarr; Tripo 상태 확인
+                                              &rarr; 완료 시: GLB &rarr; S3 &rarr; COMPLETED
+         -------- Kafka ------&rarr;
+                                            RecoverStuckModelsService (1분)
+                                              &rarr; stuck 모델 감지 &rarr; 복구</pre></div>
+  </div>
+
+  <div class="card">
+    <h3>정상 흐름 타임라인</h3>
+    <div class="flow"><pre>
+T=0초     사용자 요청
+          DB: showcase + images + showcase_3d_model(REQUESTED) + outbox_message
+          응답: 201 Created
+
+T=1초     Outbox Relay &rarr; Kafka 발행 + outbox published=true
+
+T=2초     Worker 수신
+          멱등성 확인 &rarr; PREPARING &rarr; S3 다운로드 &rarr; Tripo 호출($0.6) &rarr; GENERATING + taskId
+
+T=5초     폴링 시작 (3초 주기)
+~5분      Tripo 상태 반복 확인
+
+T=30초    Tripo 완료 &rarr; GLB 다운로드 &rarr; S3 저장 &rarr; COMPLETED
+~5분</pre></div>
+  </div>
+
+  <div class="card">
+    <h3>상태 전이도 (설계 반영 후)</h3>
+    <div class="flow"><pre>
+REQUESTED (등록 시)
+  |
+  +--&rarr; PREPARING (Worker 가 잡음, Tripo 호출 전)
+  |     |
+  |     +--&rarr; GENERATING + taskId (Tripo 호출 성공)
+  |     |     |
+  |     |     +--&rarr; COMPLETED (폴링 &rarr; 성공)
+  |     |     +--&rarr; FAILED (폴링 &rarr; 실패 / 타임아웃 15분)
+  |     |
+  |     +--&rarr; FAILED (Tripo Non-retryable: 크레딧 부족, 이미지 거부 등)
+  |     +--&rarr; UNAVAILABLE (Circuit Breaker OPEN)
+  |     +--&rarr; REQUESTED (크래시 &rarr; Recovery 자동 재시도)
+  |
+  +--&rarr; REQUESTED (Outbox 발행 지연 &rarr; Recovery 재등록)</pre></div>
+  </div>
+</div>
+
+<!-- ==================== 3. 시나리오 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">3</span> 깨질 수 있는 지점 — 9가지 시나리오</div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num safe">#1</span>
+      <h4>Outbox 중복 발행 <span class="badge badge-safe">안전</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> Kafka 발행 성공 + published 마킹 전 크래시 &rarr; 같은 messageId 로 2번 발행</p>
+      <p><strong>결과:</strong> Consumer 멱등성 (processed_message) 이 같은 키로 2번째를 차단. Tripo 중복 호출 없음.</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num danger">#2</span>
+      <h4>Tripo 응답 지연 + Recovery 재발행 <span class="badge badge-danger">가장 위험</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> Worker A 가 Tripo 호출 중 (5분+ 블로킹). 상태가 REQUESTED 유지. Recovery 가 "stuck" 으로 판단 &rarr; 새 messageId 로 재발행 &rarr; Worker B 가 Tripo 또 호출.</p>
+      <div class="flow"><pre>
+T=0분   Worker A: tryAcquire(msg-A) &rarr; Tripo 호출 시작 (블로킹...)
+        showcase_3d_model.status = REQUESTED (아직 안 바꿈!)
+
+T=5분   Recovery: "REQUESTED 5분 초과" &rarr; 새 Outbox (messageId=msg-B)
+        Worker B: tryAcquire(msg-B) &rarr; 다른 키라 통과!
+        Worker B: 상태 확인 &rarr; REQUESTED &rarr; 통과!
+        Worker B: Tripo 호출 &rarr; $0.6 두 번째 과금!
+
+결과: $0.6 x 2 = $1.2 이중 과금</pre></div>
+      <p><strong>근본 원인:</strong> Tripo 호출 전에 상태가 REQUESTED 로 남아있어서 Recovery 와 다른 Worker 가 끼어들 수 있었음.</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num safe">#3</span>
+      <h4>PREPARING 전환 후 크래시 (Tripo 호출 전) <span class="badge badge-safe">안전</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> REQUESTED &rarr; PREPARING 성공 &rarr; 크래시 &rarr; Tripo 호출 안 됨</p>
+      <p><strong>결과:</strong> taskId=NULL = 과금 안 됨 확정. Recovery 가 자동 재시도 (retryCount 적용).</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num warn">#4</span>
+      <h4>Tripo 호출 성공 + taskId DB 저장 실패 <span class="badge badge-warn">$0.6 1회 손실</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> Tripo 호출 &rarr; taskId 받음 ($0.6) &rarr; DB 저장 실패 &rarr; taskId 미기록</p>
+      <p><strong>결과:</strong> $0.6 1회 손실. orphan 마킹 + Alert &rarr; 개발자 수동 복구.</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num danger">#5</span>
+      <h4>Tripo 비즈니스 에러 — catch 누락 <span class="badge badge-danger">CRITICAL</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> Tripo 가 400/401/403 에러 반환 &rarr; TripoApiException &rarr; 기존 catch 에 안 잡힘</p>
+      <p><strong>결과:</strong> 모델 상태가 전환 안 되고 방치됨. 사용자에겐 영원히 "생성 중".</p>
+      <p><strong>해결:</strong> Tripo 에러를 Retryable / Non-retryable 로 분류하여 각각 처리.</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num danger">#6</span>
+      <h4>멱등성 레코드 + DLT 봉쇄 <span class="badge badge-danger">CRITICAL</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> tryAcquire 성공 (즉시 커밋) &rarr; 비즈니스 실패 &rarr; Spring Kafka 재시도 &rarr; tryAcquire 차단 &rarr; "성공" 간주 &rarr; DLT 안 감</p>
+      <div class="flow"><pre>
+1차 시도:  tryAcquire("17") 성공 [커밋!] &rarr; 비즈니스 실패 &rarr; throw
+
+재시도 #1: tryAcquire("17") &rarr; 이미 존재 &rarr; return
+           Spring Kafka: "성공했네" &rarr; offset commit &rarr; DLT 안 감!
+
+결과: 메시지가 "처리 완료" 로 간주됐지만 실제로는 아무것도 안 됨
+      멱등성 레코드가 남아있어서 Recovery 도 차단됨
+      &rarr; 영원히 처리 안 됨</pre></div>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num safe">#7</span>
+      <h4>폴링 중 GLB 다운로드 실패 <span class="badge badge-safe">안전</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> Tripo 성공 &rarr; GLB 다운로드 실패 (CDN 에러, 네트워크 등)</p>
+      <p><strong>결과:</strong> 다음 폴링 주기 (3초) 에 자동 재시도. 조회일 뿐이라 추가 과금 없음.</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num safe">#8</span>
+      <h4>COMPLETED 전환 시 DB 실패 <span class="badge badge-safe">안전</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> GLB S3 저장 성공 &rarr; DB UPDATE 실패</p>
+      <p><strong>결과:</strong> 다음 폴링 주기에 재시도. S3 는 같은 key 덮어쓰기 (멱등).</p>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <span class="scenario-num warn">#9</span>
+      <h4>서버 분리 후 메시지 스키마 불일치 <span class="badge badge-warn">서비스 중단</span></h4>
+    </div>
+    <div class="scenario-body">
+      <p><strong>상황:</strong> API 서버가 메시지에 필드 추가 &rarr; Worker 미배포 &rarr; 역직렬화 실패 &rarr; 3D 생성 전체 중단</p>
+      <p><strong>원인:</strong> Producer / Consumer 가 별도 배포 &rarr; DTO 불일치 구간 발생.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 4. 설계 결정 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">4</span> 설계 결정 — 6가지</div>
+
+  <!-- Decision 1 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#1</span>
+      <h3>Tripo 호출 전 상태 선행 전환 (PREPARING)</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #2 (Recovery 우회), #3 (크래시 후 안전한 재시도)</p>
+
+    <div class="compare">
+      <div class="compare-item before">
+        <h4>Before</h4>
+        <pre>REQUESTED &rarr; Tripo 호출 (수분 블로킹) &rarr; GENERATING
+             |
+             | 이 동안 상태가 REQUESTED
+             | Recovery/Worker 가 끼어들 수 있음</pre>
+      </div>
+      <div class="compare-item after">
+        <h4>After</h4>
+        <pre>REQUESTED &rarr; PREPARING &rarr; Tripo 호출 &rarr; GENERATING + taskId
+                   |
+                   | 이 동안 상태가 PREPARING
+                   | Recovery 가 개입 안 함</pre>
+      </div>
+    </div>
+
+    <div class="callout callout-info">
+      <strong>핵심 원칙:</strong> "외부 API 호출 전에 의도를 기록하라" — PREPARING 이 "내가 이제 Tripo 부를 거야" 를 DB 에 먼저 남긴다.
+    </div>
+  </div>
+
+  <!-- Decision 2 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#2</span>
+      <h3>PREPARING 좀비 자동 재시도 (retryCount)</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #3 (크래시 후 사용자 개입 없이 자동 복구)</p>
+
+    <div class="flow"><pre>
+PREPARING + taskId=NULL + 5분 초과:
+  &rarr; taskId=NULL = Tripo 호출 안 됨 = 과금 없음 확정
+  &rarr; retryCount &lt; 3: REQUESTED 로 되돌림 + Outbox 재등록 (자동 재시도)
+  &rarr; retryCount &ge; 3: FAILED + Alert (무한 루프 방지)</pre></div>
+
+    <div class="callout callout-success">
+      <strong>안전 근거:</strong> taskId=NULL 이 "과금 안 됐다" 의 증거. 이 상태에서는 재시도해도 이중 과금 위험이 없다.
+    </div>
+  </div>
+
+  <!-- Decision 3 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#3</span>
+      <h3>Recovery 대상 명확화</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #2, #3, #4 의 Recovery 동작 분리</p>
+
+    <table>
+      <tr><th>상태</th><th>taskId</th><th>Recovery 행동</th><th>이유</th></tr>
+      <tr><td>REQUESTED + 5분 초과</td><td>NULL</td><td>Outbox 재등록</td><td>Worker 가 아직 안 잡음</td></tr>
+      <tr><td>PREPARING + 5분 초과</td><td>NULL</td><td>자동 재시도 (retryCount)</td><td>Tripo 호출 전 크래시, 과금 없음</td></tr>
+      <tr><td>GENERATING</td><td style="color:var(--success)">있음</td><td style="color:var(--text-muted)">대상 아님 (Polling 담당)</td><td>정상 흐름</td></tr>
+      <tr><td>GENERATING</td><td style="color:var(--critical)">NULL</td><td style="color:var(--critical)">즉시 FAILED + Alert</td><td>비정상 상태 (코드 버그 또는 인프라 이상)</td></tr>
+    </table>
+  </div>
+
+  <!-- Decision 4 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#4</span>
+      <h3>Tripo 에러 분류 + 재시도 한계</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #5 (TripoApiException catch 누락)</p>
+
+    <table>
+      <tr><th>Tripo 에러</th><th>분류</th><th>모델 상태</th><th>자동 재시도</th><th>Alert</th></tr>
+      <tr><td>429 Rate Limit</td><td><span class="badge badge-warn">Retryable</span></td><td>PREPARING 유지</td><td>O</td><td>-</td></tr>
+      <tr><td>500 Server Error</td><td><span class="badge badge-warn">Retryable</span></td><td>PREPARING 유지</td><td>O</td><td>-</td></tr>
+      <tr><td>400 Invalid Param</td><td><span class="badge badge-danger">Non-retryable</span></td><td>FAILED</td><td>X</td><td>-</td></tr>
+      <tr><td>400 Image Empty</td><td><span class="badge badge-danger">Non-retryable</span></td><td>FAILED</td><td>X</td><td>-</td></tr>
+      <tr><td>403 No Credit</td><td><span class="badge badge-danger">Non-retryable</span></td><td>FAILED</td><td>X</td><td style="color:var(--critical); font-weight:700">필수</td></tr>
+      <tr><td>401 Auth Failed</td><td><span class="badge badge-danger">Non-retryable</span></td><td>FAILED</td><td>X</td><td style="color:var(--critical); font-weight:700">필수</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+      <strong>재시도 한계:</strong> retryCount &ge; 3 이면 원인 불문 FAILED + Alert. 무한 재시도 방지.
+    </div>
+  </div>
+
+  <!-- Decision 5 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#5</span>
+      <h3>멱등성 레코드 release 규칙</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #6 (tryAcquire 독립 커밋 &rarr; DLT 봉쇄)</p>
+
+    <div class="flow"><pre>
+  tryAcquire ---&rarr; PREPARING ---&rarr; S3 다운로드 ---&rarr; [Tripo 호출] ---&rarr; taskId 저장
+  |                                                 |
+  |&larr;---------- 이 구간 실패 = release OK ----------&rarr;|
+  |                과금 전 (안전)                      |&larr;--- 이후 실패 = release 금지 ---&rarr;
+  |                                                 |         과금 후 (위험)</pre></div>
+
+    <table>
+      <tr><th>실패 시점</th><th>release</th><th>이유</th><th>복구 방법</th></tr>
+      <tr><td>Tripo 호출 전</td><td style="color:var(--success); font-weight:700">허용</td><td>과금 안 됨, 재시도 안전</td><td>Spring Kafka 즉시 재시도</td></tr>
+      <tr><td>Tripo 호출 후</td><td style="color:var(--critical); font-weight:700">금지</td><td>이미 과금됨, 재시도하면 이중 과금</td><td>orphan 마킹 + Alert</td></tr>
+      <tr><td>위 둘 다 실패</td><td style="color:var(--warning)">Recovery 가 5분 후 정리</td><td>최후 안전망</td><td>Recovery release + Outbox 재등록</td></tr>
+    </table>
+  </div>
+
+  <!-- Decision 6 -->
+  <div class="decision">
+    <div class="decision-header">
+      <span class="decision-num">#6</span>
+      <h3>메시지 스키마 하위 호환</h3>
+    </div>
+    <p style="color:var(--text-dim); margin-bottom: 16px;">해결 시나리오: #9 (서버 분리 후 스키마 불일치)</p>
+
+    <table>
+      <tr><th>스키마 변경</th><th>허용 여부</th><th>이유</th></tr>
+      <tr><td>필드 추가</td><td style="color:var(--success); font-weight:700">허용</td><td>Consumer 가 @JsonIgnoreProperties(ignoreUnknown=true) 로 무시</td></tr>
+      <tr><td>필드 삭제</td><td style="color:var(--critical); font-weight:700">금지</td><td>Consumer 가 기대하는 필드가 null &rarr; NPE 또는 로직 오류</td></tr>
+      <tr><td>필드 타입 변경</td><td style="color:var(--critical); font-weight:700">금지</td><td>역직렬화 실패 &rarr; 전체 메시지 처리 중단</td></tr>
+    </table>
+
+    <div class="callout callout-info">
+      <strong>운영 규칙:</strong> "필드는 추가만, 삭제/변경은 금지." 삭제/변경이 정말 필요해지면 그때 schemaVersion 도입.
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 5. 전후 비교 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">5</span> 설계 전후 비교</div>
+
+  <div class="card">
+    <h3>상태 전이 비교</h3>
+    <div class="compare">
+      <div class="compare-item before">
+        <h4>Before</h4>
+        <pre>REQUESTED &rarr; GENERATING &rarr; COMPLETED / FAILED
+
+문제: REQUESTED &rarr; GENERATING 사이
+     Tripo 블로킹으로 긴 공백</pre>
+      </div>
+      <div class="compare-item after">
+        <h4>After</h4>
+        <pre>REQUESTED &rarr; PREPARING &rarr; GENERATING &rarr; COMPLETED / FAILED
+
+효과: PREPARING 이 "누군가 처리 중" 을
+     명시적으로 표현</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>방어 체계 비교</h3>
+    <div class="compare">
+      <div class="compare-item before">
+        <h4>Before — 5중 레이어</h4>
+        <pre>[1] Transactional Outbox
+[2] Consumer 멱등성 (Recovery 우회 가능 &cross;)
+[3] 도메인 상태 머신
+[4] 상태 사전 확인 (블로킹 중 무력 &cross;)
+[5] Orphan 방어</pre>
+      </div>
+      <div class="compare-item after">
+        <h4>After — 7중 레이어</h4>
+        <pre>[1] Transactional Outbox
+[2] Consumer 멱등성 + release 규칙
+[3] 도메인 상태 머신 + PREPARING
+[4] 상태 선행 전환
+[5] Tripo 에러 분류
+[6] 자동 재시도 + 한계 (retryCount)
+[7] 운영 복원력 (Alert + 수동 복구)</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>시나리오별 최종 결과</h3>
+    <table>
+      <tr><th>#</th><th>시나리오</th><th>이중 과금?</th><th>해결 방법</th></tr>
+      <tr><td>1</td><td>Outbox 중복 발행</td><td><span class="badge badge-safe">없음</span></td><td>멱등성이 차단 (기존)</td></tr>
+      <tr><td>2</td><td>Tripo 응답 지연 + Recovery</td><td><span class="badge badge-safe">해결</span></td><td>PREPARING 선행 전환 (설계 #1)</td></tr>
+      <tr><td>3</td><td>PREPARING 후 크래시</td><td><span class="badge badge-safe">없음</span></td><td>자동 재시도 (설계 #2)</td></tr>
+      <tr><td>4</td><td>Tripo 성공 + DB 실패</td><td><span class="badge badge-warn">$0.6 1회</span></td><td>orphan + Alert (설계 #3)</td></tr>
+      <tr><td>5</td><td>Tripo 비즈니스 에러</td><td><span class="badge badge-safe">없음</span></td><td>에러 분류 (설계 #4)</td></tr>
+      <tr><td>6</td><td>멱등성 + DLT 봉쇄</td><td><span class="badge badge-safe">없음</span></td><td>release 규칙 (설계 #5)</td></tr>
+      <tr><td>7</td><td>GLB 다운로드 실패</td><td><span class="badge badge-safe">없음</span></td><td>폴링 자동 재시도 (기존)</td></tr>
+      <tr><td>8</td><td>COMPLETED DB 실패</td><td><span class="badge badge-safe">없음</span></td><td>폴링 자동 재시도 (기존)</td></tr>
+      <tr><td>9</td><td>스키마 불일치</td><td>-</td><td>하위 호환 규칙 (설계 #6)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ==================== 6. 핵심 원칙 ==================== -->
+<div class="section">
+  <div class="section-title"><span class="section-num">6</span> 핵심 설계 원칙</div>
+
+  <div class="principle">
+    <div class="principle-num">PRINCIPLE 01</div>
+    <h4>외부 API 호출 전에 의도를 기록하라</h4>
+    <p>PREPARING 상태로 "내가 이제 Tripo 부를 거야" 를 DB 에 먼저 남긴다. 중간에 뭐가 깨져도 다른 컴포넌트가 "누군가 처리 중" 을 알 수 있다.</p>
+  </div>
+
+  <div class="principle">
+    <div class="principle-num">PRINCIPLE 02</div>
+    <h4>taskId 유무가 과금 여부의 증거다</h4>
+    <p>taskId=NULL 이면 Tripo 과금 안 됨 &rarr; 재시도 안전. taskId 있으면 Tripo 과금됨 &rarr; 재시도 위험. 이 구분이 모든 Recovery 동작의 판단 기준이다.</p>
+  </div>
+
+  <div class="principle">
+    <div class="principle-num">PRINCIPLE 03</div>
+    <h4>멱등성 레코드는 과금 경계를 기준으로 관리하라</h4>
+    <p>과금 전 실패: release (재시도 허용). 과금 후 실패: 유지 (이중 과금 방지). "번호표를 언제 반납하느냐" 가 돈을 지키는 열쇠다.</p>
+  </div>
+
+  <div class="principle">
+    <div class="principle-num">PRINCIPLE 04</div>
+    <h4>자동 재시도에는 반드시 한계를 둬라</h4>
+    <p>retryCount &ge; 3 이면 원인 불문 FAILED + Alert. Retryable 에러든 크래시든 무한 루프를 구조적으로 차단한다.</p>
+  </div>
+
+  <div class="principle">
+    <div class="principle-num">PRINCIPLE 05</div>
+    <h4>서비스 분리 시 메시지는 하위 호환만 허용하라</h4>
+    <p>필드 추가만 허용, 삭제/변경 금지. Consumer 는 모르는 필드를 무시. 이 규칙 하나가 서버 분리 시 "배포 순서 무관하게 안전" 을 보장한다.</p>
+  </div>
+</div>
+
+</div><!-- container -->
+</body>
+</html>

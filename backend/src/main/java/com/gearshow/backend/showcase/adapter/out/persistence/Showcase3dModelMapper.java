@@ -23,6 +23,7 @@ public class Showcase3dModelMapper {
                 .lastPolledAt(model.getLastPolledAt())
                 .failureReason(model.getFailureReason())
                 .createdAt(model.getCreatedAt())
+                .retryCount(model.getRetryCount())
                 .build();
     }
 
@@ -40,6 +41,7 @@ public class Showcase3dModelMapper {
                 .lastPolledAt(entity.getLastPolledAt())
                 .failureReason(entity.getFailureReason())
                 .createdAt(entity.getCreatedAt())
+                .retryCount(entity.getRetryCount())
                 .build();
     }
 }

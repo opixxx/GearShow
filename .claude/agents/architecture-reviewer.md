@@ -334,3 +334,9 @@ grep -rn "methodName(" backend/src/main/java
 
 - [ ] **도메인 상태 전이 메서드 가드**: `markX()` / `startX()` 류가 메타데이터만 갱신하는 경우에도 **허용된 시작 상태** 에서만 동작해야 함. 가드 없이 모든 상태에서 호출 가능하면 상태 머신이 우회됨 (예: `markPolled()` 가 REQUESTED/COMPLETED 에서도 동작하면 폴링 메타가 엉뚱한 상태에 쌓임)
 - [ ] **application → infrastructure 직접 의존**: application/service 가 `KafkaTemplate`, `RestClient` 등 인프라 기술에 직접 의존하면 계층 역전. 포트 인터페이스 추상화 필요. `@ConfigurationProperties` record 는 application/config 배치 권장
+
+### CR 갭 보강 — 2026-04-13 PR#27
+
+- [ ] **상태 전이 원자성 (check-then-act race)**: `findById() → 상태 확인 → save()` 패턴은 동시성에 취약. 두 Worker 가 동시에 REQUESTED 를 읽으면 둘 다 PREPARING 전환에 성공할 수 있음. `@Version` 낙관적 락 또는 `WHERE model_status = :expected` 조건부 UPDATE 가 적용됐는지 확인
+  - 근거: PR#27 CodeRabbit Critical (PrepareModelGenerationService.java:54-73)
+  - 체크: `@Version` 필드 존재 또는 Port 에 `updateStatusIfCurrent()` 메서드 존재

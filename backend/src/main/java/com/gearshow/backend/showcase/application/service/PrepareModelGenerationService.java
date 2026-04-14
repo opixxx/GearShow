@@ -1,5 +1,7 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
 import com.gearshow.backend.showcase.application.port.in.PrepareModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
@@ -18,23 +20,22 @@ import org.springframework.web.client.RestClientException;
  * <p>Worker 가 수신한 메시지에 대해 다음을 수행한다:</p>
  * <ol>
  *   <li>모델 상태 확인 (REQUESTED 아니면 skip — 재전달/중복 메시지 방어)</li>
+ *   <li><b>PREPARING 상태로 선행 전환</b> — "외부 API 호출 전에 의도를 기록"</li>
  *   <li>Tripo startGeneration 호출 (이미지 업로드 + task 생성)</li>
  *   <li>task_id 와 함께 모델을 GENERATING 으로 전환</li>
  * </ol>
  *
- * <p>비즈니스 실패 시 예외를 던지지 않고 모델 상태만 전환한다:</p>
+ * <p><b>설계 결정 #1 (PREPARING 선행 전환)</b>: Tripo 호출 전에 상태를 PREPARING 으로
+ * 바꿔두어, Recovery 스케줄러와 다른 Worker 가 끼어드는 것을 방지한다.
+ * PREPARING 상태에서 generationTaskId 는 반드시 NULL 이므로
+ * Tripo 과금이 발생하지 않았음이 구조적으로 보장된다.</p>
+ *
+ * <p><b>설계 결정 #4 (Tripo 에러 분류)</b>:</p>
  * <ul>
- *   <li>Tripo Circuit Breaker OPEN → UNAVAILABLE (서비스 장애, 사용자 수동 재시도)</li>
- *   <li>Tripo 비즈니스 실패 ({@link RestClientException}) → FAILED (사용자에게 고정된 일반 메시지 노출)</li>
+ *   <li>{@link ModelGenerationRetryableException} (429, 500) → PREPARING 유지, Recovery 가 자동 재시도</li>
+ *   <li>{@link ModelGenerationNonRetryableException} (400, 401, 403) → 즉시 FAILED</li>
+ *   <li>{@link CallNotPermittedException} → UNAVAILABLE (Circuit Breaker)</li>
  * </ul>
- *
- * <p>다만 인프라 장애({@link DataAccessException} 계열 — DB 락 경합, 타임아웃 등) 는
- * 잡지 않고 그대로 던져서 Spring Kafka {@code DefaultErrorHandler} 가 DLT 로 보내도록 한다.
- * 인프라 장애를 비즈니스 실패로 오분류하면 사용자에게 잘못된 안내가 나가고 복구도 어렵다.</p>
- *
- * <p><b>실패 사유 메시지 정책</b>: {@code e.getMessage()} 를 그대로 저장하면 내부 URL,
- * 클래스명, 스택 일부가 사용자에게 노출될 위험이 있다. 카테고리화된 고정 한글 메시지를
- * 저장하고, 상세는 로그에만 남긴다.</p>
  *
  * <p><b>트랜잭션 범위</b>: 이 메서드는 의도적으로 전체를 트랜잭션으로 감싸지 않는다.
  * Tripo 외부 호출 동안 DB 커넥션을 점유하면 HikariCP 풀이 고갈되기 때문.
@@ -50,52 +51,77 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
 
     @Override
     public void prepare(Long showcase3dModelId, Long showcaseId) {
-        Showcase3dModel model = showcase3dModelPort.findById(showcase3dModelId)
+        // [설계 결정 #1] PREPARING 상태로 원자적 선행 전환.
+        // WHERE model_status = REQUESTED 조건으로 DB 레벨에서 1 Worker 만 성공하도록 보장한다.
+        // check-then-act race (findById → 상태 확인 → save) 를 제거하여
+        // 두 Worker 가 동시에 PREPARING 전환에 성공하는 것을 원천 차단한다.
+        int updated = showcase3dModelPort.updateStatusIfCurrent(
+                showcase3dModelId, ModelStatus.REQUESTED, ModelStatus.PREPARING);
+
+        if (updated == 0) {
+            // 다른 Worker 가 이미 PREPARING 으로 전환했거나, 모델이 없거나, 다른 상태
+            log.info("REQUESTED→PREPARING 원자적 전환 실패 (이미 처리 중 또는 대상 없음) "
+                    + "- showcase3dModelId: {}", showcase3dModelId);
+            return;
+        }
+
+        log.info("PREPARING 전환 완료 - showcase3dModelId: {}", showcase3dModelId);
+
+        // 원자적 전환 성공 → 최신 도메인 모델을 다시 읽어서 이후 로직에 사용
+        Showcase3dModel preparing = showcase3dModelPort.findById(showcase3dModelId)
                 .orElse(null);
-
-        if (model == null) {
-            log.warn("3D 모델을 찾을 수 없습니다 - showcase3dModelId: {}", showcase3dModelId);
+        if (preparing == null) {
+            log.error("PREPARING 전환 후 모델 조회 실패 - showcase3dModelId: {}", showcase3dModelId);
             return;
         }
 
-        if (model.getModelStatus() != ModelStatus.REQUESTED) {
-            // 중복 메시지/재전달 시나리오: 이미 GENERATING/COMPLETED/FAILED 상태면 skip
-            log.info("REQUESTED 상태가 아니어서 처리를 건너뜁니다 - showcase3dModelId: {}, status: {}",
-                    showcase3dModelId, model.getModelStatus());
-            return;
-        }
-
+        // Tripo API 호출 (이미지 업로드 + task 생성)
         String taskId;
         try {
             taskId = modelGenerationClient.startGeneration(showcase3dModelId, showcaseId);
         } catch (CallNotPermittedException e) {
-            // Tripo Circuit Breaker 가 OPEN — 서비스 일시 이용 불가.
-            // 모델을 UNAVAILABLE 로 마킹하여 사용자가 수동 재시도할 수 있게 한다.
+            // Tripo Circuit Breaker OPEN — 서비스 일시 이용 불가
             log.warn("Tripo Circuit Breaker OPEN - 모델을 UNAVAILABLE 로 전환 - showcase3dModelId: {}",
                     showcase3dModelId);
-            Showcase3dModel unavailable = model.markUnavailable("3D 생성 서비스가 일시적으로 이용 불가합니다");
+            Showcase3dModel unavailable = preparing.markUnavailable("3D 생성 서비스가 일시적으로 이용 불가합니다");
             showcase3dModelPort.save(unavailable);
+            return;
+        } catch (ModelGenerationNonRetryableException e) {
+            // [설계 결정 #4] 영구 실패 — 즉시 FAILED (재시도 무의미)
+            log.error("Tripo 영구 실패 (Non-retryable) - showcase3dModelId: {}, errorCode: {}",
+                    showcase3dModelId, e.getMessage(), e);
+            Showcase3dModel failed = preparing.fail(e.getMessage());
+            showcase3dModelPort.save(failed);
+            if (e.isAlertRequired()) {
+                // 크레딧 부족, 인증 실패 등 → 개발자에게 알림 필요
+                log.error("ALERT 필요: Tripo 크레딧 부족 또는 인증 실패 - 전체 3D 생성 서비스에 영향 - "
+                        + "showcase3dModelId: {}", showcase3dModelId);
+            }
+            return;
+        } catch (ModelGenerationRetryableException e) {
+            // [설계 결정 #4] 일시적 장애 — PREPARING 유지, Recovery 가 자동 재시도.
+            // 이 경로에서 예외를 Worker 까지 전파하지 않는 것은 의도적 결정이다:
+            // - 예외를 던지면 Worker 의 release() 가 호출되어 Kafka 수준 재시도가 즉시 일어남
+            // - 하지만 429/500 은 수초~수분 후 복구되는 일시적 장애이므로 즉시 재시도보다
+            //   preparingStuckMinutes(기본 2분) 대기 후 Recovery 가 처리하는 것이 적절함
+            // - 이 "의도적 쿨다운" 이 Tripo rate limit 초과를 방지하는 역할도 한다.
+            log.warn("일시적 장애 (Retryable) - PREPARING 유지, Recovery 대기 - showcase3dModelId: {}, error: {}",
+                    showcase3dModelId, e.getMessage());
             return;
         } catch (DataAccessException e) {
             // 인프라 일시 장애는 DLT 로 보내 수동 재처리 (비즈니스 FAILED 와 구분)
             log.error("3D 모델 생성 시작 중 DB 장애 - showcase3dModelId: {}", showcase3dModelId, e);
             throw e;
         } catch (RestClientException e) {
-            // Tripo API 호출 실패 (HTTP 네트워크/5xx/타임아웃 등) — 비즈니스 실패로 간주
+            // Tripo API 호출 실패 (HTTP 네트워크/타임아웃 등) — 비즈니스 실패로 간주
             log.error("Tripo API 호출 실패 - showcase3dModelId: {}", showcase3dModelId, e);
-            Showcase3dModel failed = model.fail("3D 모델 생성을 시작하지 못했습니다");
+            Showcase3dModel failed = preparing.fail("3D 모델 생성을 시작하지 못했습니다");
             showcase3dModelPort.save(failed);
             return;
         }
 
-        // Tripo task 생성 성공 — 이 시점부터는 save 가 반드시 성공해야 한다.
-        // save 실패 시 그대로 예외를 던지면:
-        //   1) Worker 는 이미 tryAcquire 로 messageId 를 선점했으므로 재시도도 프로세스를 통과 못함
-        //   2) 상태는 REQUESTED 로 남아 StuckModelRecoveryScheduler 가 새 messageId 로 재발행
-        //   3) 새 messageId → tryAcquire 통과 → startGeneration 재호출 → 중복 Tripo 과금
-        // 이를 막기 위해 save 실패 시 명시적으로 모델을 FAILED(orphan) 로 마킹하여
-        // recovery 대상에서 제외한다. orphan Tripo task 는 운영자 수동 처리.
-        persistGenerating(model, taskId, showcase3dModelId);
+        // Tripo task 생성 성공 — taskId 와 함께 GENERATING 전환
+        persistGenerating(preparing, taskId, showcase3dModelId);
     }
 
     /**
@@ -127,8 +153,6 @@ public class PrepareModelGenerationService implements PrepareModelGenerationUseC
             log.warn("orphan 마킹 완료 - showcase3dModelId: {}, taskId: {}",
                     showcase3dModelId, taskId);
         } catch (DataAccessException inner) {
-            // FAILED 마킹조차 실패하면 recovery 가 이 모델을 재발행할 수 있고
-            // 그때 중복 과금이 발생한다. DB 가 완전히 죽은 상황이라 운영자 수동 개입 필요.
             log.error("CRITICAL: orphan 마킹 실패 - 수동 복구 필수 (modelId: {}, taskId: {})",
                     showcase3dModelId, taskId, inner);
         }

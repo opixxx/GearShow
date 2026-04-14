@@ -352,13 +352,16 @@ erDiagram
 |:------|:-----|:--------|:-----|
 | showcase3dModelId | bigint | PK | 3D 모델 고유 식별자 |
 | showcaseId | bigint | NOT NULL, FK → SHOWCASE, UNIQUE | 쇼케이스 ID |
-| modelFileUrl | string | | 3D 모델 파일 URL |
+| modelFileUrl | string | | 3D 모델 파일 URL (COMPLETED 시 S3 CDN URL) |
 | previewImageUrl | string | | 미리보기 이미지 URL |
-| modelStatus | enum | NOT NULL | 모델 상태 (REQUESTED, GENERATING, COMPLETED, FAILED 등) |
+| modelStatus | enum | NOT NULL | 모델 상태 (REQUESTED, PREPARING, GENERATING, COMPLETED, FAILED, UNAVAILABLE) |
 | generationProvider | string | | 생성 제공자 (tripo 등) |
+| generationTaskId | string(100) | | Tripo task_id. GENERATING 상태에서만 non-null. 폴링 스케줄러가 상태 조회에 사용 |
 | requestedAt | timestamp | | 요청 일시 |
 | generatedAt | timestamp | | 생성 완료 일시 |
+| lastPolledAt | timestamp | | 마지막 폴링 시각. stuck 감지(타임아웃 15분) 기준값 |
 | failureReason | string | | 실패 사유 |
+| retryCount | int | NOT NULL, DEFAULT 0 | Recovery 자동 재시도 횟수. PREPARING 좀비 복구 시 증가, 3회 초과 시 FAILED |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 
 ### MODEL_SOURCE_IMAGE (3D 모델 소스 이미지)

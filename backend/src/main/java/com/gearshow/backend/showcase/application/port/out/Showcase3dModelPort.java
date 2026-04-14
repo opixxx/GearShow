@@ -18,6 +18,16 @@ public interface Showcase3dModelPort {
     Showcase3dModel save(Showcase3dModel model);
 
     /**
+     * 현재 상태가 expected 일 때만 newStatus 로 원자적 전환한다.
+     *
+     * <p>동시에 여러 Worker 가 같은 모델을 처리하려 할 때 DB 레벨에서 1명만 성공하도록 보장한다.
+     * {@code UPDATE ... WHERE model_status = :expected} 조건으로 이미 전환된 행은 영향 0 을 반환.</p>
+     *
+     * @return 영향 받은 행 수 (1=성공, 0=다른 Worker 가 이미 전환)
+     */
+    int updateStatusIfCurrent(Long id, ModelStatus expected, ModelStatus newStatus);
+
+    /**
      * ID로 3D 모델을 조회한다.
      */
     Optional<Showcase3dModel> findById(Long id);

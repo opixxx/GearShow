@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.adapter.out.persistence;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +15,21 @@ import java.util.Optional;
  * 쇼케이스 3D 모델 JPA 저장소.
  */
 public interface Showcase3dModelJpaRepository extends JpaRepository<Showcase3dModelJpaEntity, Long> {
+
+    /**
+     * 상태를 원자적으로 전환한다. 현재 상태가 expected 일 때만 newStatus 로 변경한다.
+     *
+     * <p>동시에 여러 Worker 가 같은 모델을 처리하려 할 때, DB 레벨에서 1명만 성공하도록 보장한다.
+     * {@code WHERE model_status = :expected} 조건 덕분에 이미 전환된 행은 영향 row 0 을 반환한다.</p>
+     *
+     * @return 영향 받은 행 수 (1=성공, 0=이미 다른 Worker 가 전환함)
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Showcase3dModelJpaEntity e SET e.modelStatus = :newStatus" +
+            " WHERE e.id = :id AND e.modelStatus = :expected")
+    int updateStatusIfCurrent(@Param("id") Long id,
+                              @Param("expected") ModelStatus expected,
+                              @Param("newStatus") ModelStatus newStatus);
 
     /**
      * 쇼케이스 ID로 3D 모델을 조회한다.
