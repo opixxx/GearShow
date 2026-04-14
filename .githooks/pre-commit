@@ -1,0 +1,59 @@
+#!/bin/bash
+# GearShow pre-commit hook
+#
+# 커밋 직전에 결정론적 계산적 센서를 실행하여 명백한 오류가 메인 브랜치 히스토리에
+# 진입하는 것을 차단한다. 느린 센서(전체 테스트, LLM 리뷰)는 pre-push 또는 PR 단계로 위임.
+#
+# 실행 조건:
+#   - Java/Gradle 파일 변경이 있을 때만 gradle 호출 (문서만 바뀌면 skip)
+#
+# 비상 탈출:
+#   SKIP_PRECOMMIT=1 git commit ...  으로 한 번만 우회 가능 (권장하지 않음)
+
+set -e
+
+# 비상 탈출 — 긴급 상황에만 사용할 것
+if [ "${SKIP_PRECOMMIT:-0}" = "1" ]; then
+  echo "⚠️  SKIP_PRECOMMIT=1 — pre-commit 훅을 건너뜁니다. (이 커밋의 책임은 작성자에게 있습니다)"
+  exit 0
+fi
+
+# 스테이징된 파일 중 Java/Gradle 변경 여부 확인
+# 문서·설정만 수정한 커밋에서는 gradle 호출을 생략하여 속도를 확보한다
+CHANGED_JAVA=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(java|gradle)$' || true)
+
+if [ -z "$CHANGED_JAVA" ]; then
+  echo "✓ pre-commit: Java/Gradle 변경 없음 — 계산적 센서 건너뜀"
+  exit 0
+fi
+
+echo "🔍 pre-commit: 계산적 센서 실행 중..."
+echo "   대상: $(echo "$CHANGED_JAVA" | wc -l | tr -d ' ')개 파일"
+
+# 스크립트가 어디서 실행되든 레포 루트 기준으로 gradle 호출
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 1) 컴파일 검증 — 문법 오류, 타입 오류 등 정적 오류를 즉시 걸러낸다
+echo ""
+echo "[1/2] 컴파일 검증 (./gradlew compileJava)"
+if ! (cd "$REPO_ROOT/backend" && ./gradlew compileJava --quiet); then
+  echo ""
+  echo "❌ 컴파일 실패 — 커밋 차단."
+  echo "   해결: 오류를 수정한 후 다시 커밋하세요."
+  exit 1
+fi
+
+# 2) 아키텍처 경계 검증 — ArchUnit으로 헥사고날 계층 의존 위반 차단
+echo ""
+echo "[2/2] 아키텍처 검증 (./gradlew archTest)"
+if ! (cd "$REPO_ROOT/backend" && ./gradlew archTest --quiet); then
+  echo ""
+  echo "❌ 아키텍처 규칙 위반 — 커밋 차단."
+  echo "   상세: backend/build/reports/tests/archTest/index.html"
+  echo "   규칙: backend/src/test/java/com/gearshow/backend/architecture/HexagonalArchitectureTest.java"
+  exit 1
+fi
+
+echo ""
+echo "✅ pre-commit 통과"
+exit 0
