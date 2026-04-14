@@ -36,6 +36,21 @@ git status
 
 커밋되지 않은 변경이 있으면 사용자에게 커밋 여부를 확인한다.
 
+4. linked worktree 여부 정보 수집 (하네스 환경)
+
+```bash
+TOP=$(git rev-parse --show-toplevel)
+if [ -f "$TOP/.git" ]; then
+  IN_WORKTREE="yes"
+  PLAN_PATH="$TOP/EXEC_PLAN.md"
+else
+  IN_WORKTREE="no"
+fi
+```
+
+- linked worktree(`$TOP/.git`이 파일)이면 `EXEC_PLAN.md`가 존재할 가능성이 높다 → Step 5에서 PR 본문에 링크 포함
+- 메인 작업 디렉토리이면 플랜 없이 진행 (경고만 출력)
+
 ---
 
 ### Step 2: 테스트 실행 [필수]
@@ -46,7 +61,15 @@ git status
 cd backend && ./gradlew build
 ```
 
-`./gradlew build`는 컴파일 + 전체 테스트 + JaCoCo 커버리지 검증을 한 번에 수행한다.
+`./gradlew build`는 컴파일 + 전체 테스트 + JaCoCo 커버리지 검증 + **ArchUnit 경계 검증**을 한 번에 수행한다.
+(`check` 태스크가 `archTest`에 의존하므로 별도 호출 불필요)
+
+ArchUnit 규칙 위반이 발생하면 빌드가 실패하며 다음과 같은 메시지가 출력된다:
+```
+> Task :archTest FAILED
+HexagonalArchitectureTest > domain_계층은_Spring_의존_금지 FAILED
+```
+이 경우 `backend/src/test/java/.../architecture/HexagonalArchitectureTest.java` 규칙을 참조하여 수정한다.
 
 #### 테스트 우선순위
 
@@ -132,11 +155,18 @@ gh pr create --title "PR 제목" --body "$(cat <<'EOF'
 ## Summary
 - 변경 사항 요약 (1~3줄)
 
+## EXEC_PLAN
+- 📋 [실행 계획: {task-slug}](docs/agent/plans/{YYYY-MM-DD}-{task-slug}.md)
+  (Step 1에서 `$IN_WORKTREE=yes` 이고 `EXEC_PLAN.md` symlink가 존재하면 자동 삽입,
+   symlink 타겟의 저장소 상대 경로를 링크로 사용.
+   worktree 없이 생성된 PR이면 이 섹션 생략)
+
 ## Changes
 - 구체적인 변경 내용
 - 파일/패키지 단위로 정리
 
 ## Test
+- [ ] ArchUnit 경계 검증 통과 (`./gradlew archTest`)
 - [ ] Cucumber 인수 테스트 통과
 - [ ] 통합 테스트 통과 (Adapter, Service)
 - [ ] JaCoCo 커버리지 70% 이상
@@ -150,6 +180,17 @@ gh pr create --title "PR 제목" --body "$(cat <<'EOF'
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )" --base main
+```
+
+EXEC_PLAN 링크 자동 생성:
+```bash
+if [ "$IN_WORKTREE" = "yes" ] && [ -L "$PLAN_PATH" ]; then
+  # symlink 타겟을 저장소 상대 경로로 변환
+  PLAN_TARGET=$(readlink "$PLAN_PATH")
+  REPO_ROOT_MAIN=$(git -C "$TOP" worktree list --porcelain | awk '/^worktree/ && !found {print $2; found=1}')
+  PLAN_REL="${PLAN_TARGET#$REPO_ROOT_MAIN/}"
+  # → 예: docs/agent/plans/2026-04-14-거래-취소-api.md
+fi
 ```
 
 ---
@@ -178,6 +219,7 @@ EOF
 ## 최종 체크리스트
 
 - [ ] `gh` CLI 설치 및 인증 완료
+- [ ] **ArchUnit 경계 검증 통과** (`./gradlew archTest` — `build`에 포함됨)
 - [ ] **Cucumber 인수 테스트 통과**
 - [ ] **통합 테스트 통과** (Persistence Adapter, Service, Controller)
 - [ ] 단위 테스트 통과 (있는 경우)
@@ -188,4 +230,5 @@ EOF
 - [ ] 모든 커밋이 push됨
 - [ ] 베이스 브랜치(main) 기준 최신 상태
 - [ ] PR 제목이 변경 내용을 명확히 반영
+- [ ] EXEC_PLAN 링크가 PR 본문에 포함됨 (worktree 경유 작업인 경우)
 - [ ] 보안 민감 정보 미포함 (.env, API 키 등)
