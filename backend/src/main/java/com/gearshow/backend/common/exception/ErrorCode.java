@@ -82,7 +82,21 @@ public enum ErrorCode {
 
     // OUTBOX (Transactional Outbox 패턴)
     OUTBOX_INVALID_MESSAGE(400, "Outbox 메시지 필수 값이 누락되었습니다"),
-    OUTBOX_EVENT_SERIALIZATION_FAILED(500, "Outbox 이벤트 직렬화에 실패했습니다");
+    OUTBOX_EVENT_SERIALIZATION_FAILED(500, "Outbox 이벤트 직렬화에 실패했습니다"),
+
+    // CHAT (채팅)
+    CHAT_ROOM_NOT_FOUND(404, "채팅방을 찾을 수 없습니다"),
+    FORBIDDEN_CHAT_ROOM_ACCESS(403, "채팅방 참여자만 접근할 수 있습니다"),
+    CHAT_ROOM_OWN_SHOWCASE(400, "자신의 쇼케이스에는 채팅을 시작할 수 없습니다"),
+    CHAT_ROOM_SHOWCASE_NOT_AVAILABLE(400, "해당 쇼케이스에는 채팅을 시작할 수 없습니다"),
+    CHAT_ROOM_CLOSED(403, "종료된 채팅방에는 메시지를 보낼 수 없습니다"),
+    CHAT_ROOM_INVALID(400, "유효하지 않은 채팅방입니다"),
+    CHAT_MESSAGE_NOT_FOUND(404, "채팅 메시지를 찾을 수 없습니다"),
+    CHAT_MESSAGE_TOO_LONG(400, "메시지는 2,000자 이하여야 합니다"),
+    CHAT_MESSAGE_NOT_OWNER(403, "본인이 보낸 메시지만 삭제할 수 있습니다"),
+    CHAT_MESSAGE_SYSTEM_UNDELETABLE(400, "시스템 메시지는 삭제할 수 없습니다"),
+    CHAT_MESSAGE_INVALID(400, "유효하지 않은 채팅 메시지입니다"),
+    DUPLICATE_CLIENT_MESSAGE_ID(409, "이미 전송된 메시지입니다");
 
     private final int status;
     private final String message;
