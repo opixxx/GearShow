@@ -12,7 +12,8 @@
 | USER | AUTH_ACCOUNT | FK |
 | CATALOG_ITEM | BOOTS_SPEC, UNIFORM_SPEC | FK |
 | SHOWCASE | SHOWCASE_IMAGE, SHOWCASE_SPEC, SHOWCASE_3D_MODEL, MODEL_SOURCE_IMAGE, SHOWCASE_COMMENT | FK |
-| CHAT_ROOM | CHAT_MESSAGE | FK |
+| CHAT_ROOM | CHAT_MESSAGE, CHAT_READ_MARKER | FK |
+| TRANSACTION_TICKET | — | (독립 Aggregate) |
 | TRANSACTION | PAYMENT | FK |
 
 ---
@@ -160,20 +161,46 @@ erDiagram
     CHAT_MESSAGE {
         bigint chatMessageId PK
         bigint chatRoomId FK "FK → CHAT_ROOM (같은 Aggregate)"
-        bigint senderId "논리 참조 → USER"
-        enum messageType
+        bigint senderId "논리 참조 → USER (시스템 메시지는 NULL)"
+        bigint seq "채팅방 내 단조 증가 순번"
+        enum messageType "TEXT, IMAGE, SYSTEM_*"
         text content
-        boolean isRead
+        json payloadJson "시스템 메시지 부가 정보 (ticketId 등)"
+        enum messageStatus "ACTIVE, DELETED"
         timestamp sentAt
+    }
+
+    CHAT_READ_MARKER {
+        bigint chatReadMarkerId PK
+        bigint chatRoomId FK "FK → CHAT_ROOM (같은 Aggregate)"
+        bigint userId "논리 참조 → USER"
+        bigint lastReadMessageId "논리 참조 → CHAT_MESSAGE"
+        timestamp updatedAt
+    }
+
+    TRANSACTION_TICKET {
+        string ticketId PK "UUID"
+        enum contextType "SHOWCASE_DIRECT, SHOWCASE_ESCROW"
+        bigint contextRefId "논리 참조 (현재: showcaseId)"
+        bigint issuedByUserId "논리 참조 → USER"
+        bigint sellerId "논리 참조 → USER"
+        bigint buyerId "논리 참조 → USER"
+        int amount
+        enum paymentMethod "CASH, ESCROW"
+        enum ticketStatus "ISSUED, USED, EXPIRED, CANCELLED"
+        timestamp expiresAt
+        timestamp usedAt
+        bigint usedByTransactionId "논리 참조 → TRANSACTION"
+        timestamp createdAt
     }
 
     TRANSACTION {
         bigint transactionId PK
+        string ticketId "논리 참조 → TRANSACTION_TICKET"
         bigint showcaseId "논리 참조 → SHOWCASE"
-        bigint chatRoomId "논리 참조 → CHAT_ROOM"
         bigint sellerId "논리 참조 → USER"
         bigint buyerId "논리 참조 → USER"
-        enum transactionMethod
+        enum transactionMethod "DIRECT, ESCROW"
         decimal askingPriceSnapshot
         decimal agreedPrice
         enum transactionStatus
@@ -210,8 +237,12 @@ erDiagram
     USER ||--o{ CHAT_ROOM : participates
     CHAT_ROOM ||--o{ CHAT_MESSAGE : contains
     USER ||--o{ CHAT_MESSAGE : sends
+    CHAT_ROOM ||--|{ CHAT_READ_MARKER : tracks
+    USER ||--o{ CHAT_READ_MARKER : marks
+    SHOWCASE ||--o{ TRANSACTION_TICKET : referenced_by
+    USER ||--o{ TRANSACTION_TICKET : issues
+    TRANSACTION_TICKET ||--o| TRANSACTION : consumed_by
     SHOWCASE ||--o{ TRANSACTION : has
-    CHAT_ROOM ||--o| TRANSACTION : leads_to
     TRANSACTION ||--o| PAYMENT : has
 ```
 
@@ -401,7 +432,11 @@ erDiagram
 | buyerId | bigint | NOT NULL, 논리 참조 → USER | 구매자 ID |
 | chatRoomStatus | enum | NOT NULL | 채팅방 상태 (ACTIVE, CLOSED 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
-| lastMessageAt | timestamp | | 마지막 메시지 일시 |
+| lastMessageAt | timestamp | NOT NULL | 마지막 메시지 일시 (메시지 미발송 시 createdAt 값으로 초기화) |
+
+- 유니크: `(showcaseId, buyerId)` — 쇼케이스 당 구매자 1채팅방
+- 인덱스: `(sellerId, lastMessageAt, chatRoomId)` — 판매자 목록 정렬 커버
+- 인덱스: `(buyerId, lastMessageAt, chatRoomId)` — 구매자 목록 정렬 커버
 
 ### CHAT_MESSAGE (채팅 메시지)
 
@@ -411,28 +446,90 @@ erDiagram
 |:------|:-----|:--------|:-----|
 | chatMessageId | bigint | PK | 메시지 고유 식별자 |
 | chatRoomId | bigint | NOT NULL, FK → CHAT_ROOM | 채팅방 ID |
-| senderId | bigint | NOT NULL, 논리 참조 → USER | 발신자 ID |
-| messageType | enum | NOT NULL | 메시지 타입 (TEXT, IMAGE, SYSTEM 등) |
-| content | text | NOT NULL | 메시지 내용 |
-| isRead | boolean | NOT NULL, DEFAULT false | 읽음 여부 |
+| senderId | bigint | NULLABLE, 논리 참조 → USER | 발신자 ID (시스템 메시지는 NULL) |
+| seq | bigint | NOT NULL | 채팅방 내 단조 증가 순번 (재연결 시 delta 동기화 기준) |
+| messageType | enum | NOT NULL | TEXT, IMAGE, SYSTEM_TICKET_ISSUED, SYSTEM_TRANSACTION_STARTED, SYSTEM_PAYMENT_COMPLETED, SYSTEM_TRANSACTION_COMPLETED, SYSTEM_TRANSACTION_CANCELLED |
+| content | text | NOT NULL | 메시지 본문 (시스템 메시지는 표시용 문구) |
+| payloadJson | json | NULLABLE | 시스템 메시지 부가 데이터 (ticketId, transactionId 등) |
+| clientMessageId | varchar(64) | NULLABLE | 클라이언트 재전송 멱등성 키 |
+| messageStatus | enum | NOT NULL, DEFAULT 'ACTIVE' | ACTIVE, DELETED (본인이 soft delete) |
 | sentAt | timestamp | NOT NULL | 발신 일시 |
 
+- 인덱스: `(chatRoomId, seq)` — 채팅방별 순서 조회
+- 인덱스: `(chatRoomId, chatMessageId)` — 커서 기반 히스토리 역순 조회 (MySQL 8 backward index scan)
+- 유니크: `(chatRoomId, senderId, clientMessageId)` — 멱등성 재전송 회수
+- 읽음 상태는 각 메시지에 플래그로 저장하지 않고 `CHAT_READ_MARKER`로 관리 (per user, per room).
+
+### CHAT_READ_MARKER (읽음 마커)
+
+> Aggregate: **CHAT_ROOM** (FK로 연결)
+
+각 유저가 각 채팅방에서 마지막으로 읽은 메시지를 추적한다. 채팅방 진입 시 이 값을 갱신한다.
+
+| 컬럼명 | 타입 | 제약조건 | 설명 |
+|:------|:-----|:--------|:-----|
+| chatReadMarkerId | bigint | PK | 마커 고유 식별자 |
+| chatRoomId | bigint | NOT NULL, FK → CHAT_ROOM | 채팅방 ID |
+| userId | bigint | NOT NULL, 논리 참조 → USER | 유저 ID |
+| lastReadMessageId | bigint | NULLABLE | 마지막으로 읽은 메시지 ID |
+| updatedAt | timestamp | NOT NULL | 최종 갱신 일시 |
+
+- 유니크 제약: `UNIQUE (chatRoomId, userId)`
+- 미읽음 수: `COUNT(chat_message WHERE chatRoomId=? AND chatMessageId > lastReadMessageId AND senderId != me)`
+- MySQL UPDATE 시 row lock으로 동시성 보장.
+
+### TRANSACTION_TICKET (거래 티켓)
+
+> 독립 Aggregate (채팅·거래와 단방향 의존 관계)
+
+채팅방에서 거래 요청이 발생하면 티켓이 발급되고, 상대방이 티켓을 사용(소비)하면 `TRANSACTION`이 생성된다.
+티켓은 채팅과 거래의 **유일한 계약 지점**이며, 추후 다른 진입점(쇼케이스 상세 등)에서도 같은 메커니즘으로 확장 가능하다.
+
+| 컬럼명 | 타입 | 제약조건 | 설명 |
+|:------|:-----|:--------|:-----|
+| ticketId | varchar(36) | PK | UUID |
+| contextType | enum | NOT NULL | SHOWCASE_DIRECT, SHOWCASE_ESCROW |
+| contextRefId | bigint | NOT NULL | 맥락 대상 ID (현재는 showcaseId) |
+| issuedByUserId | bigint | NOT NULL, 논리 참조 → USER | 티켓 발급자 |
+| sellerId | bigint | NOT NULL, 논리 참조 → USER | 판매자 (스냅샷) |
+| buyerId | bigint | NOT NULL, 논리 참조 → USER | 구매자 (스냅샷) |
+| amount | int | NOT NULL | 거래 금액 (서버 확정, 조작 불가) |
+| currency | char(3) | NOT NULL, DEFAULT 'KRW' | 통화 |
+| paymentMethod | enum | NOT NULL | CASH (DIRECT), ESCROW |
+| ticketStatus | enum | NOT NULL, DEFAULT 'ISSUED' | ISSUED, USED, EXPIRED, CANCELLED |
+| expiresAt | timestamp | NOT NULL | 유효기간 종료 시각 (기본 발급 후 1시간) |
+| usedAt | timestamp | NULLABLE | 소비 시각 |
+| usedByTransactionId | bigint | NULLABLE | 소비 결과로 생성된 거래 ID |
+| cancelledAt | timestamp | NULLABLE | 취소 시각 |
+| createdAt | timestamp | NOT NULL | 생성 일시 |
+
+- 인덱스: `(contextType, contextRefId)` — 쇼케이스별 티켓 조회
+- 인덱스: `(ticketStatus, expiresAt)` — 만료 배치 처리
+- 인덱스: `(buyerId, ticketStatus)` / `(sellerId, ticketStatus)` — 유저별 진행 티켓 조회
+- 원자적 소비: `UPDATE ... SET ticketStatus='USED' WHERE ticketId=? AND ticketStatus='ISSUED' AND expiresAt > NOW()` 의 affected rows == 1이어야 함 (멱등성).
+
 ### TRANSACTION (거래)
+
+> `chatRoomId`를 직접 의존하지 않는다. 대신 `ticketId`를 통해 티켓의 맥락(`contextType`, `contextRefId`)을 참조한다.
+> 이로써 채팅방 외 진입점(쇼케이스 상세, 마이페이지 등)에서 발급된 티켓도 동일하게 거래로 변환 가능.
 
 | 컬럼명 | 타입 | 제약조건 | 설명 |
 |:------|:-----|:--------|:-----|
 | transactionId | bigint | PK | 거래 고유 식별자 |
-| showcaseId | bigint | NOT NULL, 논리 참조 → SHOWCASE | 쇼케이스 ID |
-| chatRoomId | bigint | NOT NULL, 논리 참조 → CHAT_ROOM | 채팅방 ID |
+| ticketId | varchar(36) | NOT NULL, UNIQUE, 논리 참조 → TRANSACTION_TICKET | 소비된 티켓 ID (멱등성 키 겸용) |
+| showcaseId | bigint | NOT NULL, 논리 참조 → SHOWCASE | 쇼케이스 ID (티켓 맥락 스냅샷) |
 | sellerId | bigint | NOT NULL, 논리 참조 → USER | 판매자 ID |
 | buyerId | bigint | NOT NULL, 논리 참조 → USER | 구매자 ID |
-| transactionMethod | enum | NOT NULL | 거래 방식 (DIRECT, ESCROW 등) |
+| transactionMethod | enum | NOT NULL | 거래 방식 (DIRECT, ESCROW) |
 | askingPriceSnapshot | decimal | | 요청 가격 스냅샷 |
-| agreedPrice | decimal | NOT NULL | 합의 가격 |
-| transactionStatus | enum | NOT NULL | 거래 상태 (PENDING, IN_PROGRESS, COMPLETED, CANCELLED 등) |
+| agreedPrice | decimal | NOT NULL | 합의 가격 (티켓 `amount`와 일치) |
+| transactionStatus | enum | NOT NULL | 거래 상태 (PENDING, IN_PROGRESS, COMPLETED, CANCELLED) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | completedAt | timestamp | | 완료 일시 |
 | cancelledAt | timestamp | | 취소 일시 |
+
+- 인덱스: `UNIQUE (ticketId)` — 한 티켓은 최대 1개 거래 생성
+- 채팅방 연결은 `ticket.contextRefId` 또는 `ChatRoom (showcaseId, buyerId) = (transaction.showcaseId, transaction.buyerId)` 규칙으로 간접 조회.
 
 ### PAYMENT (결제)
 
@@ -477,9 +574,12 @@ erDiagram
 | USER → SHOWCASE | 1:N | 사용자는 여러 쇼케이스를 소유할 수 있음 |
 | CATALOG_ITEM → SHOWCASE | 1:N (선택) | 하나의 카탈로그 아이템에 여러 쇼케이스가 연결될 수 있음 (카탈로그 미선택 시 null) |
 | USER → SHOWCASE_COMMENT | 1:N | 사용자는 여러 댓글을 작성할 수 있음 |
-| SHOWCASE → CHAT_ROOM | 1:N | 하나의 쇼케이스에 여러 채팅방이 생성될 수 있음 |
+| SHOWCASE → CHAT_ROOM | 1:N | 하나의 쇼케이스에 여러 채팅방이 생성될 수 있음 (구매자마다 1개) |
 | USER → CHAT_ROOM | 1:N | 사용자는 판매자/구매자로 채팅방에 참여 |
-| USER → CHAT_MESSAGE | 1:N | 사용자는 여러 메시지를 발신할 수 있음 |
+| USER → CHAT_MESSAGE | 1:N | 사용자는 여러 메시지를 발신할 수 있음 (시스템 메시지는 senderId NULL) |
+| USER → CHAT_READ_MARKER | 1:N | 사용자는 여러 채팅방의 읽음 상태를 각각 관리 |
+| SHOWCASE → TRANSACTION_TICKET | 1:N | 쇼케이스 단위로 여러 티켓이 발급될 수 있음 (맥락: `contextType=SHOWCASE_*`) |
+| USER → TRANSACTION_TICKET | 1:N | 사용자는 여러 티켓을 발급하거나 소비할 수 있음 |
+| TRANSACTION_TICKET → TRANSACTION | 1:0..1 | 티켓이 소비되면 정확히 하나의 거래가 생성됨 |
 | SHOWCASE → TRANSACTION | 1:N | 하나의 쇼케이스에 여러 거래가 발생할 수 있음 |
-| CHAT_ROOM → TRANSACTION | 1:0..1 | 채팅방에서 거래가 발생할 수 있음 |
 | USER → TRANSACTION | 1:N | 사용자는 판매자/구매자로 여러 거래에 참여 |
