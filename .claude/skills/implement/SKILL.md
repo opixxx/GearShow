@@ -33,6 +33,54 @@ user_invocable: false
 
 ---
 
+## 핵심 원칙 — 시그니처 수준 지시
+
+EXEC_PLAN의 작업 지시는 **인터페이스와 핵심 규칙만** 명시하고, 구현체 디테일은 이 스킬을 호출한
+에이전트의 재량에 맡긴다. 과도하게 상세한 지시는 두 가지 부작용:
+
+1. **에이전트 사고 정지** — 기계적으로 따라 적기만 하고 더 나은 패턴 못 찾음
+2. **유연성 상실** — 도메인 맥락에서 자연스럽게 떠오르는 분리/추출이 가로막힘
+
+### Plan에 적어야 할 것 (시그니처 + 양보 불가 규칙)
+- 클래스/메서드 이름과 파라미터·반환 타입
+- 핵심 비즈니스 규칙 (멱등성, 보안, 데이터 무결성, 상태 전이 가드)
+- 외부 의존 계약 (Port 인터페이스, ErrorCode, 이벤트 스키마)
+- 트랜잭션 경계
+- 검증 통과 기준 (Bash 명령으로)
+
+### Plan에 적지 말아야 할 것 (구현 재량)
+- 메서드 본문의 step-by-step 의사 코드
+- private 헬퍼 함수의 구체적 분리
+- 변수명·로컬 구조
+- 어떤 헬퍼/유틸을 쓸지 (재사용은 에이전트가 코드베이스 보고 판단)
+- 흔한 보일러플레이트 (Mapper의 if-else 등)
+
+### 예시 — Good vs Bad
+
+❌ **너무 상세 (Bad)**:
+```
+Showcase.cancel() 에서:
+1. status를 가져온다
+2. status가 ACTIVE인지 확인한다
+3. ACTIVE가 아니면 InvalidShowcaseStatusException 발생
+4. status를 CANCELLED로 변경
+5. cancelledAt 필드에 LocalDateTime.now() 설정
+```
+
+✅ **시그니처 수준 (Good)**:
+```
+Showcase.cancel() — 인스턴스 메서드, 반환 void
+규칙:
+- ACTIVE 상태에서만 호출 가능 (그 외 InvalidShowcaseStatusException)
+- 호출 후 상태는 CANCELLED, 취소 시각 기록
+- 멱등성 보장 (이미 CANCELLED면 no-op)
+```
+
+위 두 예시 모두 같은 결과지만, Good 쪽이 에이전트가 도메인 컨벤션
+(`changeStatus()` 헬퍼 사용 등)을 반영하면서 자연스럽게 구현하게 됨.
+
+---
+
 ## 컴파일 의존 순서대로 구현
 
 도메인 → 애플리케이션 → 어댑터 순서로 내려간다.
