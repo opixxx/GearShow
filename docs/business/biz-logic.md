@@ -260,11 +260,109 @@ COMPLETED → (종결, 전이 불가)
 
 ## 7. CHAT (채팅)
 
-`[TBD]` 초기 MVP 후 작성
+> **설계 근거 (ADR)**:
+> - [ADR-005 채팅 프로토콜](../architecture/adr/ADR-005-chat-protocol.md) — WebSocket + STOMP + Kafka + MySQL 선택 이유
+> - [ADR-006 Transaction Ticket 패턴](../architecture/adr/ADR-006-transaction-ticket-pattern.md) — 채팅/거래 결합 설계
+> - [ADR-007 채팅/거래/결제 BC 경계](../architecture/adr/ADR-007-chat-transaction-payment-boundaries.md) — 단방향 의존 규칙
+>
+> **리서치**: [2026-04-15 채팅 설계 종합](../research/2026-04-15-chat-design.md) — 국내외 15+ 소스, 당근페이 발표 분석, Phase 로드맵
+
+### 7-1. 기본 원칙
+
+- **1:1 채팅만 지원** (그룹 채팅 없음)
+- 채팅방은 **쇼케이스 단위 + 판매자-구매자 쌍**으로 존재한다.
+- 채팅방 유니크 키: `(showcase_id, buyer_id)` — 같은 쇼케이스에 같은 구매자가 여러 채팅방을 만들 수 없다. 판매자는 쇼케이스 소유자이므로 고정.
+- 채팅에서 합의된 거래는 **§7-6 Transaction Ticket**을 통해서만 실제 거래로 전환된다 (채팅 ↔ 거래 직접 결합 금지).
+
+### 7-2. 채팅방 생성
+
+- 진입점은 **쇼케이스 상세 페이지의 "채팅하기" 버튼 하나**로 단일화된다.
+- 구매자가 "채팅하기"를 누르면 다음 중 하나가 일어난다:
+  - 기존 채팅방이 있으면 해당 채팅방으로 이동
+  - 없으면 새 채팅방을 `ACTIVE` 상태로 생성
+- 판매자는 자신의 쇼케이스에 대해 "채팅하기"를 누를 수 없다 (자기 자신과의 채팅 금지).
+- `ACTIVE`가 아닌(DELETED/SOLD 외) 쇼케이스에는 신규 채팅방 생성 불가.
+
+### 7-3. 채팅방 상태
+
+| 상태 | 설명 |
+|:----|:-----|
+| ACTIVE | 정상 대화 가능 |
+| CLOSED | 거래 완료(`SOLD`) 또는 쇼케이스 삭제 등으로 닫힘. 과거 메시지는 열람 가능, 신규 메시지 송신 불가 |
+
+- 쇼케이스가 `SOLD` 또는 `DELETED`로 전이되면 해당 쇼케이스의 모든 채팅방은 `CLOSED`로 자동 전환된다.
+
+### 7-4. 메시지 규칙
+
+- 텍스트 메시지 최대 길이: 2,000자
+- 메시지 타입 (`message_type`):
+  - `TEXT` — 일반 텍스트
+  - `IMAGE` — 이미지 (Phase 4에서 도입, MVP 제외)
+  - `SYSTEM_TICKET_ISSUED` — 거래 티켓 발급 시스템 메시지
+  - `SYSTEM_TRANSACTION_STARTED` — 거래 시작 (티켓 소비됨)
+  - `SYSTEM_PAYMENT_COMPLETED` — 결제 완료 (ESCROW)
+  - `SYSTEM_TRANSACTION_COMPLETED` — 거래 완료
+  - `SYSTEM_TRANSACTION_CANCELLED` — 거래 취소
+- 시스템 메시지의 부가 정보(티켓 ID, 거래 ID 등)는 `payload_json` 필드에 담는다.
+
+### 7-5. 읽음 처리 정책
+
+- 읽음 처리 시점: **사용자가 해당 채팅방에 진입한 시점**에 그 시점까지의 메시지를 일괄 읽음 처리
+- 각 유저의 읽음 상태는 `CHAT_READ_MARKER` 테이블의 `last_read_message_id`로 관리한다 (메시지 단위 읽음 플래그 없음)
+- 미읽음 카운트(unread count) = `COUNT(chat_message WHERE message_id > last_read_message_id AND sender_id != me)`
+- 푸시 알림은 읽음 처리와 독립적으로 동작한다 (오프라인 상태에서도 푸시 발송).
+
+### 7-6. Transaction Ticket 패턴
+
+거래는 채팅방 내부에서 **티켓 발급 → 조회 → 사용** 3단계로 진행된다. 티켓이 채팅과 거래의 유일한 계약 지점이며, 채팅방 외 진입점(마이페이지 등) 확장도 동일 메커니즘으로 가능하다.
+
+**전체 흐름**:
+```
+1. 판매자 또는 구매자가 채팅방에서 "거래 요청" 선택
+2. 서버가 Transaction Ticket 발급 (ISSUED)
+   - 맥락: SHOWCASE_DIRECT 또는 SHOWCASE_ESCROW
+   - 금액·판매자·구매자·유효기간 서버가 확정
+3. 채팅방에 SYSTEM_TICKET_ISSUED 메시지 자동 삽입 (payload_json에 ticket_id)
+4. 상대방이 티켓 링크(gearshow://transaction/start?ticket=...)로 거래 수락
+5. 서버가 티켓을 원자적으로 USED 처리하며 TRANSACTION 생성
+6. 채팅방에 SYSTEM_TRANSACTION_STARTED 메시지 자동 삽입
+```
+
+**티켓 핵심 규칙**:
+- 1회용 (한 번 사용되면 소비됨)
+- 유효기간 1시간 (만료 시 EXPIRED)
+- 발급자만 CANCELLED 처리 가능 (발급자의 의사 변경 반영)
+- 금액은 발급 시점에 서버가 확정 — 클라이언트 조작 불가
+- 티켓 상태 전이: `ISSUED → USED` / `ISSUED → EXPIRED` / `ISSUED → CANCELLED`
+
+**티켓 경유의 이점**:
+- 채팅방과 거래의 **단방향 의존** (채팅방 → 티켓 발급 → 거래 생성)
+- 거래 엔티티는 ticketId만 알면 되고 채팅방을 몰라도 됨
+- 추후 "쇼케이스 상세에서 직접 거래 요청" 같은 외부 진입점도 동일 티켓 메커니즘으로 수용 가능
+- 딥링크 조작 공격 방지 (티켓 ID 외 정보가 URL에 노출되지 않음)
+
+### 7-7. 메시지 삭제
+
+- 각 유저는 **본인이 보낸 메시지만** 삭제할 수 있다.
+- 삭제는 soft delete로 처리된다 (`message_status = DELETED`).
+- 삭제된 메시지는 "삭제된 메시지입니다" 플레이스홀더로 표시된다.
+- 시스템 메시지는 삭제할 수 없다.
+
+### 7-8. 미결 사항
+
+- `[TBD]` 채팅방당 메시지 보존 기간 (무기한 vs 1년 등)
+- `[TBD]` 채팅방 즐겨찾기/고정 기능 도입 여부
+- `[TBD]` 차단 기능 (상대방 차단 시 채팅방 처리)
+- `[TBD]` 신고 기능 (메시지/채팅방 단위)
+- `[TBD]` 타이핑 인디케이터 (현재 MVP 제외)
 
 ---
 
 ## 8. TRANSACTION (거래)
+
+> **설계 근거 (ADR)**:
+> - [ADR-006 Transaction Ticket 패턴](../architecture/adr/ADR-006-transaction-ticket-pattern.md) — `TRANSACTION.chat_room_id` FK 제거 이유, 티켓 경유 원칙
+> - [ADR-007 BC 경계](../architecture/adr/ADR-007-chat-transaction-payment-boundaries.md) — transaction 이 ticket 만 참조하는 이유
 
 거래는 **직거래(DIRECT)** 와 **안전거래(ESCROW)** 두 가지 방식으로 나뉘며, 각각 흐름이 다르다.
 
@@ -273,6 +371,8 @@ COMPLETED → (종결, 전이 불가)
 - `isForSale = true`인 쇼케이스만 거래가 가능하다.
 - 구매자, 판매자는 휴대폰 인증이 완료된 상태여야 한다.
 - `agreedPrice`에는 실제 판매 완료 금액이 기록된다.
+- **모든 거래 생성은 `TRANSACTION_TICKET`을 경유한다** (§7-6). 채팅방·쇼케이스 상세 어느 진입점이든 티켓을 발급한 뒤 그 티켓을 소비하여 거래를 만든다.
+- 거래 엔티티는 티켓의 맥락(`context_type`, `context_ref_id`)만 참조하며, 채팅방 ID를 직접 의존하지 않는다.
 
 ### 8-2. 직거래 (DIRECT)
 
@@ -280,12 +380,15 @@ COMPLETED → (종결, 전이 불가)
 
 **흐름**:
 ```
-1. 구매자가 채팅/댓글로 구매 의향 전달
+1. 구매자가 채팅방에서 구매 의향 전달
 2. 판매자가 isForSale = true로 변경 (이미 true라면 생략)
-3. 채팅에서 가격, 장소, 일정 등을 협의
-4. 오프라인에서 직거래 진행
-5. 판매자가 쇼케이스를 SOLD로 변경하여 판매 완료 확정
-6. TRANSACTION 레코드가 COMPLETED 상태로 생성된다 (거래 이력 보존)
+3. 채팅에서 가격·장소·일정 협의
+4. 일방이 "직거래 약속" 버튼 선택 → 서버가 DIRECT 컨텍스트 티켓 발급
+   → SYSTEM_TICKET_ISSUED 메시지가 채팅방에 삽입됨
+5. 상대방이 티켓 수락 → 서버가 티켓을 USED 처리하며 TRANSACTION을 COMPLETED로 생성
+   → SYSTEM_TRANSACTION_COMPLETED 메시지 삽입
+6. 오프라인에서 실제 물품·대금 전달
+7. 판매자가 쇼케이스를 SOLD로 변경하여 확정
 ```
 
 - 판매자만 쇼케이스를 `SOLD` 상태로 변경할 수 있다.
@@ -301,10 +404,17 @@ COMPLETED → (종결, 전이 불가)
 **흐름**:
 ```
 1. 채팅에서 가격 합의
-2. 채팅방 내 안전거래 버튼으로 거래 생성 (PENDING)
-3. 구매자가 결제 진행 (PENDING → IN_PROGRESS)
-4. 판매자가 상품 발송/전달
-5. 구매자가 수령 확인 또는 자동 정산 → 거래 완료 (COMPLETED)
+2. 판매자 또는 구매자가 채팅방에서 "안전거래" 선택
+   → 서버가 SHOWCASE_ESCROW 컨텍스트 티켓 발급 (ISSUED, 1시간 유효)
+   → SYSTEM_TICKET_ISSUED 메시지 채팅방에 삽입
+3. 상대방이 티켓 수락
+   → 서버가 티켓 USED 처리하며 TRANSACTION을 PENDING 상태로 생성
+   → SYSTEM_TRANSACTION_STARTED 메시지 삽입
+4. 구매자가 결제 진행 (PENDING → IN_PROGRESS)
+   → SYSTEM_PAYMENT_COMPLETED 메시지 삽입
+5. 판매자가 상품 발송/전달
+6. 구매자가 수령 확인 또는 자동 정산 → 거래 완료 (COMPLETED)
+   → SYSTEM_TRANSACTION_COMPLETED 메시지 삽입
 ```
 
 #### 8-3-1. 거래 상태 전이

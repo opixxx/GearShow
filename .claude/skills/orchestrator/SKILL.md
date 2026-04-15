@@ -43,14 +43,33 @@ description: "GearShow Backend 구현/버그수정/리팩토링 작업의 표준
 
 ## 0. Intake (강제 질문 지점)
 
-다음 중 하나라도 명확하지 않으면 **구현에 들어가지 말고 사용자에게 질문**한다.
+### 0.1 관련 문서 수집 (Intake 질문 이전 필수)
+
+사용자에게 질문하기 **전에**, 이미 결정된 내용을 재질문하지 않도록 관련 문서를 먼저 스캔한다.
+같은 결정을 두 번 하지 않기 위함.
+
+호출 순서:
+1. **`docs/business/biz-logic.md`** — 해당 Bounded Context 섹션 읽기
+2. **`docs/architecture/adr/`** — 파일명에 주제 키워드 있으면 읽기
+   - 예: 채팅 작업 → `ADR-005-chat-protocol.md`, `ADR-006-transaction-ticket-pattern.md`, `ADR-007-chat-transaction-payment-boundaries.md`
+3. **`docs/research/`** — 해당 기능 관련 최신 리서치 문서 (파일명에 주제 키워드 포함) 읽기
+   - 예: 채팅 작업 → `2026-04-15-chat-design.md`
+4. **`docs/spec/api-spec.md`** — 해당 섹션 확인 (엔드포인트 이미 정의됐는지)
+5. **`docs/diagram/schema.md`** — 관련 테이블 구조
+
+읽은 내용 중 **이미 결정된 규칙·제약·계약**이 있으면 Intake 질문 대신 그대로 따른다.
+문서가 충돌하면 사용자에게 확정 요청.
+
+### 0.2 미확정 요구 질문
+
+위 문서 조사 후에도 다음이 명확하지 않으면 **구현에 들어가지 말고 사용자에게 질문**한다.
 추측으로 계획을 만들지 않는다.
 
-- 어떤 Bounded Context에 속하는가? (`showcase`, `user`, `catalog`, `platform`, `common`)
+- 어떤 Bounded Context에 속하는가? (`showcase`, `user`, `catalog`, `platform`, `common`, 향후 `chat`, `transaction-ticket`, `transaction`, `payment`)
 - 새 API인가 기존 변경인가? (Breaking change 여부)
 - 이벤트 발행·구독 관계가 바뀌는가?
 - DB 스키마 변경이 있는가?
-- 기존 상태기계(3D 생성, 주문 등)에 영향이 있는가?
+- 기존 상태기계(3D 생성, 주문, 거래, 결제 등)에 영향이 있는가?
 
 불명확한 항목이 있으면 한 번에 묶어서 질문. 여러 차례 왕복 금지.
 

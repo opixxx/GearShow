@@ -41,10 +41,13 @@
 - ERD : `docs/diagram/schema.md`
 - API 명세 : `docs/spec/api-spec.md`
 - PRD : `docs/PRD.md`
+- **아키텍처 결정 (ADR)** : `docs/architecture/adr/` — 되돌리기 어려운 주요 결정의 근거·대안·트레이드오프 기록. 새 기능 설계 전에 관련 ADR을 먼저 읽는다.
+- **리서치 문서** : `docs/research/` — 기능별 설계 근거·외부 소스 종합·미결정 목록. 유사 기능 작업 전 참조.
 
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
+| 2026-04-15 | CLAUDE.md 포인터에 ADR/리서치 디렉토리 추가 | CLAUDE.md | 새 세션 자립도 보강 — 에이전트가 관련 문서 자발적 발견 가능 |
 | 2026-04-14 | 하네스 초기 구성 (포인터화) | 전체 | 수동 당김 → 파이프라인 강제로 전환 |
 | 2026-04-15 | 위험 Bash 명령 차단 훅 추가 | guard-bash.sh, settings.json | 파괴적 명령(파일 일괄 삭제, 강제 push, DDL DROP 등) 사전 차단 |
 | 2026-04-15 | blocked 종료 상태 명시 도입 | escalation.md | 사용자 개입 필요 상황의 명시적 상태값 (completed/error/blocked 3상태) |

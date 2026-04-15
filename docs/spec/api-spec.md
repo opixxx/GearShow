@@ -986,6 +986,367 @@ DELETE /api/v1/showcases/{showcaseId}/comments/{commentId}
 
 ---
 
+## 8. CHAT (채팅)
+
+> 1:1 채팅. 쇼케이스 단위 + 판매자-구매자 쌍으로 채팅방이 존재한다.
+> 자세한 규칙: `docs/business/biz-logic.md §7`
+> 아키텍처 결정: `docs/architecture/adr/ADR-005`
+
+### 8-1. 채팅방 목록 조회 🔒
+
+자신이 참여 중인 모든 채팅방을 최신 활동 순으로 조회한다.
+
+```
+GET /api/v1/chat-rooms?size=20&cursor={pageToken}
+```
+
+**Response** `200 OK`
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "items": [
+      {
+        "chatRoomId": 1,
+        "showcaseId": 42,
+        "showcaseTitle": "프레데터 24 FG 280mm",
+        "showcaseThumbnailUrl": "https://cdn.../thumb.jpg",
+        "peer": {
+          "userId": 7,
+          "nickname": "boots_lover",
+          "profileImageUrl": "https://cdn.../p.jpg"
+        },
+        "lastMessage": {
+          "content": "네, 괜찮습니다.",
+          "messageType": "TEXT",
+          "sentAt": "2026-04-15T14:30:00Z"
+        },
+        "unreadCount": 3,
+        "chatRoomStatus": "ACTIVE"
+      }
+    ],
+    "pageInfo": {
+      "hasNext": true,
+      "nextCursor": "eyJpZCI6MSwidHMiOi4uLn0="
+    }
+  }
+}
+```
+
+### 8-2. 채팅방 상세 조회 🔒
+
+```
+GET /api/v1/chat-rooms/{chatRoomId}
+```
+
+**Response** `200 OK`
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "chatRoomId": 1,
+    "showcaseId": 42,
+    "seller": { "userId": 5, "nickname": "seller", "profileImageUrl": "..." },
+    "buyer":  { "userId": 7, "nickname": "buyer",  "profileImageUrl": "..." },
+    "chatRoomStatus": "ACTIVE",
+    "createdAt": "2026-04-10T09:00:00Z",
+    "lastMessageAt": "2026-04-15T14:30:00Z"
+  }
+}
+```
+
+**에러**:
+- `403 FORBIDDEN_CHAT_ROOM_ACCESS` — 참여자가 아님
+
+### 8-3. 채팅방 생성 또는 조회 🔒
+
+쇼케이스 상세 "채팅하기" 버튼의 진입점. 기존 채팅방이 있으면 그것을 반환하고, 없으면 새로 생성한다.
+
+```
+POST /api/v1/chat-rooms
+```
+
+**Request Body**
+```json
+{
+  "showcaseId": 42
+}
+```
+
+**Response** `200 OK` (기존 채팅방 반환) 또는 `201 Created` (신규 생성)
+```json
+{
+  "status": 201,
+  "message": "Chat room created",
+  "data": {
+    "chatRoomId": 1
+  }
+}
+```
+
+**에러**:
+- `400 CHAT_ROOM_OWN_SHOWCASE` — 자신의 쇼케이스에 채팅 시도
+- `400 CHAT_ROOM_SHOWCASE_NOT_AVAILABLE` — 쇼케이스가 `DELETED`/`SOLD`
+
+### 8-4. 메시지 목록 조회 🔒
+
+채팅방 히스토리를 커서 기반으로 조회한다. 오래된 메시지부터 최신 방향으로.
+
+```
+GET /api/v1/chat-rooms/{chatRoomId}/messages?size=50&before={messageId}
+```
+
+**쿼리 파라미터**:
+- `size` — 페이지 크기 (기본 50, 최대 200)
+- `before` — 해당 messageId 이전 메시지 조회 (무한 스크롤용)
+
+**Response** `200 OK`
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "items": [
+      {
+        "chatMessageId": 1001,
+        "senderId": 7,
+        "seq": 1,
+        "messageType": "TEXT",
+        "content": "안녕하세요, 가격 조정 가능할까요?",
+        "payloadJson": null,
+        "messageStatus": "ACTIVE",
+        "sentAt": "2026-04-10T09:01:00Z"
+      },
+      {
+        "chatMessageId": 1005,
+        "senderId": null,
+        "seq": 5,
+        "messageType": "SYSTEM_TICKET_ISSUED",
+        "content": "안전거래 요청이 발급되었습니다",
+        "payloadJson": { "ticketId": "abc-123-def" },
+        "messageStatus": "ACTIVE",
+        "sentAt": "2026-04-10T09:05:00Z"
+      }
+    ],
+    "pageInfo": {
+      "hasNext": true,
+      "nextCursor": "bmV4dA=="
+    }
+  }
+}
+```
+
+### 8-5. 메시지 전송 🔒 (HTTP)
+
+실시간 WebSocket 경로가 있지만, HTTP fallback으로도 송신 가능.
+
+```
+POST /api/v1/chat-rooms/{chatRoomId}/messages
+```
+
+**Request Body**
+```json
+{
+  "messageType": "TEXT",
+  "content": "네, 괜찮습니다.",
+  "clientMessageId": "uuid-멱등성-키"
+}
+```
+
+**응답** `201 Created`
+```json
+{
+  "status": 201,
+  "message": "Message sent",
+  "data": {
+    "chatMessageId": 1010,
+    "seq": 10,
+    "sentAt": "2026-04-15T14:30:00Z"
+  }
+}
+```
+
+**에러**:
+- `400 CHAT_MESSAGE_TOO_LONG` — 2,000자 초과
+- `403 CHAT_ROOM_CLOSED` — 채팅방 CLOSED 상태
+- `409 DUPLICATE_CLIENT_MESSAGE_ID` — 동일 clientMessageId 재시도 (응답은 기존 메시지 반환)
+
+### 8-6. WebSocket 연결 (STOMP) 🔒
+
+```
+WebSocket endpoint: /ws
+STOMP handshake: CONNECT
+구독 대상: /topic/chat-rooms/{chatRoomId}
+발신 대상: /app/chat-rooms/{chatRoomId}/send
+```
+
+**구독 메시지 스키마** (서버 → 클라이언트):
+```json
+{
+  "type": "MESSAGE",
+  "payload": {
+    "chatMessageId": 1010,
+    "chatRoomId": 1,
+    "senderId": 7,
+    "seq": 10,
+    "messageType": "TEXT",
+    "content": "네, 괜찮습니다.",
+    "payloadJson": null,
+    "sentAt": "2026-04-15T14:30:00Z"
+  }
+}
+```
+
+**송신 메시지 스키마** (클라이언트 → 서버):
+```json
+{
+  "messageType": "TEXT",
+  "content": "안녕하세요",
+  "clientMessageId": "uuid"
+}
+```
+
+**재연결 동기화**: 클라이언트는 연결 성립 시 `GET /api/v1/chat-rooms/{id}/messages?since_seq=N` 로 누락 메시지 delta 조회.
+
+### 8-7. 읽음 처리 🔒
+
+채팅방 진입 시 호출. 해당 시점까지의 모든 메시지를 읽음 처리.
+
+```
+POST /api/v1/chat-rooms/{chatRoomId}/read
+```
+
+**Request Body**
+```json
+{
+  "lastReadMessageId": 1010
+}
+```
+
+**응답** `200 OK`
+```json
+{
+  "status": 200,
+  "message": "Read marker updated",
+  "data": null
+}
+```
+
+### 8-8. 메시지 삭제 🔒 (soft delete)
+
+자신이 보낸 메시지만 삭제 가능. 시스템 메시지는 삭제 불가.
+
+```
+DELETE /api/v1/chat-rooms/{chatRoomId}/messages/{messageId}
+```
+
+**응답** `200 OK` — 메시지는 `DELETED` 상태로 전환되며 목록 조회 시 "삭제된 메시지입니다" 플레이스홀더로 응답.
+
+**에러**:
+- `403 CHAT_MESSAGE_NOT_OWNER` — 본인 메시지가 아님
+- `400 CHAT_MESSAGE_SYSTEM_UNDELETABLE` — 시스템 메시지
+
+---
+
+## 9. TRANSACTION TICKET (거래 티켓)
+
+> 채팅방·쇼케이스 상세 등에서 거래 요청 시 발급되는 1회용 티켓.
+> 티켓이 소비되면 `TRANSACTION`이 생성된다.
+> 자세한 규칙: `docs/business/biz-logic.md §7-6`
+> 아키텍처 결정: `docs/architecture/adr/ADR-006`
+
+### 9-1. 티켓 발급 🔒
+
+```
+POST /api/v1/transaction-tickets
+```
+
+**Request Body**
+```json
+{
+  "contextType": "SHOWCASE_ESCROW",
+  "contextRefId": 42,
+  "paymentMethod": "ESCROW"
+}
+```
+
+**응답** `201 Created`
+```json
+{
+  "status": 201,
+  "message": "Ticket issued",
+  "data": {
+    "ticketId": "9b3e-...-uuid",
+    "contextType": "SHOWCASE_ESCROW",
+    "contextRefId": 42,
+    "amount": 120000,
+    "sellerId": 5,
+    "buyerId": 7,
+    "paymentMethod": "ESCROW",
+    "expiresAt": "2026-04-15T15:30:00Z",
+    "ticketStatus": "ISSUED"
+  }
+}
+```
+
+**에러**:
+- `400 TICKET_INVALID_CONTEXT` — 맥락 대상 없음/판매 불가
+- `400 TICKET_NOT_PHONE_VERIFIED` — 휴대폰 인증 미완 (거래 선행 조건)
+- `409 TICKET_CONCURRENT_ACTIVE` — 동일 맥락 진행 중 티켓 존재
+
+### 9-2. 티켓 조회 🔒
+
+```
+GET /api/v1/transaction-tickets/{ticketId}
+```
+
+### 9-3. 티켓 취소 🔒 (발급자만)
+
+```
+POST /api/v1/transaction-tickets/{ticketId}/cancel
+```
+
+**에러**:
+- `403 TICKET_NOT_ISSUER` — 발급자가 아님
+- `409 TICKET_NOT_CANCELLABLE` — 이미 USED/EXPIRED/CANCELLED
+
+### 9-4. 티켓 소비 (거래 생성) 🔒
+
+상대방이 티켓을 수락하여 실제 거래 생성. 원자적 `UPDATE`로 멱등성 보장.
+
+```
+POST /api/v1/transactions
+```
+
+**Request Body**
+```json
+{
+  "ticketId": "9b3e-...-uuid"
+}
+```
+
+**응답** `201 Created`
+```json
+{
+  "status": 201,
+  "message": "Transaction created",
+  "data": {
+    "transactionId": 1,
+    "ticketId": "9b3e-...-uuid",
+    "transactionStatus": "PENDING"
+  }
+}
+```
+
+**에러**:
+- `409 TICKET_ALREADY_USED` — 이미 소비된 티켓
+- `410 TICKET_EXPIRED` — 만료
+- `403 TICKET_NOT_TARGET` — 티켓 수락 대상이 아님 (상대방이 아님)
+
+---
+
 ## 에러 코드 목록
 
 > 모든 에러 메시지는 한글로 작성한다.
