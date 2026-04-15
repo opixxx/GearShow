@@ -70,9 +70,10 @@ class ChatRoomPersistenceAdapterIntegrationTest {
 
     @Test
     @DisplayName("findByParticipant: lastMessageAt DESC 정렬 + last message 스냅샷·unread count 합쳐 반환")
+    @SuppressWarnings("java:S2925") // lastMessageAt 순서 보장을 위해 타임스탬프 차이를 강제 (도메인이 Instant.now() 직접 호출, Clock 주입 전환 시 제거 예정)
     void findByParticipant_assemblesProjection() throws InterruptedException {
         // Given: 2개 채팅방, 두 번째 방에 메시지 2건 (peer 발신 1, 본인 발신 1)
-        ChatRoom room1 = adapter.save(ChatRoom.open(100L, 1L, 2L));
+        adapter.save(ChatRoom.open(100L, 1L, 2L));
         Thread.sleep(5);
         ChatRoom room2 = adapter.save(ChatRoom.open(200L, 1L, 2L));
         com.gearshow.backend.chat.domain.model.ChatMessage m1 =
@@ -98,6 +99,7 @@ class ChatRoomPersistenceAdapterIntegrationTest {
 
     @Test
     @DisplayName("findByParticipantWithCursor: 커서 기준 오래된 페이지 조회")
+    @SuppressWarnings("java:S2925") // 동일 사유 — lastMessageAt 타임스탬프 차이 보장용 (Clock 주입 전환 시 제거)
     void findByParticipantWithCursor() throws InterruptedException {
         ChatRoom r1 = adapter.save(ChatRoom.open(100L, 1L, 2L));
         Thread.sleep(5);

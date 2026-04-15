@@ -5,7 +5,6 @@ import com.gearshow.backend.support.TestApiClient;
 import com.gearshow.backend.support.TestResponse;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
-import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
 import java.util.HashMap;
@@ -162,7 +161,7 @@ public class ChatStepDefinitions {
     public void 응답_code_확인(String expectedCode) {
         Object code = context.getLastResponse().body().get("code");
         assertThat(code).isNotNull();
-        assertThat(code.toString()).isEqualTo(expectedCode);
+        assertThat(code).hasToString(expectedCode);
     }
 
     @And("메시지 목록 첫 번째 항목의 content는 {string}이다")
@@ -171,7 +170,7 @@ public class ChatStepDefinitions {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> items = (List<Map<String, Object>>) data.get("data");
         assertThat(items).isNotEmpty();
-        assertThat(items.get(0).get("content").toString()).isEqualTo(expected);
+        assertThat(items.get(0).get("content")).hasToString(expected);
     }
 
     // ===== Helper =====

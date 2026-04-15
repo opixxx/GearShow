@@ -66,9 +66,9 @@ class ChatMessagePersistenceAdapterIntegrationTest {
     @DisplayName("UNIQUE(chat_room_id, seq) 충돌 시 DataIntegrityViolationException")
     void uniqueSeq_violation_throws() {
         adapter.save(ChatMessage.text(ROOM_ID, SENDER, 5L, "a", null));
+        ChatMessage duplicate = ChatMessage.text(ROOM_ID, SENDER, 5L, "b", "diff-client-id");
 
-        assertThatThrownBy(() ->
-                adapter.save(ChatMessage.text(ROOM_ID, SENDER, 5L, "b", "diff-client-id")))
+        assertThatThrownBy(() -> adapter.save(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

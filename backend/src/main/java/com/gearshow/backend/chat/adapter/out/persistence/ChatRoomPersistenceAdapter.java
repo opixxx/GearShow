@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,48 +74,73 @@ public class ChatRoomPersistenceAdapter implements ChatRoomPort {
         }
         List<Long> roomIds = rooms.stream().map(ChatRoomJpaEntity::getId).toList();
 
-        Map<Long, Long> lastIdByRoom = new HashMap<>();
-        for (Object[] row : chatMessageJpaRepository.findLastMessageIdsByChatRoomIds(roomIds)) {
-            lastIdByRoom.put((Long) row[0], (Long) row[1]);
-        }
-
-        Set<Long> lastMessageIds = lastIdByRoom.values().stream().collect(Collectors.toSet());
-        Map<Long, ChatMessageJpaEntity> lastMessageById = lastMessageIds.isEmpty()
-                ? Map.of()
-                : chatMessageJpaRepository.findAllByIdIn(List.copyOf(lastMessageIds)).stream()
-                        .collect(Collectors.toMap(ChatMessageJpaEntity::getId, m -> m));
-
-        Map<Long, Long> unreadByRoom = new HashMap<>();
-        for (Object[] row : chatMessageJpaRepository.countUnreadByChatRoomIds(roomIds, userId)) {
-            unreadByRoom.put((Long) row[0], ((Number) row[1]).longValue());
-        }
+        Map<Long, Long> lastIdByRoom = fetchLastMessageIds(roomIds);
+        Map<Long, ChatMessageJpaEntity> lastMessageById = fetchLastMessagesByIds(lastIdByRoom.values());
+        Map<Long, Long> unreadByRoom = fetchUnreadCounts(roomIds, userId);
 
         List<ChatRoomListProjection> result = new ArrayList<>(rooms.size());
         for (ChatRoomJpaEntity room : rooms) {
             Long lastId = lastIdByRoom.get(room.getId());
             ChatMessageJpaEntity last = lastId != null ? lastMessageById.get(lastId) : null;
             long unread = unreadByRoom.getOrDefault(room.getId(), 0L);
-
-            String content = last == null
-                    ? null
-                    : (last.getStatus() == ChatMessageStatus.DELETED
-                            ? ChatMessage.DELETED_PLACEHOLDER
-                            : last.getContent());
-
-            result.add(new ChatRoomListProjection(
-                    room.getId(),
-                    room.getShowcaseId(),
-                    room.getSellerId(),
-                    room.getBuyerId(),
-                    room.getStatus(),
-                    room.getCreatedAt(),
-                    room.getLastMessageAt(),
-                    last != null ? last.getId() : null,
-                    last != null ? last.getMessageType() : null,
-                    content,
-                    last != null ? last.getSentAt() : null,
-                    unread));
+            result.add(toProjection(room, last, unread));
         }
         return result;
+    }
+
+    private Map<Long, Long> fetchLastMessageIds(List<Long> roomIds) {
+        Map<Long, Long> lastIdByRoom = new HashMap<>();
+        for (Object[] row : chatMessageJpaRepository.findLastMessageIdsByChatRoomIds(roomIds)) {
+            lastIdByRoom.put((Long) row[0], (Long) row[1]);
+        }
+        return lastIdByRoom;
+    }
+
+    private Map<Long, ChatMessageJpaEntity> fetchLastMessagesByIds(Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> unique = Set.copyOf(ids);
+        return chatMessageJpaRepository.findAllByIdIn(List.copyOf(unique)).stream()
+                .collect(Collectors.toMap(ChatMessageJpaEntity::getId, m -> m));
+    }
+
+    private Map<Long, Long> fetchUnreadCounts(List<Long> roomIds, Long userId) {
+        Map<Long, Long> unreadByRoom = new HashMap<>();
+        for (Object[] row : chatMessageJpaRepository.countUnreadByChatRoomIds(roomIds, userId)) {
+            unreadByRoom.put((Long) row[0], ((Number) row[1]).longValue());
+        }
+        return unreadByRoom;
+    }
+
+    private ChatRoomListProjection toProjection(ChatRoomJpaEntity room,
+                                                ChatMessageJpaEntity last,
+                                                long unread) {
+        return new ChatRoomListProjection(
+                room.getId(),
+                room.getShowcaseId(),
+                room.getSellerId(),
+                room.getBuyerId(),
+                room.getStatus(),
+                room.getCreatedAt(),
+                room.getLastMessageAt(),
+                last != null ? last.getId() : null,
+                last != null ? last.getMessageType() : null,
+                displayContentOf(last),
+                last != null ? last.getSentAt() : null,
+                unread);
+    }
+
+    /**
+     * soft delete 된 메시지는 본문을 {@link ChatMessage#DELETED_PLACEHOLDER}로 치환한다.
+     */
+    private String displayContentOf(ChatMessageJpaEntity last) {
+        if (last == null) {
+            return null;
+        }
+        if (last.getStatus() == ChatMessageStatus.DELETED) {
+            return ChatMessage.DELETED_PLACEHOLDER;
+        }
+        return last.getContent();
     }
 }

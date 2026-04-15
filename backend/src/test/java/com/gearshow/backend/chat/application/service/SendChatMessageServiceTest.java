@@ -31,8 +31,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SendChatMessageServiceTest {
@@ -101,8 +99,9 @@ class SendChatMessageServiceTest {
     @DisplayName("채팅방이 없으면 NotFoundChatRoomException")
     void send_roomNotFound_throws() {
         given(chatRoomPort.findById(ROOM_ID)).willReturn(Optional.empty());
+        SendChatMessageCommand command = cmd("hi", null);
 
-        assertThatThrownBy(() -> service.send(cmd("hi", null)))
+        assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(NotFoundChatRoomException.class);
     }
 
@@ -121,8 +120,9 @@ class SendChatMessageServiceTest {
     @DisplayName("CLOSED 채팅방이면 ChatRoomClosedException")
     void send_closed_throws() {
         given(chatRoomPort.findById(ROOM_ID)).willReturn(Optional.of(closedRoom()));
+        SendChatMessageCommand command = cmd("hi", null);
 
-        assertThatThrownBy(() -> service.send(cmd("hi", null)))
+        assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(ChatRoomClosedException.class);
     }
 
@@ -136,8 +136,9 @@ class SendChatMessageServiceTest {
                 .status(ChatMessageStatus.ACTIVE).sentAt(Instant.now()).build();
         given(chatMessagePort.findByClientMessageId(ROOM_ID, BUYER, "dup"))
                 .willReturn(Optional.of(existing));
+        SendChatMessageCommand command = cmd("hi", "dup");
 
-        assertThatThrownBy(() -> service.send(cmd("hi", "dup")))
+        assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(DuplicateClientMessageIdException.class)
                 .satisfies(e -> {
                     DuplicateClientMessageIdException ex = (DuplicateClientMessageIdException) e;
@@ -152,8 +153,9 @@ class SendChatMessageServiceTest {
         given(chatRoomPort.findById(ROOM_ID)).willReturn(Optional.of(activeRoom()));
         given(chatMessagePort.nextSeq(ROOM_ID)).willReturn(1L);
         String big = "가".repeat(2001);
+        SendChatMessageCommand command = cmd(big, null);
 
-        assertThatThrownBy(() -> service.send(cmd(big, null)))
+        assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(ChatMessageTooLongException.class);
     }
 
@@ -182,8 +184,9 @@ class SendChatMessageServiceTest {
         given(chatMessagePort.nextSeq(anyLong())).willReturn(5L, 6L, 7L);
         given(chatMessagePort.save(any(ChatMessage.class)))
                 .willThrow(new DataIntegrityViolationException("race"));
+        SendChatMessageCommand command = cmd("hi", null);
 
-        assertThatThrownBy(() -> service.send(cmd("hi", null)))
+        assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }
