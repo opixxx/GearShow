@@ -1,238 +1,211 @@
 ---
 name: code-review
-description: PR 코드리뷰를 수행한다. CLAUDE.md 규칙 기반으로 아키텍처, 보안, 테스트, 성능을 검토하고 GitHub PR에 리뷰를 등록한다.
+description: >
+  GitHub PR에 대해 4개 서브에이전트(code-reviewer, architecture-reviewer, database-optimizer, test-writer)를
+  병렬 호출하여 통합 리뷰를 생성하고 PR 코멘트로 등록한다. (1) "PR 리뷰", "코드리뷰", "/code-review"
+  요청, (2) PR 번호가 언급된 리뷰 요청, (3) 머지 전 품질 점검 시 사용. 서브에이전트 누적 학습(추가 학습 섹션)이
+  자동으로 리뷰에 반영된다.
 user_invocable: true
 ---
 
-# GearShow 코드리뷰
+# PR 코드리뷰 — 서브에이전트 오케스트레이션
 
-이 스킬은 GitHub PR의 코드를 리뷰하고, 피드백을 GitHub PR 코멘트로 등록한다.
+이 스킬은 **직접 리뷰하지 않는다**. 4개 서브에이전트를 병렬 호출하여 각자의 전문 영역을 검토하게 하고,
+결과를 통합하여 GitHub PR에 코멘트로 등록한다.
+
+각 서브에이전트가 `## 추가 학습 (review-gap-analysis)` 섹션에 누적한 패턴이 자동으로 반영되므로,
+리뷰 품질이 시간에 따라 개선된다.
 
 ## 실행 방법
 
 ```
 /code-review          → 현재 브랜치의 PR을 리뷰
-/code-review 2        → PR #2를 리뷰
+/code-review 27       → PR #27을 리뷰
 ```
 
 ---
 
-## 리뷰 절차
-
-### Step 1: PR 컨텍스트 파악
+## Step 1: PR 컨텍스트 수집
 
 ```bash
-# PR 정보 확인
-gh pr view {PR번호} --json title,body,files,additions,deletions
+# PR 번호 결정
+PR_NUMBER="${1:-$(gh pr view --json number --jq '.number')}"
 
-# PR diff 확인
-gh pr diff {PR번호}
+# PR 기본 정보
+gh pr view "$PR_NUMBER" --json title,body,headRefName,baseRefName,files,additions,deletions,state
 
-# PR에 포함된 커밋 확인
-gh pr view {PR번호} --json commits
+# 변경 diff
+gh pr diff "$PR_NUMBER"
+
+# CI 상태
+gh pr checks "$PR_NUMBER"
 ```
 
 확인할 것:
 - PR 설명과 변경 목적
-- 변경 파일 수와 규모 (400줄 초과 시 분할 권고)
-- CI 통과 여부
+- 변경 규모 (400줄 초과 시 분할 권고를 리뷰에 포함)
+- CI 통과 여부 (빌드 실패 상태면 리뷰 전에 안내)
+- **EXEC_PLAN 존재 여부** — PR 본문에 `docs/agent/plans/` 링크가 있으면 함께 참조
 
 ---
 
-### Step 2: 아키텍처 검토
+## Step 2: 4개 서브에이전트 병렬 호출
 
-`docs/spec/architecture-pattern.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
+Task 툴로 네 개를 동시에 호출한다 (`run_in_background: true` 지양 — 결과를 즉시 통합해야 함).
 
-#### 계층 의존성 방향
+| 서브에이전트 | 담당 영역 | 호출 조건 |
+|---|---|---|
+| `code-reviewer` | SOLID · 네이밍 · 보안 · DTO/예외 · 클린 코드 · 엣지 케이스 | 항상 |
+| `architecture-reviewer` | 헥사고날 경계 · DDD · BC 격리 · Aggregate 설계 · 계층 일관성 | 항상 |
+| `database-optimizer` | N+1 · 인덱스 · 쿼리 최적화 · 트랜잭션 범위 | Repository/JPQL/스키마 변경 시 |
+| `test-writer` (**점검만**, 작성 금지) | 테스트 커버리지 · Happy/Unhappy · BDD 스타일 · 격리 | 항상 |
+
+### 각 에이전트 호출 프롬프트 형식
 
 ```
-Adapter → Application → Domain (이 방향만 허용)
+PR #{번호} 를 리뷰하세요.
+
+- 변경 파일: {gh pr view로 얻은 목록}
+- 변경 diff: gh pr diff {PR번호} 로 직접 수집하세요
+- 대상 브랜치: {headRef} → {baseRef}
+
+리뷰 기준:
+- .claude/agents/{agent-name}.md 의 체크리스트 + 추가 학습 섹션 모두 적용
+- 출력 형식: file:line, 심각도(Critical/Major/Minor), 카테고리, 위반 내용, 수정 제안
+
+`test-writer` 에게만 추가: 이 호출은 점검(audit) 목적이며 테스트 파일을 Edit/Write 하지 마세요.
+                       테스트 적정성 평가만 수행합니다.
 ```
 
-| 체크 항목 | 참조 섹션 | 확인 내용 |
-|:---------|:---------|:---------|
-| Domain 순수성 | 섹션 1 | `domain/` 패키지에 Spring, JPA 어노테이션 없는지 (Lombok @Getter, @Builder만 허용) |
-| Port/Adapter 패턴 | 섹션 1 | Port 인터페이스 없이 Adapter 직접 참조하지 않는지 |
-| DTO 분리 | 섹션 4 | Entity가 Controller에서 직접 반환되지 않는지, record 타입 사용하는지 |
-| 의존성 주입 | 섹션 11 | @Autowired 필드 주입 없이 @RequiredArgsConstructor 사용하는지 |
-| 트랜잭션 위치 | 섹션 7 | @Transactional이 Application Service에만 있는지 |
-| 트랜잭션 범위 | 섹션 7 | 외부 API 호출(S3, Kafka, HTTP 등)이 @Transactional 범위 밖에 있는지 |
-| 소유권 검증 | 섹션 8 | 리소스 수정/삭제/하위 추가 시 Service에서 소유권 검증을 하는지 |
-| 외부 어댑터 예외 | 섹션 9 | 도메인 오류(4xx)와 인프라 오류(5xx)를 분리해서 처리하는지 |
-| Cross-Aggregate | 섹션 2 | 다른 Aggregate 간 JPA 관계 매핑(@ManyToOne 등) 없이 ID 참조만 사용하는지 |
+### `database-optimizer` 조건부 실행
+
+다음 중 하나라도 해당하면 호출:
+- `backend/src/main/java/**/adapter/out/persistence/**` 변경
+- `backend/src/main/java/**/domain/repository/**` 변경
+- `.sql`, Flyway/Liquibase 마이그레이션 파일 변경
+- JPA 엔티티(`*JpaEntity.java`) 변경
+- JPQL/Native Query 포함 메서드 변경
+
+해당 없으면 리뷰 결과에 "database: N/A (변경 없음)" 로 표기.
 
 ---
 
-### Step 3: 코드 품질 검토
+## Step 3: 결과 통합
 
-`docs/spec/coding-convention.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
+### 3-1. Dedup
 
-#### 도메인 모델
+같은 file:line에 여러 에이전트가 동일 이슈를 지적한 경우 (범위 ±3라인) 하나로 병합. 가장 높은 심각도와 가장 상세한 설명을 채택.
 
-| 체크 항목 | 확인 내용 |
-|:---------|:---------|
-| 정적 팩토리 메서드 | public 생성자 대신 create() 등 의미 있는 팩토리 메서드 사용하는지 |
-| 불변 객체 | final 필드, setter 없는지 |
-| 검증 로직 | 팩토리 메서드 내에서 validate 수행하는지 |
-| null 주입 금지 | 필수 필드에 null 전달하지 않는지 |
-| 상태 전이 | 유효하지 않은 상태 전이를 도메인에서 방어하는지 |
+### 3-2. 심각도 레이블 변환
 
-#### 네이밍
+에이전트 용어 → GitHub 리뷰 레이블 매핑:
 
-| 대상 | 규칙 | 예시 |
-|:----|:----|:----|
-| UseCase (Inbound Port) | `{Action}UseCase` | `CreateShowcaseUseCase` |
-| Outbound Port | `{Entity}Port` | `ShowcasePort` |
-| Service | `{Action}Service` | `CreateShowcaseService` |
-| Controller | `{Entity}Controller` | `ShowcaseController` |
-| JPA Entity | `{Entity}JpaEntity` | `ShowcaseJpaEntity` |
-| Domain Exception | `{Reason}{Entity}Exception` | `NotFoundShowcaseException` |
-| ErrorCode | `{DOMAIN}_{REASON}` | `SHOWCASE_NOT_FOUND` |
+| 에이전트 용어 | GitHub 레이블 | 머지 영향 |
+|---|---|---|
+| CRITICAL | 🔴 `[blocking]` | 반드시 수정 |
+| MAJOR | 🟡 `[important]` | 수정 권장 |
+| MINOR | 🟢 `[nit]` | 선택 |
+| (대안 제시) | 💡 `[suggestion]` | 선택 |
+| (칭찬) | 🎉 `[praise]` | — |
 
-#### 메서드 규칙
+### 3-3. 카테고리 집계
 
-- 단일 책임: 한 가지 일만 수행
-- 최대 20줄
-- BDD 스타일 테스트: Given-When-Then 주석
-
-#### 한글 규칙
-
-- 주석, Javadoc: **한글**
-- 로그 메시지: **한글**
-- 예외 메시지 (ErrorCode): **한글**
-- Bean Validation 메시지: **한글**
-- 변수/메서드명: **영문**
-
----
-
-### Step 4: 보안 검토
-
-| 체크 항목 | 확인 내용 |
-|:---------|:---------|
-| 인증/인가 | 보호 엔드포인트에 인증 확인이 있는지 |
-| 입력 검증 | 사용자 입력에 @Valid, @NotBlank 등 Validation 적용되는지 |
-| SQL Injection | JPA 파라미터 바인딩 사용하는지 (문자열 연결 쿼리 금지) |
-| 민감 정보 노출 | .env, API 키, 비밀번호가 코드에 하드코딩되지 않는지 |
-| 에러 메시지 | 스택 트레이스나 내부 정보가 API 응답에 노출되지 않는지 |
-| JWT | 토큰 검증 로직이 올바른지, 만료 확인이 되는지 |
-
----
-
-### Step 5: 테스트 검토
-
-`docs/spec/test-strategy.md`를 Read한 뒤 해당 규칙을 기준으로 검토한다.
-
-| 체크 항목 | 확인 내용 |
-|:---------|:---------|
-| 인수 테스트 | 신규 기능에 Cucumber 시나리오가 있는지 |
-| 통합 테스트 | 신규/변경된 Adapter에 통합 테스트가 있는지 |
-| Happy + Unhappy | Happy Path와 Edge Case 모두 있는지 |
-| 테스트 격리 | 시간 의존 로직, 공유 상태 없는지 |
-| BDD 스타일 | Given-When-Then 주석이 있는지 |
-| @DisplayName | 한글로 테스트 목적이 명확한지 |
-
----
-
-### Step 6: 성능 검토
-
-| 체크 항목 | 확인 내용 |
-|:---------|:---------|
-| N+1 문제 | 연관 엔티티 조회 시 Fetch Join이나 Batch Size 고려했는지 |
-| 불필요한 조회 | 사용하지 않는 데이터까지 조회하지 않는지 |
-| 페이징 | 대량 데이터 조회에 커서 기반 페이징 적용했는지 |
-| 트랜잭션 범위 | 트랜잭션이 불필요하게 길지 않은지 |
-
----
-
-### Step 7: 리뷰 작성
-
-#### 심각도 레이블
-
-| 레이블 | 의미 | 예시 |
-|:------|:----|:----|
-| 🔴 `[blocking]` | 머지 전 반드시 수정 | 보안 취약점, 버그, 아키텍처 위반 |
-| 🟡 `[important]` | 수정 권장, 사유 있으면 유지 가능 | 성능 우려, 네이밍 개선 |
-| 🟢 `[nit]` | 사소한 개선, 머지에 영향 없음 | 코드 스타일, 주석 보완 |
-| 💡 `[suggestion]` | 대안 제시, 선택 사항 | 다른 패턴/접근법 |
-| 🎉 `[praise]` | 잘한 점 칭찬 | 좋은 설계, 깔끔한 코드 |
-
-#### 피드백 규칙
+에이전트별 요약 생성 (위반 건수만):
 
 ```
-❌ "이거 잘못됨"
-✅ "🔴 [blocking] 이 쿼리는 SQL Injection에 취약합니다. 
-    파라미터 바인딩을 사용해주세요:
-    @Query("SELECT u FROM User u WHERE u.nickname = :nickname")"
+## 📊 리뷰 결과 요약
 
-❌ "왜 이 패턴 안 씀?"
-✅ "💡 [suggestion] Repository 패턴을 사용하면 테스트가 
-    더 쉬워질 수 있습니다. 어떻게 생각하시나요?"
-
-❌ "변수명 바꿔"
-✅ "🟢 [nit] `uc` 대신 `userCount`가 더 명확할 것 같습니다."
-```
-
-#### 질문형 피드백 활용
-
-```
-❌ "빈 리스트 처리 안 됨"
-✅ "items가 빈 배열이면 어떻게 동작하나요?"
-
-❌ "에러 핸들링 없음"
-✅ "API 호출이 실패하면 어떻게 처리되나요?"
+| 에이전트 | Critical | Major | Minor | 상태 |
+|---|---|---|---|---|
+| code-reviewer | 0 | 2 | 3 | 수정 권장 |
+| architecture-reviewer | 1 | 0 | 0 | 🔴 머지 차단 |
+| database-optimizer | 0 | 1 | 0 | 수정 권장 |
+| test-writer | 0 | 1 | 2 | 수정 권장 |
+| **합계** | **1** | **4** | **5** | **🔄 Request Changes** |
 ```
 
 ---
 
-### Step 8: GitHub PR에 리뷰 등록
+## Step 4: GitHub PR 코멘트 등록
 
-```bash
-# 전체 리뷰 코멘트 등록
-gh pr review {PR번호} --comment --body "리뷰 내용"
-
-# 승인
-gh pr review {PR번호} --approve --body "리뷰 내용"
-
-# 변경 요청
-gh pr review {PR번호} --request-changes --body "리뷰 내용"
-```
-
-#### 리뷰 본문 형식
+### 4-1. 리뷰 본문 형식
 
 ```markdown
-## 코드리뷰 결과
+## 🤖 자동 코드리뷰 결과
 
-### 요약
-[변경 사항 요약 및 전체 평가]
+{Step 3-3 요약 표}
 
-### 잘한 점
-🎉 [칭찬할 부분]
+### 🔴 Blocking ({개수}건)
+{CRITICAL 항목 — file:line · 카테고리 · 위반 내용 · 수정 제안 · 에이전트명}
 
-### 수정 필요
-🔴 [blocking 항목]
-🟡 [important 항목]
+### 🟡 Important ({개수}건)
+{MAJOR 항목}
 
-### 제안
-💡 [suggestion 항목]
-🟢 [nit 항목]
+### 🟢 Nit ({개수}건)
+{MINOR 항목}
 
-### 체크리스트
-- [ ] 아키텍처 패턴 준수
-- [ ] 보안 이슈 없음
-- [ ] 테스트 충분
-- [ ] 성능 우려 없음
-- [ ] 네이밍/컨벤션 준수
+### 💡 Suggestions
+{대안 제시}
 
-### 판정
-✅ Approve / 🔄 Request Changes / 💬 Comment
-```
+### 🎉 Good Parts
+{칭찬할 부분}
 
 ---
 
-## 판정 기준
+**리뷰 에이전트**: code-reviewer · architecture-reviewer · database-optimizer · test-writer
+**누적 학습 반영**: 각 에이전트의 `## 추가 학습 (review-gap-analysis)` 섹션 포함
+```
 
-| 판정 | 조건 |
-|:----|:----|
-| ✅ **Approve** | blocking 없음, 전체적으로 양호 |
-| 💬 **Comment** | blocking 없음, nit/suggestion만 있음 |
-| 🔄 **Request Changes** | blocking이 1개 이상 존재 |
+### 4-2. 판정 결정
+
+| 상태 | 조건 | 명령 |
+|---|---|---|
+| ✅ Approve | Critical 0건 + Major 0건 | `gh pr review {N} --approve --body "..."` |
+| 💬 Comment | Critical 0건 + Major 있음 | `gh pr review {N} --comment --body "..."` |
+| 🔄 Request Changes | Critical 1건 이상 | `gh pr review {N} --request-changes --body "..."` |
+
+### 4-3. 인라인 코멘트
+
+특정 라인에 대한 구체 피드백은 본문 리뷰가 아니라 **인라인 코멘트**로 등록:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{PR}/comments \
+  -f body="🔴 [blocking] ..." \
+  -f commit_id="$(gh pr view {PR} --json headRefOid -q .headRefOid)" \
+  -f path="{file}" \
+  -F line={line}
+```
+
+인라인 코멘트 기준:
+- Critical/Major: 반드시 인라인
+- Minor/Suggestion: 본문 요약만 (노이즈 방지)
+
+---
+
+## 이 스킬이 하지 않는 것
+
+- **직접 체크리스트 대조** — 서브에이전트 고유 영역이므로 각 `.md` 파일에서 관리
+- **코드 수정** — 리뷰만 수행, 수정은 PR 작성자 또는 `orchestrator`가 담당
+- **테스트 추가/수정** — `test-writer`는 점검만 수행 (작성 스킬은 오케스트레이터 Phase 4에서만)
+- **빌드/CI 실행** — CI 상태는 `gh pr checks`로 조회만
+
+---
+
+## 에러 대응
+
+| 상황 | 대응 |
+|---|---|
+| PR 번호 없음 | `gh pr view`로 현재 브랜치 PR 자동 조회, 없으면 사용자에게 안내 |
+| CI 실패 상태 | 리뷰 전에 CI 실패 원인을 리뷰 본문 상단에 명시 |
+| 변경 파일 0개 | "리뷰할 변경 없음" 안내 후 종료 |
+| 에이전트 1개 타임아웃 | 해당 에이전트는 "N/A (타임아웃)"으로 표기하고 나머지 3개로 진행 |
+| PR이 이미 머지됨 | "이미 머지된 PR, post-hoc 리뷰로 기록만 진행" 안내 후 코멘트만 등록 |
+
+---
+
+## 참조
+
+- 각 에이전트 정의: `.claude/agents/{code-reviewer,architecture-reviewer,database-optimizer,test-writer}.md`
+- 리뷰 갭 분석: `/review-gap-analysis` 스킬 (월 1회)
+- 오케스트레이터 Phase 4와의 관계: `.claude/skills/orchestrator/SKILL.md`
+  (오케스트레이터 Phase 4는 **구현 중 리뷰**, 이 스킬은 **PR 생성 후 리뷰**. 호출 시점이 다름)
