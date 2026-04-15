@@ -16,7 +16,12 @@ public interface ShowcaseReadPort {
     ShowcaseSummary getSummary(Long showcaseId);
 
     /**
-     * 복수 쇼케이스를 한 번에 조회한다 (채팅방 목록 N+1 회피).
+     * 복수 쇼케이스 조회.
+     *
+     * <p><b>현재 구현 한계</b>: showcase BC가 lightweight summary batch UseCase를 제공하지 않아
+     * 어댑터에서 N회 개별 호출 + 각 호출은 detail-heavy 그래프를 로드한다. 채팅방 목록 페이지 크기(≤100)
+     * 안에서 동작하지만 진정한 N+1 회피는 아니다. Phase 후속 작업에서 showcase BC에
+     * {@code GetShowcaseSummariesUseCase} 추가 예정.</p>
      *
      * @return showcaseId → summary 매핑 (존재하지 않는 ID는 key에서 생략)
      */

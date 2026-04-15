@@ -33,7 +33,13 @@ import java.time.Instant;
         name = "chat_message",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_chat_message_client_msg_id",
-                        columnNames = {"chat_room_id", "sender_id", "client_message_id"})
+                        columnNames = {"chat_room_id", "sender_id", "client_message_id"}),
+                // seq 순서성 도메인 불변식의 DB 수준 보장.
+                // MAX(seq) FOR UPDATE 가 빈 채팅방에서 잠길 row 가 없는 사각지대를 막아준다.
+                // 동시 첫 메시지 race 시 한쪽이 DataIntegrityViolationException 으로 떨어지면
+                // 애플리케이션 레벨 재시도로 수렴.
+                @UniqueConstraint(name = "uk_chat_message_room_seq",
+                        columnNames = {"chat_room_id", "seq"})
         },
         indexes = {
                 @Index(name = "ix_chat_message_room_seq",

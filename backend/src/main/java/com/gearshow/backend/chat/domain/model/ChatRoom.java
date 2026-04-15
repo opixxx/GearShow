@@ -105,10 +105,23 @@ public class ChatRoom {
     /**
      * 메시지 발송 시점에 {@code lastMessageAt}을 최신값으로 갱신한다.
      *
-     * @param sentAt 기준 시각
-     * @return 갱신된 채팅방
+     * <p>정렬 인덱스와 목록 커서가 {@code lastMessageAt}에 의존하므로 불변식을 방어한다:
+     * <ul>
+     *   <li>{@code sentAt}이 null이면 {@link InvalidChatRoomException}</li>
+     *   <li>{@code sentAt}이 현재 {@code lastMessageAt}보다 과거이면 역진 없이 원본 반환</li>
+     * </ul>
+     * </p>
+     *
+     * @param sentAt 기준 시각 (NOT NULL)
+     * @return 갱신된 채팅방 (역진 케이스에선 동일 인스턴스)
      */
     public ChatRoom touch(Instant sentAt) {
+        if (sentAt == null) {
+            throw new InvalidChatRoomException();
+        }
+        if (lastMessageAt != null && sentAt.isBefore(lastMessageAt)) {
+            return this;
+        }
         return toBuilder()
                 .lastMessageAt(sentAt)
                 .build();

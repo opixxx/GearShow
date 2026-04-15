@@ -16,7 +16,8 @@ import java.util.Map;
  * chat → user 읽기 어댑터.
  *
  * <p>user BC의 공개 유스케이스({@link GetUserProfileUseCase})를 감싼다.
- * 사라진 유저는 결과에서 누락되며, 상위 서비스는 해당 필드를 null로 다룬다.</p>
+ * 탈퇴/삭제된 유저는 nickname·profileImageUrl이 null인 placeholder {@link UserProfile}로
+ * 결과 맵에 포함된다 (호출측이 "(알 수 없음)" 문구로 렌더링할 수 있게).</p>
  */
 @Component
 @RequiredArgsConstructor

@@ -69,7 +69,9 @@ public class ChatMessage {
     public static ChatMessage text(Long chatRoomId, Long senderId, long seq,
                                    String content, String clientMessageId) {
         if (chatRoomId == null || senderId == null
-                || content == null || content.isBlank()) {
+                || content == null || content.isBlank()
+                || seq <= 0) {
+            // seq는 채팅방 내 단조 증가 순번 — 0 또는 음수는 불변식 위반
             throw new InvalidChatMessageException();
         }
         if (content.length() > MAX_CONTENT_LENGTH) {

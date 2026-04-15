@@ -14,7 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -38,19 +39,25 @@ public class ListChatMessagesService implements ListChatMessagesUseCase {
                 .orElseThrow(NotFoundChatRoomException::new);
         room.validateParticipant(requesterId);
 
+        // 히스토리는 항상 DESC(최신→과거)로 size+1 조회한다.
+        // PageInfo.of 가 size+1 의 마지막 원소(=가장 과거)로 nextCursor 를 만들어야
+        // "다음 페이지 = 더 과거" 의미가 보장된다. 따라서 정렬을 뒤집는 작업은 응답 직전에만 수행.
         List<ChatMessage> desc = before == null
                 ? chatMessagePort.findByChatRoomIdFirstPage(chatRoomId, size)
                 : chatMessagePort.findByChatRoomIdBefore(chatRoomId, before, size);
 
-        List<ChatMessageResult> results = desc.stream()
+        List<ChatMessageResult> descResults = desc.stream()
                 .map(ListChatMessagesService::toResult)
-                .sorted(Comparator.comparingLong(ChatMessageResult::seq))
                 .toList();
 
-        // DESC 기준으로 size + 1 조회되었으므로 hasNext 판정은 seq 최소값 기준
-        return PageInfo.of(results, size,
+        PageInfo<ChatMessageResult> pageDesc = PageInfo.of(descResults, size,
                 ChatMessageResult::sentAt,
                 ChatMessageResult::chatMessageId);
+
+        // 응답은 ASC(과거→최신) 로 노출. 커서/hasNext 는 위에서 계산된 값 그대로 유지.
+        List<ChatMessageResult> ascData = new ArrayList<>(pageDesc.data());
+        Collections.reverse(ascData);
+        return new PageInfo<>(pageDesc.pageToken(), ascData, pageDesc.size(), pageDesc.hasNext());
     }
 
     private static ChatMessageResult toResult(ChatMessage m) {

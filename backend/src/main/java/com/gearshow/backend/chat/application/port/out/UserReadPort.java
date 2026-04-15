@@ -15,7 +15,11 @@ public interface UserReadPort {
     UserProfile getProfile(Long userId);
 
     /**
-     * 복수 유저 프로필 일괄 조회 (N+1 회피).
+     * 복수 유저 프로필 조회.
+     *
+     * <p><b>현재 구현 한계</b>: user BC가 아직 batch UseCase를 제공하지 않아 어댑터에서 N회 개별 호출.
+     * 채팅방 목록 페이지 크기(≤100) 안에서 동작하지만 진정한 N+1 회피는 아니다.
+     * Phase 후속 작업에서 user BC에 {@code GetUserProfilesUseCase} 추가 예정.</p>
      *
      * @return userId → profile 매핑
      */
