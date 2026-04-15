@@ -260,6 +260,13 @@ COMPLETED → (종결, 전이 불가)
 
 ## 7. CHAT (채팅)
 
+> **설계 근거 (ADR)**:
+> - [ADR-005 채팅 프로토콜](../architecture/adr/ADR-005-chat-protocol.md) — WebSocket + STOMP + Kafka + MySQL 선택 이유
+> - [ADR-006 Transaction Ticket 패턴](../architecture/adr/ADR-006-transaction-ticket-pattern.md) — 채팅/거래 결합 설계
+> - [ADR-007 채팅/거래/결제 BC 경계](../architecture/adr/ADR-007-chat-transaction-payment-boundaries.md) — 단방향 의존 규칙
+>
+> **리서치**: [2026-04-15 채팅 설계 종합](../research/2026-04-15-chat-design.md) — 국내외 15+ 소스, 당근페이 발표 분석, Phase 로드맵
+
 ### 7-1. 기본 원칙
 
 - **1:1 채팅만 지원** (그룹 채팅 없음)
@@ -352,6 +359,10 @@ COMPLETED → (종결, 전이 불가)
 ---
 
 ## 8. TRANSACTION (거래)
+
+> **설계 근거 (ADR)**:
+> - [ADR-006 Transaction Ticket 패턴](../architecture/adr/ADR-006-transaction-ticket-pattern.md) — `TRANSACTION.chat_room_id` FK 제거 이유, 티켓 경유 원칙
+> - [ADR-007 BC 경계](../architecture/adr/ADR-007-chat-transaction-payment-boundaries.md) — transaction 이 ticket 만 참조하는 이유
 
 거래는 **직거래(DIRECT)** 와 **안전거래(ESCROW)** 두 가지 방식으로 나뉘며, 각각 흐름이 다르다.
 

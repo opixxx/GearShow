@@ -144,27 +144,76 @@ sed \
 # worktree 루트에 symlink — PR diff에 계획이 포함되어 리뷰 시 함께 보인다
 ln -s "$PLAN_PATH" "${WT_PATH}/EXEC_PLAN.md"
 
-# ─── 2-1) --with-context 옵션 처리: 최근 트레젝토리 부록 첨부 ─────────────────
+# ─── 2-1) --with-context 옵션 처리: 최근 트레젝토리 + 리서치 문서 부록 첨부 ────
 if [ "$WITH_CONTEXT" = "true" ]; then
+  # (1) 최근 트레젝토리 N건 수집
   TRAJ_DIR="${REPO_ROOT}/docs/agent/trajectories"
+  RECENT_TRAJ=""
   if [ -d "$TRAJ_DIR" ]; then
-    # 모든 월별 로그를 합쳐서 최근 N건 추출 (역순)
-    RECENT=$(cat "$TRAJ_DIR"/*.log 2>/dev/null | tail -"$CONTEXT_N" || true)
-    if [ -n "$RECENT" ]; then
-      cat >> "$PLAN_PATH" <<EOF
+    # 모든 월별 로그를 합쳐서 최근 N건 추출
+    RECENT_TRAJ=$(cat "$TRAJ_DIR"/*.log 2>/dev/null | tail -"$CONTEXT_N" || true)
+  fi
 
----
+  # (2) 최근 리서치 문서 경로 N개 수집 (수정 시간 역순)
+  RESEARCH_DIR="${REPO_ROOT}/docs/research"
+  RECENT_RESEARCH=""
+  if [ -d "$RESEARCH_DIR" ]; then
+    # macOS와 Linux 호환: ls -t 로 최신순 나열
+    RECENT_RESEARCH=$(ls -t "$RESEARCH_DIR"/*.md 2>/dev/null | head -"$CONTEXT_N" || true)
+  fi
 
-## 부록 — 최근 ${CONTEXT_N}개 트레젝토리 (참고용 컨텍스트)
+  # (3) ADR 디렉토리 존재 여부 (있으면 힌트만 제공)
+  ADR_DIR="${REPO_ROOT}/docs/architecture/adr"
+  ADR_COUNT=0
+  if [ -d "$ADR_DIR" ]; then
+    ADR_COUNT=$(ls "$ADR_DIR"/ADR-*.md 2>/dev/null | wc -l | tr -d ' ')
+  fi
 
-> 이전 작업의 패턴, 마찰점, 학습을 새 작업 시작 시 참고하기 위해 자동 첨부됨.
-> --with-context 옵션으로 활성화. 무시해도 무방하나 유사한 작업이면 큰 도움.
+  # (4) 하나라도 있으면 부록 블록 생성
+  if [ -n "$RECENT_TRAJ" ] || [ -n "$RECENT_RESEARCH" ] || [ "$ADR_COUNT" -gt 0 ]; then
+    {
+      echo ""
+      echo "---"
+      echo ""
+      echo "## 부록 — 관련 컨텍스트 (자동 첨부)"
+      echo ""
+      echo "> 이전 작업의 패턴·마찰점 + 관련 리서치·ADR 힌트를 새 작업 시작 시점에 주입."
+      echo "> --with-context 옵션으로 활성화. 참고용."
+      echo ""
 
-\`\`\`
-${RECENT}
-\`\`\`
-EOF
-    fi
+      if [ -n "$RECENT_TRAJ" ]; then
+        echo "### 최근 트레젝토리 (최근 ${CONTEXT_N}건)"
+        echo ""
+        echo '```'
+        echo "$RECENT_TRAJ"
+        echo '```'
+        echo ""
+      fi
+
+      if [ -n "$RECENT_RESEARCH" ]; then
+        echo "### 관련 리서치 문서 (최신 ${CONTEXT_N}개)"
+        echo ""
+        echo "이 task와 관련성이 있어 보이면 먼저 읽어라. 파일명에 주제 키워드가 있으면 우선순위:"
+        echo ""
+        while IFS= read -r f; do
+          rel="${f#$REPO_ROOT/}"
+          echo "- \`$rel\`"
+        done <<< "$RECENT_RESEARCH"
+        echo ""
+      fi
+
+      if [ "$ADR_COUNT" -gt 0 ]; then
+        echo "### ADR 문서"
+        echo ""
+        echo "${ADR_COUNT}개의 ADR이 존재한다. 이 task와 관련된 주제의 ADR이 있는지 확인:"
+        echo ""
+        ls "$ADR_DIR"/ADR-*.md 2>/dev/null | while IFS= read -r adr; do
+          base=$(basename "$adr")
+          echo "- \`docs/architecture/adr/$base\`"
+        done
+        echo ""
+      fi
+    } >> "$PLAN_PATH"
   fi
 fi
 
