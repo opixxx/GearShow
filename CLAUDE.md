@@ -46,3 +46,10 @@
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-04-14 | 하네스 초기 구성 (포인터화) | 전체 | 수동 당김 → 파이프라인 강제로 전환 |
+| 2026-04-15 | 위험 Bash 명령 차단 훅 추가 | guard-bash.sh, settings.json | 파괴적 명령(파일 일괄 삭제, 강제 push, DDL DROP 등) 사전 차단 |
+| 2026-04-15 | blocked 종료 상태 명시 도입 | escalation.md | 사용자 개입 필요 상황의 명시적 상태값 (completed/error/blocked 3상태) |
+| 2026-04-15 | EXEC_PLAN 템플릿 강화 | EXEC_PLAN.template.md | Step 자기완결성 + AC를 Bash 커맨드로 + Status 필드 |
+| 2026-04-15 | implement에 시그니처 수준 지시 원칙 추가 | implement/SKILL.md | 과도 상세 지시 → 에이전트 사고 정지 방지 |
+| 2026-04-15 | 트레젝토리 누적 컨텍스트 옵션 | start-task.sh `--with-context` | 이전 작업 학습을 새 작업에 자동 주입 |
+| 2026-04-15 | 2단계 커밋 가이드 추가 | pr-guide/SKILL.md | 큰 변경 시 feat+chore 분리로 git history 정리 |
+| 2026-04-15 | 훅 스크립트 unit test 도입 | tools/hooks/__tests__/ | bats 의존 없이 32개 시나리오 자동 검증 |
