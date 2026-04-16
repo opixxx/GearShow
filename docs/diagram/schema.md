@@ -432,7 +432,11 @@ erDiagram
 | buyerId | bigint | NOT NULL, 논리 참조 → USER | 구매자 ID |
 | chatRoomStatus | enum | NOT NULL | 채팅방 상태 (ACTIVE, CLOSED 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
-| lastMessageAt | timestamp | | 마지막 메시지 일시 |
+| lastMessageAt | timestamp | NOT NULL | 마지막 메시지 일시 (메시지 미발송 시 createdAt 값으로 초기화) |
+
+- 유니크: `(showcaseId, buyerId)` — 쇼케이스 당 구매자 1채팅방
+- 인덱스: `(sellerId, lastMessageAt, chatRoomId)` — 판매자 목록 정렬 커버
+- 인덱스: `(buyerId, lastMessageAt, chatRoomId)` — 구매자 목록 정렬 커버
 
 ### CHAT_MESSAGE (채팅 메시지)
 
@@ -447,11 +451,13 @@ erDiagram
 | messageType | enum | NOT NULL | TEXT, IMAGE, SYSTEM_TICKET_ISSUED, SYSTEM_TRANSACTION_STARTED, SYSTEM_PAYMENT_COMPLETED, SYSTEM_TRANSACTION_COMPLETED, SYSTEM_TRANSACTION_CANCELLED |
 | content | text | NOT NULL | 메시지 본문 (시스템 메시지는 표시용 문구) |
 | payloadJson | json | NULLABLE | 시스템 메시지 부가 데이터 (ticketId, transactionId 등) |
+| clientMessageId | varchar(64) | NULLABLE | 클라이언트 재전송 멱등성 키 |
 | messageStatus | enum | NOT NULL, DEFAULT 'ACTIVE' | ACTIVE, DELETED (본인이 soft delete) |
 | sentAt | timestamp | NOT NULL | 발신 일시 |
 
 - 인덱스: `(chatRoomId, seq)` — 채팅방별 순서 조회
-- 인덱스: `(chatRoomId, sentAt DESC)` — 최신 메시지 조회
+- 인덱스: `(chatRoomId, chatMessageId)` — 커서 기반 히스토리 역순 조회 (MySQL 8 backward index scan)
+- 유니크: `(chatRoomId, senderId, clientMessageId)` — 멱등성 재전송 회수
 - 읽음 상태는 각 메시지에 플래그로 저장하지 않고 `CHAT_READ_MARKER`로 관리 (per user, per room).
 
 ### CHAT_READ_MARKER (읽음 마커)
