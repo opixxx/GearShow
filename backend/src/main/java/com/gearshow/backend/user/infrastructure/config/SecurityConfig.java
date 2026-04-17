@@ -43,6 +43,24 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     /**
+     * WebSocket 엔드포인트 전용 보안 필터 체인.
+     *
+     * <p>WebSocket 업그레이드 요청은 HTTP 필터를 완전히 우회해야 한다.
+     * STOMP CONNECT 시점에 JWT 인증을 별도로 수행한다 (WebSocketAuthInterceptor).</p>
+     */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain webSocketSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher("/ws/**")
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .build();
+    }
+
+    /**
      * 메인 애플리케이션 포트(8080) 의 보안 필터 체인.
      *
      * <p>로컬 프로파일에서는 {@code management.server.port} 가 설정되지 않아 actuator 도
@@ -51,6 +69,7 @@ public class SecurityConfig {
      * {@code /actuator/*} 매칭은 사실상 비활성 규칙이 된다.</p>
      */
     @Bean
+    @Order(2)
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         configureStatelessCorsAndCsrf(http);
         http.authorizeHttpRequests(this::configureAuthorization);
@@ -109,6 +128,8 @@ public class SecurityConfig {
     private void configureAuthorization(
             org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth
+                // 정적 리소스 (채팅 테스트 페이지 등)
+                .requestMatchers("/chat-test.html").permitAll()
                 // Observability — 로컬/개발용. 운영에서는 management.server.port 분리
                 .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 // 인증 없이 접근 가능한 엔드포인트
@@ -153,6 +174,7 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
+        source.registerCorsConfiguration("/ws/**", config);
         return source;
     }
 }
