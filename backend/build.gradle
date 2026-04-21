@@ -48,6 +48,9 @@ dependencies {
 	// Kafka
 	implementation 'org.springframework.kafka:spring-kafka'
 
+	// WebSocket + STOMP
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
 	// Resilience4j (Circuit Breaker for Tripo API)
 	implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
 	implementation 'org.springframework.boot:spring-boot-starter-aop'

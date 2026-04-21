@@ -4,6 +4,7 @@ import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,14 @@ public interface ShowcasePort {
     Showcase save(Showcase showcase);
 
     Optional<Showcase> findById(Long id);
+
+    /**
+     * 복수 ID 로 쇼케이스를 일괄 조회한다. 존재하지 않는 ID 는 결과에서 누락된다.
+     *
+     * @param ids 쇼케이스 ID 컬렉션. 빈 컬렉션이면 빈 리스트 반환.
+     * @return 조회된 쇼케이스 목록 (순서 보장 없음)
+     */
+    List<Showcase> findAllByIds(Collection<Long> ids);
 
     // ── 공개 목록 조회 (최신순) ──
 

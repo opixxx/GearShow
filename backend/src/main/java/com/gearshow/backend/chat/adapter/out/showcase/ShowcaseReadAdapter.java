@@ -5,6 +5,8 @@ import com.gearshow.backend.chat.application.port.out.ShowcaseReadPort;
 import com.gearshow.backend.chat.domain.exception.ChatRoomShowcaseNotAvailableException;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult.ImageResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseSummaryResult;
+import com.gearshow.backend.showcase.application.port.in.GetShowcaseSummariesUseCase;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
@@ -19,14 +21,19 @@ import java.util.Map;
 /**
  * chat → showcase 읽기 어댑터.
  *
- * <p>showcase BC의 공개 유스케이스({@link GetShowcaseUseCase})를 경유해
- * {@link ShowcaseSummary}로 변환한다. chat 도메인은 showcase 도메인 타입을 직접 소비하지 않는다.</p>
+ * <p>chat 도메인은 showcase 도메인 타입을 직접 소비하지 않고,
+ * showcase BC 의 공개 유스케이스 ({@link GetShowcaseUseCase}, {@link GetShowcaseSummariesUseCase})
+ * 를 경유해 {@link ShowcaseSummary} 로 변환한다.</p>
+ *
+ * <p>배치 조회({@link #getSummaries}) 는 {@link GetShowcaseSummariesUseCase} 를 사용해
+ * showcase · image 쿼리 각 1회로 해결하여 N+1 을 제거한다.</p>
  */
 @Component
 @RequiredArgsConstructor
 public class ShowcaseReadAdapter implements ShowcaseReadPort {
 
     private final GetShowcaseUseCase getShowcaseUseCase;
+    private final GetShowcaseSummariesUseCase getShowcaseSummariesUseCase;
 
     @Override
     public ShowcaseSummary getSummary(Long showcaseId) {
@@ -40,14 +47,15 @@ public class ShowcaseReadAdapter implements ShowcaseReadPort {
 
     @Override
     public Map<Long, ShowcaseSummary> getSummaries(List<Long> showcaseIds) {
+        if (showcaseIds == null || showcaseIds.isEmpty()) {
+            return Map.of();
+        }
+        List<ShowcaseSummaryResult> summaries =
+                getShowcaseSummariesUseCase.getSummaries(showcaseIds);
+
         Map<Long, ShowcaseSummary> result = new HashMap<>();
-        for (Long id : showcaseIds) {
-            try {
-                ShowcaseDetailResult detail = getShowcaseUseCase.getShowcase(id);
-                result.put(id, toSummary(detail));
-            } catch (NotFoundShowcaseException e) {
-                // 목록 조회 중 개별 쇼케이스가 사라진 경우 해당 항목만 누락 처리
-            }
+        for (ShowcaseSummaryResult summary : summaries) {
+            result.put(summary.showcaseId(), toSummary(summary));
         }
         return result;
     }
@@ -59,6 +67,15 @@ public class ShowcaseReadAdapter implements ShowcaseReadPort {
                 detail.title(),
                 thumbnailOf(detail),
                 detail.showcaseStatus() == ShowcaseStatus.ACTIVE);
+    }
+
+    private ShowcaseSummary toSummary(ShowcaseSummaryResult summary) {
+        return new ShowcaseSummary(
+                summary.showcaseId(),
+                summary.ownerId(),
+                summary.title(),
+                summary.primaryImageUrl(),
+                summary.showcaseStatus() == ShowcaseStatus.ACTIVE);
     }
 
     private String thumbnailOf(ShowcaseDetailResult detail) {

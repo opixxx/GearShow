@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +33,17 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     public Optional<Showcase> findById(Long id) {
         return showcaseJpaRepository.findById(id)
                 .map(showcaseMapper::toDomain);
+    }
+
+    @Override
+    public List<Showcase> findAllByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return showcaseJpaRepository.findAllById(ids)
+                .stream()
+                .map(showcaseMapper::toDomain)
+                .toList();
     }
 
     @Override

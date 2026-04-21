@@ -15,13 +15,12 @@ public interface UserReadPort {
     UserProfile getProfile(Long userId);
 
     /**
-     * 복수 유저 프로필 조회.
+     * 복수 유저 공개 프로필을 한 번에 조회한다.
      *
-     * <p><b>현재 구현 한계</b>: user BC가 아직 batch UseCase를 제공하지 않아 어댑터에서 N회 개별 호출.
-     * 채팅방 목록 페이지 크기(≤100) 안에서 동작하지만 진정한 N+1 회피는 아니다.
-     * Phase 후속 작업에서 user BC에 {@code GetUserProfilesUseCase} 추가 예정.</p>
+     * <p>구현은 user BC 의 배치 유스케이스를 경유해 {@code user IN (:ids)} 단일 쿼리로 해결한다.
+     * 탈퇴/삭제된 userId 는 placeholder(nickname·profileImageUrl null) 로 결과에 포함된다.</p>
      *
-     * @return userId → profile 매핑
+     * @return userId → profile 매핑 (모든 요청 ID 가 key 로 존재)
      */
     Map<Long, UserProfile> getProfiles(List<Long> userIds);
 }

@@ -481,6 +481,103 @@ class ShowcaseComment {
   }
 }
 
+class ChatRoom {
+  const ChatRoom({
+    required this.chatRoomId,
+    required this.showcaseId,
+    required this.sellerId,
+    required this.buyerId,
+    required this.chatRoomStatus,
+    this.showcaseTitle,
+    this.showcasePrimaryImageUrl,
+    this.otherUserNickname,
+    this.otherUserProfileImageUrl,
+    this.lastMessageContent,
+    this.lastMessageAt,
+    required this.unreadCount,
+  });
+
+  final int chatRoomId;
+  final int showcaseId;
+  final int sellerId;
+  final int buyerId;
+  final String chatRoomStatus;
+  final String? showcaseTitle;
+  final String? showcasePrimaryImageUrl;
+  final String? otherUserNickname;
+  final String? otherUserProfileImageUrl;
+  final String? lastMessageContent;
+  final String? lastMessageAt;
+  final int unreadCount;
+
+  factory ChatRoom.fromJson(Map<String, dynamic> json) {
+    final peer = json['peer'] as Map<String, dynamic>?;
+    final lastMessage = json['lastMessage'] as Map<String, dynamic>?;
+    return ChatRoom(
+      chatRoomId: (json['chatRoomId'] as num?)?.toInt() ?? 0,
+      showcaseId: (json['showcaseId'] as num?)?.toInt() ?? 0,
+      sellerId: (json['sellerId'] as num?)?.toInt() ?? 0,
+      buyerId: (json['buyerId'] as num?)?.toInt() ?? 0,
+      chatRoomStatus: json['chatRoomStatus'] as String? ?? 'ACTIVE',
+      showcaseTitle: json['showcaseTitle'] as String?,
+      showcasePrimaryImageUrl: json['showcaseThumbnailUrl'] as String?,
+      otherUserNickname: peer?['nickname'] as String?,
+      otherUserProfileImageUrl: peer?['profileImageUrl'] as String?,
+      lastMessageContent: lastMessage?['content'] as String?,
+      lastMessageAt: lastMessage?['sentAt'] as String?,
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class ChatMessage {
+  const ChatMessage({
+    required this.chatMessageId,
+    required this.senderId,
+    required this.seq,
+    required this.messageType,
+    required this.content,
+    this.payloadJson,
+    required this.messageStatus,
+    required this.sentAt,
+  });
+
+  final int chatMessageId;
+  final int? senderId;
+  final int seq;
+  final String messageType;
+  final String content;
+  final String? payloadJson;
+  final String messageStatus;
+  final String sentAt;
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      chatMessageId: (json['chatMessageId'] as num?)?.toInt() ?? 0,
+      senderId: (json['senderId'] as num?)?.toInt(),
+      seq: (json['seq'] as num?)?.toInt() ?? 0,
+      messageType: json['messageType'] as String? ?? 'TEXT',
+      content: json['content'] as String? ?? '',
+      payloadJson: json['payloadJson'] as String?,
+      messageStatus: json['messageStatus'] as String? ?? 'ACTIVE',
+      sentAt: json['sentAt'] as String? ?? '',
+    );
+  }
+
+  factory ChatMessage.fromStompPayload(Map<String, dynamic> json) {
+    return ChatMessage(
+      chatMessageId: (json['chatMessageId'] as num?)?.toInt() ?? 0,
+      senderId: (json['senderId'] as num?)?.toInt(),
+      seq: (json['seq'] as num?)?.toInt() ?? 0,
+      messageType: json['messageType'] as String? ?? 'TEXT',
+      content: json['content'] as String? ?? '',
+      payloadJson: json['payloadJson'] as String?,
+      messageStatus: 'ACTIVE',
+      sentAt: json['sentAt'] as String? ?? '',
+    );
+  }
+}
+
 class ShowcaseDraft {
   const ShowcaseDraft({
     required this.catalogItem,

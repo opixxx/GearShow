@@ -15,4 +15,10 @@ public interface DevLoginUseCase {
      * @return JWT 토큰
      */
     LoginResult devLogin();
+
+    /**
+     * 지정한 userId로 개발용 로그인한다.
+     * 해당 사용자가 없으면 자동 생성한다.
+     */
+    LoginResult devLoginAs(Long userId);
 }

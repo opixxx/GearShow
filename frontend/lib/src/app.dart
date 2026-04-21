@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:stomp_dart_client/stomp_dart_client.dart';
 
 import 'api.dart';
 import 'models.dart';
@@ -36,7 +39,13 @@ class AppController extends ChangeNotifier {
   AuthSession? session;
   UserProfile? profile;
 
+  StompClient? _stompClient;
+  final Map<int, StompUnsubscribe> _stompSubscriptions = {};
+  void Function(ChatMessage)? onStompMessage;
+
   bool get isLoggedIn => session?.accessToken.isNotEmpty ?? false;
+
+  int? get currentUserId => profile?.userId;
 
   /// 첫 로그인 사용자인지 확인한다 (닉네임이 "사용자_"로 시작하면 신규).
   bool get needsNicknameSetup =>
@@ -53,13 +62,17 @@ class AppController extends ChangeNotifier {
   }
 
   /// 개발용 로그인. OAuth 없이 테스트 사용자로 인증한다.
+  /// DEV_USER_ID dart-define으로 다른 유저 ID를 지정할 수 있다.
   Future<void> devLogin() async {
-    final nextSession = await api.devLogin(baseUrl: baseUrl);
+    const devUserIdStr = String.fromEnvironment('DEV_USER_ID');
+    final devUserId = devUserIdStr.isNotEmpty ? int.tryParse(devUserIdStr) : null;
+    final nextSession = await api.devLogin(baseUrl: baseUrl, userId: devUserId);
     session = nextSession;
     profile = await api.getMyProfile(
       baseUrl: baseUrl,
       accessToken: nextSession.accessToken,
     );
+    connectStomp();
     notifyListeners();
   }
 
@@ -79,6 +92,7 @@ class AppController extends ChangeNotifier {
       baseUrl: baseUrl,
       accessToken: nextSession.accessToken,
     );
+    connectStomp();
     notifyListeners();
   }
 
@@ -129,6 +143,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    disconnectStomp();
     final token = session?.accessToken;
     if (token != null && token.isNotEmpty) {
       await api.logout(baseUrl: baseUrl, accessToken: token);
@@ -136,6 +151,69 @@ class AppController extends ChangeNotifier {
     session = null;
     profile = null;
     notifyListeners();
+  }
+
+  void connectStomp() {
+    final token = session?.accessToken;
+    if (token == null || token.isEmpty) return;
+
+    disconnectStomp();
+    final wsUrl = '${baseUrl.replaceFirst('http', 'http')}/ws';
+    _stompClient = StompClient(
+      config: StompConfig.sockJS(
+        url: wsUrl,
+        stompConnectHeaders: {'Authorization': 'Bearer $token'},
+        onConnect: (_) => notifyListeners(),
+        onDisconnect: (_) => notifyListeners(),
+        onWebSocketError: (error) => debugPrint('WebSocket 에러: $error'),
+      ),
+    );
+    _stompClient!.activate();
+  }
+
+  void disconnectStomp() {
+    for (final unsub in _stompSubscriptions.values) {
+      unsub(unsubscribeHeaders: {});
+    }
+    _stompSubscriptions.clear();
+    _stompClient?.deactivate();
+    _stompClient = null;
+  }
+
+  bool get isStompConnected => _stompClient?.connected ?? false;
+
+  void subscribeChatRoom(int chatRoomId) {
+    if (_stompClient == null || !_stompClient!.connected) return;
+    if (_stompSubscriptions.containsKey(chatRoomId)) return;
+
+    final unsub = _stompClient!.subscribe(
+      destination: '/topic/chat-rooms/$chatRoomId',
+      callback: (frame) {
+        if (frame.body == null) return;
+        final json = jsonDecode(frame.body!) as Map<String, dynamic>;
+        final payload = json['payload'] as Map<String, dynamic>?;
+        if (payload != null) {
+          onStompMessage?.call(ChatMessage.fromStompPayload(payload));
+        }
+      },
+    );
+    _stompSubscriptions[chatRoomId] = unsub;
+  }
+
+  void unsubscribeChatRoom(int chatRoomId) {
+    _stompSubscriptions.remove(chatRoomId)?.call(unsubscribeHeaders: {});
+  }
+
+  void sendStompMessage(int chatRoomId, String content, String clientMessageId) {
+    if (_stompClient == null || !_stompClient!.connected) return;
+    _stompClient!.send(
+      destination: '/app/chat-rooms/$chatRoomId/send',
+      body: jsonEncode({
+        'messageType': 'TEXT',
+        'content': content,
+        'clientMessageId': clientMessageId,
+      }),
+    );
   }
 }
 
@@ -258,6 +336,12 @@ Route<dynamic> _buildRoute(RouteSettings settings, AppController controller) {
     case '/mypage/showcases':
       return MaterialPageRoute<void>(
         builder: (_) => MyShowcasesScreen(controller: controller),
+        settings: settings,
+      );
+    case '/chat/room':
+      final args = settings.arguments! as ChatRoomArgs;
+      return MaterialPageRoute<void>(
+        builder: (_) => ChatRoomScreen(controller: controller, args: args),
         settings: settings,
       );
     default:

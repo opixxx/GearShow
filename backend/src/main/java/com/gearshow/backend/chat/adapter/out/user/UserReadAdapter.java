@@ -4,6 +4,7 @@ import com.gearshow.backend.chat.application.dto.UserProfile;
 import com.gearshow.backend.chat.application.port.out.UserReadPort;
 import com.gearshow.backend.user.application.dto.UserProfileResult;
 import com.gearshow.backend.user.application.port.in.GetUserProfileUseCase;
+import com.gearshow.backend.user.application.port.in.GetUserProfilesUseCase;
 import com.gearshow.backend.user.domain.exception.NotFoundUserException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -15,15 +16,19 @@ import java.util.Map;
 /**
  * chat → user 읽기 어댑터.
  *
- * <p>user BC의 공개 유스케이스({@link GetUserProfileUseCase})를 감싼다.
- * 탈퇴/삭제된 유저는 nickname·profileImageUrl이 null인 placeholder {@link UserProfile}로
- * 결과 맵에 포함된다 (호출측이 "(알 수 없음)" 문구로 렌더링할 수 있게).</p>
+ * <p>user BC 의 공개 유스케이스({@link GetUserProfileUseCase}, {@link GetUserProfilesUseCase}) 를 감싼다.
+ * 탈퇴/삭제된 유저는 nickname·profileImageUrl 이 {@code null} 인 placeholder {@link UserProfile} 로
+ * 결과 맵에 포함된다 (호출측이 "(알 수 없음)" 으로 렌더링).</p>
+ *
+ * <p>배치 조회({@link #getProfiles}) 는 {@link GetUserProfilesUseCase} 를 통해
+ * 단일 {@code IN} 쿼리로 해결해 N+1 을 제거한다.</p>
  */
 @Component
 @RequiredArgsConstructor
 public class UserReadAdapter implements UserReadPort {
 
     private final GetUserProfileUseCase getUserProfileUseCase;
+    private final GetUserProfilesUseCase getUserProfilesUseCase;
 
     @Override
     public UserProfile getProfile(Long userId) {
@@ -36,13 +41,18 @@ public class UserReadAdapter implements UserReadPort {
 
     @Override
     public Map<Long, UserProfile> getProfiles(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<UserProfileResult> profiles = getUserProfilesUseCase.getProfiles(userIds);
+
         Map<Long, UserProfile> result = new HashMap<>();
+        for (UserProfileResult profile : profiles) {
+            result.put(profile.userId(), toProfile(profile));
+        }
+        // 탈퇴/삭제된 userId 는 placeholder 로 채워 호출측 계약 유지
         for (Long id : userIds) {
-            try {
-                result.put(id, toProfile(getUserProfileUseCase.getUserProfile(id)));
-            } catch (NotFoundUserException e) {
-                result.put(id, new UserProfile(id, null, null));
-            }
+            result.putIfAbsent(id, new UserProfile(id, null, null));
         }
         return result;
     }
