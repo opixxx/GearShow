@@ -65,16 +65,17 @@ public interface ChatMessageJpaRepository extends JpaRepository<ChatMessageJpaEn
      * 참여자의 unread count 배치 조회.
      * 상대방 발신 + ACTIVE 상태 + (marker null 이거나 id &gt; lastReadMessageId) 메시지 count.
      *
-     * <p>read marker 서브쿼리를 {@code COALESCE}로 포함해 채팅방별 개별 마커와 일치시킨다.
-     * 채팅방 당 자신의 read marker는 0 또는 1개이므로 스칼라 서브쿼리로 안전하다.</p>
+     * <p>LEFT JOIN + GROUP BY 로 구성되어 MySQL 옵티마이저가 인덱스({@code ix_chat_read_marker_user_room},
+     * {@code ix_chat_message_room_status}) 를 활용하기 쉽다. 기존 상관 서브쿼리 방식은 row 별 매 룩업이
+     * 발생해 chat_message 규모 증가 시 성능이 급격히 저하되었다.</p>
      */
     @Query("SELECT m.chatRoomId, COUNT(m) FROM ChatMessageJpaEntity m"
+            + " LEFT JOIN ChatReadMarkerJpaEntity rm"
+            + "   ON rm.chatRoomId = m.chatRoomId AND rm.userId = :userId"
             + " WHERE m.chatRoomId IN :chatRoomIds"
             + "   AND m.status = com.gearshow.backend.chat.domain.vo.ChatMessageStatus.ACTIVE"
             + "   AND (m.senderId IS NULL OR m.senderId <> :userId)"
-            + "   AND m.id > COALESCE("
-            + "     (SELECT rm.lastReadMessageId FROM ChatReadMarkerJpaEntity rm"
-            + "      WHERE rm.chatRoomId = m.chatRoomId AND rm.userId = :userId), 0)"
+            + "   AND m.id > COALESCE(rm.lastReadMessageId, 0)"
             + " GROUP BY m.chatRoomId")
     List<Object[]> countUnreadByChatRoomIds(@Param("chatRoomIds") List<Long> chatRoomIds,
                                             @Param("userId") Long userId);
