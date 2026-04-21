@@ -105,9 +105,12 @@ resilience4j:
 # ===========================================
 # WebSocket 허용 Origin (프로덕션)
 # ===========================================
-# 기본 application.yml 의 localhost 기본값을 엄격하게 override 한다.
-# 쉼표 구분 문자열 → Spring 이 String[] 로 자동 바인딩.
+# 현 시점 WebSocket 클라이언트는 Flutter 모바일 네이티브뿐이며 Origin 헤더를 보내지 않아
+# 이 allowlist 검사 대상이 아니다. 기본값 localhost 만으로 정상 동작한다.
+# 웹 브라우저 클라이언트(관리 콘솔·Flutter Web 등) 추가 시점에 EC2 env
+# `WEBSOCKET_ALLOWED_ORIGINS` 로 실제 도메인을 쉼표 구분해 override 한다.
+# Spring 이 쉼표 문자열을 String[] 로 자동 바인딩.
 # ===========================================
 gearshow:
   websocket:
-    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS}
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*}
