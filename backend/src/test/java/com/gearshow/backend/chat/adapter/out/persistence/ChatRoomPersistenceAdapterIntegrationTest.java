@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -116,5 +117,47 @@ class ChatRoomPersistenceAdapterIntegrationTest {
 
         assertThat(next).extracting(ChatRoomListProjection::chatRoomId)
                 .containsExactly(r1.getId());
+    }
+
+    @Test
+    @DisplayName("touchLastMessageAt: 최초 호출은 1 row 를 업데이트하고 lastMessageAt 이 반영된다")
+    void touchLastMessageAt_updatesRow() {
+        // Given
+        ChatRoom room = adapter.save(ChatRoom.open(100L, 1L, 2L));
+        Instant later = room.getCreatedAt().plusSeconds(60);
+
+        // When
+        int affected = adapter.touchLastMessageAt(room.getId(), later);
+
+        // Then
+        assertThat(affected).isEqualTo(1);
+        assertThat(adapter.findById(room.getId()).orElseThrow().getLastMessageAt())
+                .isEqualTo(later);
+    }
+
+    @Test
+    @DisplayName("touchLastMessageAt: 시간 역진 요청은 no-op (0 row)")
+    void touchLastMessageAt_rejectsBackwardTime() {
+        // Given
+        ChatRoom room = adapter.save(ChatRoom.open(100L, 1L, 2L));
+        Instant earlier = room.getCreatedAt().minusSeconds(60);
+
+        // When
+        int affected = adapter.touchLastMessageAt(room.getId(), earlier);
+
+        // Then: 0 row, 기존 lastMessageAt 유지
+        assertThat(affected).isZero();
+        assertThat(adapter.findById(room.getId()).orElseThrow().getLastMessageAt())
+                .isEqualTo(room.getLastMessageAt());
+    }
+
+    @Test
+    @DisplayName("touchLastMessageAt: 존재하지 않는 채팅방 ID 는 0 row")
+    void touchLastMessageAt_missingRoom_returnsZero() {
+        // When
+        int affected = adapter.touchLastMessageAt(9_999_999L, Instant.now());
+
+        // Then
+        assertThat(affected).isZero();
     }
 }

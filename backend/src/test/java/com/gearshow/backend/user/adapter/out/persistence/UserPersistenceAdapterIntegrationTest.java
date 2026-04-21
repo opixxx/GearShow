@@ -9,6 +9,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +50,42 @@ class UserPersistenceAdapterIntegrationTest {
     void findById_notFound_returnsEmpty() {
         // Given & When
         Optional<User> found = adapter.findById(999L);
+
+        // Then
+        assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findAllByIds: 복수 사용자를 단일 IN 쿼리로 조회한다")
+    void findAllByIds_returnsFoundUsersAndOmitsMissing() {
+        // Given
+        User alice = adapter.save(User.create("alice-" + System.nanoTime()));
+        User bob = adapter.save(User.create("bob-" + System.nanoTime()));
+
+        // When: 실재 2건 + 미존재 1건 요청
+        List<User> found = adapter.findAllByIds(List.of(alice.getId(), bob.getId(), 9_999_999L));
+
+        // Then: 미존재는 누락, 나머지는 모두 반환
+        assertThat(found).hasSize(2);
+        assertThat(found).extracting(User::getId)
+                .containsExactlyInAnyOrder(alice.getId(), bob.getId());
+    }
+
+    @Test
+    @DisplayName("findAllByIds: 빈 컬렉션은 DB 조회 없이 빈 리스트를 반환한다")
+    void findAllByIds_emptyIds_returnsEmpty() {
+        // When
+        List<User> found = adapter.findAllByIds(List.of());
+
+        // Then
+        assertThat(found).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findAllByIds: null 을 받아도 안전하게 빈 리스트를 반환한다")
+    void findAllByIds_nullIds_returnsEmpty() {
+        // When
+        List<User> found = adapter.findAllByIds(null);
 
         // Then
         assertThat(found).isEmpty();

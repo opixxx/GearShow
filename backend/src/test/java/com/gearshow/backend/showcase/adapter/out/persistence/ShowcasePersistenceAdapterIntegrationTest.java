@@ -64,6 +64,42 @@ class ShowcasePersistenceAdapterIntegrationTest {
             // Then
             assertThat(found).isEmpty();
         }
+
+        @Test
+        @DisplayName("findAllByIds: 복수 쇼케이스를 단일 IN 쿼리로 조회하며 없는 ID 는 누락된다")
+        void findAllByIds_returnsFoundAndOmitsMissing() {
+            // Given
+            Showcase a = adapter.save(createShowcase("A"));
+            Showcase b = adapter.save(createShowcase("B"));
+
+            // When: 실재 2건 + 미존재 1건
+            List<Showcase> found = adapter.findAllByIds(List.of(a.getId(), b.getId(), 9_999_999L));
+
+            // Then
+            assertThat(found).hasSize(2);
+            assertThat(found).extracting(Showcase::getId)
+                    .containsExactlyInAnyOrder(a.getId(), b.getId());
+        }
+
+        @Test
+        @DisplayName("findAllByIds: 빈 컬렉션은 DB 조회 없이 빈 리스트를 반환한다")
+        void findAllByIds_emptyIds_returnsEmpty() {
+            // When
+            List<Showcase> found = adapter.findAllByIds(List.of());
+
+            // Then
+            assertThat(found).isEmpty();
+        }
+
+        @Test
+        @DisplayName("findAllByIds: null 을 받아도 안전하게 빈 리스트를 반환한다")
+        void findAllByIds_nullIds_returnsEmpty() {
+            // When
+            List<Showcase> found = adapter.findAllByIds(null);
+
+            // Then
+            assertThat(found).isEmpty();
+        }
     }
 
     @Nested
