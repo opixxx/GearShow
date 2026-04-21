@@ -36,6 +36,17 @@ public class DevLoginService implements DevLoginUseCase {
         return tokenIssuer.issue(user.getId());
     }
 
+    @Override
+    @Transactional
+    public LoginResult devLoginAs(Long userId) {
+        User user = userPort.findById(userId)
+                .orElseGet(() -> {
+                    User newUser = User.create("테스트유저_" + userId);
+                    return userPort.save(newUser);
+                });
+        return tokenIssuer.issue(user.getId());
+    }
+
     /**
      * 개발용 테스트 사용자를 조회하거나 생성한다.
      */

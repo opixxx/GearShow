@@ -27,8 +27,11 @@ public class DevAuthController {
      * 개발용 로그인. OAuth 인증 없이 테스트 사용자로 JWT를 발급한다.
      */
     @PostMapping("/dev-login")
-    public ApiResponse<LoginResponse> devLogin() {
-        LoginResult result = devLoginUseCase.devLogin();
+    public ApiResponse<LoginResponse> devLogin(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long userId) {
+        LoginResult result = userId != null
+                ? devLoginUseCase.devLoginAs(userId)
+                : devLoginUseCase.devLogin();
         return ApiResponse.of(200, "개발용 로그인 성공", LoginResponse.from(result));
     }
 }
