@@ -45,6 +45,11 @@ public class ChatRoomPersistenceAdapter implements ChatRoomPort {
     }
 
     @Override
+    public int touchLastMessageAt(Long chatRoomId, Instant sentAt) {
+        return chatRoomJpaRepository.updateLastMessageAt(chatRoomId, sentAt);
+    }
+
+    @Override
     public Optional<ChatRoom> findByShowcaseIdAndBuyerId(Long showcaseId, Long buyerId) {
         return chatRoomJpaRepository.findByShowcaseIdAndBuyerId(showcaseId, buyerId)
                 .map(chatRoomMapper::toDomain);

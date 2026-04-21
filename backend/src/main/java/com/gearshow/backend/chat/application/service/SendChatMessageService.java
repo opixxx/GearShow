@@ -57,7 +57,9 @@ public class SendChatMessageService implements SendChatMessageUseCase {
         }
 
         ChatMessage saved = saveWithSeqRetry(command);
-        chatRoomPort.save(room.touch(saved.getSentAt()));
+        // detached merge(SELECT + UPDATE) 를 피하기 위해 타겟 UPDATE 로 직접 갱신.
+        // WHERE 조건이 시간 역진을 DB 에서 차단하므로 도메인 touch() 호출 불필요.
+        chatRoomPort.touchLastMessageAt(room.getId(), saved.getSentAt());
 
         return new SendChatMessageResult(saved.getId(), saved.getSeq(), saved.getSentAt());
     }

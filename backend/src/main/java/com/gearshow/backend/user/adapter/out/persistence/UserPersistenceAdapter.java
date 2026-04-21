@@ -5,6 +5,8 @@ import com.gearshow.backend.user.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,6 +31,17 @@ public class UserPersistenceAdapter implements UserPort {
     public Optional<User> findById(Long id) {
         return userJpaRepository.findById(id)
                 .map(userMapper::toDomain);
+    }
+
+    @Override
+    public List<User> findAllByIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return userJpaRepository.findAllById(ids)
+                .stream()
+                .map(userMapper::toDomain)
+                .toList();
     }
 
     @Override

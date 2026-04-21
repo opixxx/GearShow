@@ -2,6 +2,7 @@ package com.gearshow.backend.chat.adapter.out.persistence;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -43,4 +44,17 @@ public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomJpaEntity, 
                                                         @Param("cursorActivityAt") Instant cursorActivityAt,
                                                         @Param("cursorId") Long cursorId,
                                                         Pageable pageable);
+
+    /**
+     * 새 메시지 도착 시 {@code lastMessageAt} 만 타겟 업데이트 한다.
+     *
+     * <p>{@code WHERE last_message_at IS NULL OR last_message_at < :sentAt} 조건으로 시간 역진을 DB 에서 차단한다.
+     * 영향 row 0 = 시간 역진 또는 {@code chatRoomId} 부재로 no-op.</p>
+     */
+    @Modifying
+    @Query("UPDATE ChatRoomJpaEntity cr SET cr.lastMessageAt = :sentAt"
+            + " WHERE cr.id = :chatRoomId"
+            + " AND (cr.lastMessageAt IS NULL OR cr.lastMessageAt < :sentAt)")
+    int updateLastMessageAt(@Param("chatRoomId") Long chatRoomId,
+                            @Param("sentAt") Instant sentAt);
 }

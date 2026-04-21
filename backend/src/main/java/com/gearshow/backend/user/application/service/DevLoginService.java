@@ -9,6 +9,7 @@ import com.gearshow.backend.user.domain.model.AuthAccount;
 import com.gearshow.backend.user.domain.model.User;
 import com.gearshow.backend.user.domain.vo.ProviderType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>OAuth 없이 고정된 테스트 사용자로 JWT를 발급한다.
  * 테스트 사용자가 없으면 자동 생성하고, 있으면 기존 사용자로 로그인한다.</p>
+ *
+ * <p>{@code local}, {@code dev}, {@code test} 프로파일에서만 Bean 으로 등록된다.
+ * 프로덕션 환경에는 절대 노출되어서는 안 된다.</p>
  */
+@Profile({"local", "dev", "test"})
 @Service
 @RequiredArgsConstructor
 public class DevLoginService implements DevLoginUseCase {

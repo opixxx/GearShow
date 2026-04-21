@@ -1,6 +1,6 @@
 package com.gearshow.backend.chat.adapter.in.websocket;
 
-import com.gearshow.backend.user.infrastructure.security.JwtTokenProvider;
+import com.gearshow.backend.chat.application.port.out.VerifyJwtTokenPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +13,8 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
@@ -24,7 +26,7 @@ class WebSocketAuthInterceptorTest {
     private WebSocketAuthInterceptor interceptor;
 
     @Mock
-    private JwtTokenProvider jwtTokenProvider;
+    private VerifyJwtTokenPort verifyJwtTokenPort;
 
     private Message<?> createMutableStompMessage(StompCommand command, String authHeader) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
@@ -38,13 +40,15 @@ class WebSocketAuthInterceptorTest {
     @Test
     @DisplayName("유효한 JWT로 CONNECT 시 StompPrincipal이 세팅된다")
     void connectWithValidToken() {
+        // given
         String token = "valid-token";
-        given(jwtTokenProvider.validateToken(token)).willReturn(true);
-        given(jwtTokenProvider.getUserId(token)).willReturn(42L);
+        given(verifyJwtTokenPort.resolveUserId(token)).willReturn(Optional.of(42L));
 
+        // when
         Message<?> result = interceptor.preSend(
                 createMutableStompMessage(StompCommand.CONNECT, "Bearer " + token), null);
 
+        // then
         StompHeaderAccessor resultAccessor = StompHeaderAccessor.wrap(result);
         assertThat(resultAccessor.getUser()).isNotNull();
         assertThat(resultAccessor.getUser().getName()).isEqualTo("42");
@@ -53,11 +57,13 @@ class WebSocketAuthInterceptorTest {
     @Test
     @DisplayName("만료된 JWT로 CONNECT 시 예외가 발생한다")
     void connectWithExpiredToken() {
+        // given
         String token = "expired-token";
-        given(jwtTokenProvider.validateToken(token)).willReturn(false);
+        given(verifyJwtTokenPort.resolveUserId(token)).willReturn(Optional.empty());
 
         Message<?> message = createMutableStompMessage(StompCommand.CONNECT, "Bearer " + token);
 
+        // when & then
         assertThatThrownBy(() -> interceptor.preSend(message, null))
                 .isInstanceOf(MessageDeliveryException.class);
     }

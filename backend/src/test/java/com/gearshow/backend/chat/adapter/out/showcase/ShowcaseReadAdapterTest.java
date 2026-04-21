@@ -5,6 +5,8 @@ import com.gearshow.backend.chat.application.dto.ShowcaseSummary;
 import com.gearshow.backend.chat.domain.exception.ChatRoomShowcaseNotAvailableException;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult.ImageResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseSummaryResult;
+import com.gearshow.backend.showcase.application.port.in.GetShowcaseSummariesUseCase;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
@@ -31,6 +33,7 @@ class ShowcaseReadAdapterTest {
     private ShowcaseReadAdapter adapter;
 
     @Mock private GetShowcaseUseCase getShowcaseUseCase;
+    @Mock private GetShowcaseSummariesUseCase getShowcaseSummariesUseCase;
 
     private ShowcaseDetailResult detail(Long id, ShowcaseStatus status,
                                         List<ImageResult> images) {
@@ -97,14 +100,34 @@ class ShowcaseReadAdapterTest {
     }
 
     @Test
-    @DisplayName("getSummaries는 NotFound 항목을 결과 맵에서 누락시킨다")
+    @DisplayName("getSummaries는 배치 UseCase 결과를 매핑하며 존재하지 않는 ID는 누락된다")
     void getSummaries_skipsNotFound() {
-        given(getShowcaseUseCase.getShowcase(1L)).willReturn(detail(1L, ShowcaseStatus.ACTIVE,
-                List.of(new ImageResult(1L, "p.jpg", 0, true))));
-        given(getShowcaseUseCase.getShowcase(2L)).willThrow(new NotFoundShowcaseException());
+        // given: batch UseCase가 1번만 반환 (2번은 존재하지 않아 누락)
+        given(getShowcaseSummariesUseCase.getSummaries(List.of(1L, 2L)))
+                .willReturn(List.of(new ShowcaseSummaryResult(
+                        1L, 10L, "title", "p.jpg", ShowcaseStatus.ACTIVE)));
 
+        // when
         Map<Long, ShowcaseSummary> result = adapter.getSummaries(List.of(1L, 2L));
 
+        // then
         assertThat(result).containsKey(1L).doesNotContainKey(2L);
+        assertThat(result.get(1L).chatStartable()).isTrue();
+        assertThat(result.get(1L).thumbnailUrl()).isEqualTo("p.jpg");
+    }
+
+    @Test
+    @DisplayName("getSummaries는 SOLD 상태를 chatStartable=false 로 매핑한다")
+    void getSummaries_soldIsNotStartable() {
+        // given
+        given(getShowcaseSummariesUseCase.getSummaries(List.of(1L)))
+                .willReturn(List.of(new ShowcaseSummaryResult(
+                        1L, 10L, "title", null, ShowcaseStatus.SOLD)));
+
+        // when
+        Map<Long, ShowcaseSummary> result = adapter.getSummaries(List.of(1L));
+
+        // then
+        assertThat(result.get(1L).chatStartable()).isFalse();
     }
 }

@@ -1194,10 +1194,15 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                               if (detail.ownerId != widget.controller.currentUserId)
                                 OutlinedButton(
                                   onPressed: () async {
+                                    final token = widget.controller.session?.accessToken;
+                                    if (token == null || token.isEmpty) {
+                                      _showSnack(context, '채팅은 로그인 후 이용 가능합니다.');
+                                      return;
+                                    }
                                     try {
                                       final roomId = await widget.controller.api.createOrGetChatRoom(
                                         baseUrl: widget.controller.baseUrl,
-                                        accessToken: widget.controller.session!.accessToken,
+                                        accessToken: token,
                                         showcaseId: detail.showcaseId,
                                       );
                                       if (context.mounted) {
