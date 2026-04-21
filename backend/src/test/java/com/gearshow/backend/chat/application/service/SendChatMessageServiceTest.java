@@ -21,16 +21,21 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 import java.util.Optional;
+
+import com.gearshow.backend.chat.application.event.ChatMessageCreatedEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class SendChatMessageServiceTest {
@@ -44,6 +49,7 @@ class SendChatMessageServiceTest {
 
     @Mock private ChatRoomPort chatRoomPort;
     @Mock private ChatMessagePort chatMessagePort;
+    @Mock private ApplicationEventPublisher applicationEventPublisher;
 
     private ChatRoom activeRoom() {
         return ChatRoom.builder()
@@ -83,6 +89,7 @@ class SendChatMessageServiceTest {
         // Then
         assertThat(result.chatMessageId()).isEqualTo(100L);
         assertThat(result.seq()).isEqualTo(5L);
+        verify(applicationEventPublisher).publishEvent(any(ChatMessageCreatedEvent.class));
     }
 
     @Test

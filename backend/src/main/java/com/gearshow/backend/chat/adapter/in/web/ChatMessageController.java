@@ -3,7 +3,6 @@ package com.gearshow.backend.chat.adapter.in.web;
 import com.gearshow.backend.chat.adapter.in.web.dto.ChatMessageResponse;
 import com.gearshow.backend.chat.adapter.in.web.dto.SendChatMessageRequest;
 import com.gearshow.backend.chat.adapter.in.web.dto.SendChatMessageResponse;
-import com.gearshow.backend.chat.adapter.in.websocket.dto.StompChatMessageResponse;
 import com.gearshow.backend.chat.application.dto.ChatMessageResult;
 import com.gearshow.backend.chat.application.dto.SendChatMessageCommand;
 import com.gearshow.backend.chat.application.dto.SendChatMessageResult;
@@ -17,7 +16,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,7 +42,6 @@ public class ChatMessageController {
     private final ListChatMessagesUseCase listChatMessagesUseCase;
     private final SendChatMessageUseCase sendChatMessageUseCase;
     private final DeleteChatMessageUseCase deleteChatMessageUseCase;
-    private final SimpMessagingTemplate messagingTemplate;
 
     @GetMapping
     public ApiResponse<PageInfo<ChatMessageResponse>> list(
@@ -75,18 +72,13 @@ public class ChatMessageController {
             @Valid @RequestBody SendChatMessageRequest request) {
 
         Long userId = (Long) authentication.getPrincipal();
+        // 브로드캐스트는 UseCase 내부에서 커밋 후 AFTER_COMMIT 이벤트로 처리 (ADR-009).
         SendChatMessageResult result = sendChatMessageUseCase.send(new SendChatMessageCommand(
                 chatRoomId,
                 userId,
                 request.messageType(),
                 request.content(),
                 request.clientMessageId()));
-
-        StompChatMessageResponse wsResponse = StompChatMessageResponse.of(
-                result.chatMessageId(), chatRoomId, userId, result.seq(),
-                request.messageType(), request.content(), null, result.sentAt());
-        messagingTemplate.convertAndSend("/topic/chat-rooms/" + chatRoomId, wsResponse);
-
         return ApiResponse.of(201, "메시지 전송 성공", SendChatMessageResponse.from(result));
     }
 
