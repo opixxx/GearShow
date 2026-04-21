@@ -22,7 +22,12 @@ public interface ChatRoomJpaRepository extends JpaRepository<ChatRoomJpaEntity, 
 
     /**
      * 참여자 기준 목록 첫 페이지 ({@code lastMessageAt DESC, id DESC}).
-     * {@code lastMessageAt}은 NOT NULL 이므로 복합 인덱스가 그대로 활용된다.
+     *
+     * <p><b>⚠️ Filesort 위험</b>: {@code sellerId OR buyerId} 조건은 {@code (seller_id, last_message_at)},
+     * {@code (buyer_id, last_message_at)} 두 인덱스를 {@code index_merge(sort_union)} 로만 활용 가능하여
+     * 정렬이 merge 이후 다시 filesort 로 수행될 수 있다. 채팅방이 수백만 행을 넘어가면 체감 성능이 저하된다.
+     * 근본 해결은 참여자 정규화 컬럼({@code participant_a_id, participant_b_id}) 도입이며, 데이터 마이그레이션
+     * 리스크가 커 별도 작업(Phase 3) 으로 분리한다. 현재 규모에서는 주석으로만 기록.</p>
      */
     @Query("SELECT cr FROM ChatRoomJpaEntity cr"
             + " WHERE cr.sellerId = :userId OR cr.buyerId = :userId"

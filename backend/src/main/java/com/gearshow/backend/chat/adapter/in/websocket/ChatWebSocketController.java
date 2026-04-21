@@ -1,15 +1,14 @@
 package com.gearshow.backend.chat.adapter.in.websocket;
 
 import com.gearshow.backend.chat.adapter.in.websocket.dto.StompChatMessageRequest;
-import com.gearshow.backend.chat.adapter.in.websocket.dto.StompChatMessageResponse;
 import com.gearshow.backend.chat.application.dto.SendChatMessageCommand;
-import com.gearshow.backend.chat.application.dto.SendChatMessageResult;
 import com.gearshow.backend.chat.application.port.in.SendChatMessageUseCase;
+import com.gearshow.backend.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 import java.security.Principal;
@@ -17,8 +16,10 @@ import java.security.Principal;
 /**
  * STOMP 메시지 수신 컨트롤러 (api-spec §8-6).
  *
- * <p>클라이언트가 {@code /app/chat-rooms/{chatRoomId}/send}로 메시지를 보내면
- * UseCase를 호출하여 저장 후 {@code /topic/chat-rooms/{chatRoomId}}로 브로드캐스트한다.</p>
+ * <p>클라이언트가 {@code /app/chat-rooms/{chatRoomId}/send} 로 메시지를 보내면 UseCase 를
+ * 호출해 저장한다. 브로드캐스트는 {@code SendChatMessageService} 가 저장 트랜잭션 커밋 후
+ * 발행하는 이벤트({@code ChatMessageCreatedEvent}) 를 리스너가 수신해 수행하므로 여기서는
+ * 직접 수행하지 않는다 (ADR-009).</p>
  */
 @Slf4j
 @Controller
@@ -26,7 +27,6 @@ import java.security.Principal;
 public class ChatWebSocketController {
 
     private final SendChatMessageUseCase sendChatMessageUseCase;
-    private final SimpMessagingTemplate messagingTemplate;
 
     @MessageMapping("/chat-rooms/{chatRoomId}/send")
     public void sendMessage(
@@ -34,25 +34,16 @@ public class ChatWebSocketController {
             StompChatMessageRequest request,
             Principal principal) {
 
-        Long userId = ((StompPrincipal) principal).userId();
+        if (!(principal instanceof StompPrincipal stompPrincipal)) {
+            throw new MessageDeliveryException(ErrorCode.CHAT_WS_UNAUTHENTICATED_SESSION.getMessage());
+        }
+        Long userId = stompPrincipal.userId();
 
-        SendChatMessageResult result = sendChatMessageUseCase.send(new SendChatMessageCommand(
+        sendChatMessageUseCase.send(new SendChatMessageCommand(
                 chatRoomId,
                 userId,
                 request.messageType(),
                 request.content(),
                 request.clientMessageId()));
-
-        StompChatMessageResponse response = StompChatMessageResponse.of(
-                result.chatMessageId(),
-                chatRoomId,
-                userId,
-                result.seq(),
-                request.messageType(),
-                request.content(),
-                null,
-                result.sentAt());
-
-        messagingTemplate.convertAndSend("/topic/chat-rooms/" + chatRoomId, response);
     }
 }

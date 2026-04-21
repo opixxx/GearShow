@@ -1,7 +1,9 @@
 package com.gearshow.backend.chat.application.service;
 
+import com.gearshow.backend.chat.application.dto.ChatMessageBroadcastPayload;
 import com.gearshow.backend.chat.application.dto.SendChatMessageCommand;
 import com.gearshow.backend.chat.application.dto.SendChatMessageResult;
+import com.gearshow.backend.chat.application.event.ChatMessageCreatedEvent;
 import com.gearshow.backend.chat.application.port.in.SendChatMessageUseCase;
 import com.gearshow.backend.chat.application.port.out.ChatMessagePort;
 import com.gearshow.backend.chat.application.port.out.ChatRoomPort;
@@ -13,6 +15,7 @@ import com.gearshow.backend.chat.domain.model.ChatRoom;
 import com.gearshow.backend.chat.domain.vo.ChatMessageType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,7 @@ public class SendChatMessageService implements SendChatMessageUseCase {
 
     private final ChatRoomPort chatRoomPort;
     private final ChatMessagePort chatMessagePort;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -60,6 +64,11 @@ public class SendChatMessageService implements SendChatMessageUseCase {
         // detached merge(SELECT + UPDATE) 를 피하기 위해 타겟 UPDATE 로 직접 갱신.
         // WHERE 조건이 시간 역진을 DB 에서 차단하므로 도메인 touch() 호출 불필요.
         chatRoomPort.touchLastMessageAt(room.getId(), saved.getSentAt());
+
+        // 커밋 후 브로드캐스트 — @TransactionalEventListener(AFTER_COMMIT) 가 수신 (ADR-009).
+        // 여기서 직접 broadcast 하지 않아 롤백 시 유령 메시지 위험을 구조적으로 제거한다.
+        applicationEventPublisher.publishEvent(
+                new ChatMessageCreatedEvent(ChatMessageBroadcastPayload.from(saved)));
 
         return new SendChatMessageResult(saved.getId(), saved.getSeq(), saved.getSentAt());
     }

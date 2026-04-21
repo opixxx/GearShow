@@ -1,6 +1,7 @@
 package com.gearshow.backend.chat.adapter.in.websocket;
 
 import com.gearshow.backend.chat.application.port.out.VerifyJwtTokenPort;
+import com.gearshow.backend.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -41,7 +42,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
         Long userId = verifyJwtTokenPort.resolveUserId(extractToken(accessor))
                 .orElseThrow(() -> {
                     log.warn("WebSocket 인증 실패: 유효하지 않은 토큰");
-                    return new MessageDeliveryException("인증에 실패했습니다. 유효한 JWT 토큰을 제공해주세요.");
+                    return new MessageDeliveryException(ErrorCode.CHAT_WS_AUTH_FAILED.getMessage());
                 });
 
         accessor.setUser(new StompPrincipal(userId));

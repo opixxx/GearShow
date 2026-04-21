@@ -101,3 +101,13 @@ resilience4j:
 # acks=all이 실제 내구성을 보장하려면 브로커/토픽의 min.insync.replicas >= 2 필수
 # MSK 도입 시 토픽 생성 옵션에서 설정: --config min.insync.replicas=2
 # ===========================================
+
+# ===========================================
+# WebSocket 허용 Origin (프로덕션)
+# ===========================================
+# 기본 application.yml 의 localhost 기본값을 엄격하게 override 한다.
+# 쉼표 구분 문자열 → Spring 이 String[] 로 자동 바인딩.
+# ===========================================
+gearshow:
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS}
