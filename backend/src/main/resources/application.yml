@@ -110,3 +110,11 @@ oauth:
     private-key-path: ${APPLE_PRIVATE_KEY_PATH:}
     token-uri: https://appleid.apple.com/auth/token
     redirect-uri: ${APPLE_REDIRECT_URI:http://localhost:8080/api/v1/auth/login/apple}
+
+# WebSocket 설정
+gearshow:
+  websocket:
+    # 기본값은 로컬 개발 편의상 localhost 만 허용. 프로파일별(application-prod.yml) override 필수.
+    # 와일드카드 `*` 금지 — CSRF 유사 공격 경로 차단.
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*}
+

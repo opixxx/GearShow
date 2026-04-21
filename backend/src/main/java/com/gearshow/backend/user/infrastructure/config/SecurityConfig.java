@@ -128,8 +128,6 @@ public class SecurityConfig {
     private void configureAuthorization(
             org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth
-                // 정적 리소스 (채팅 테스트 페이지 등)
-                .requestMatchers("/chat-test.html").permitAll()
                 // Observability — 로컬/개발용. 운영에서는 management.server.port 분리
                 .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
                 // 인증 없이 접근 가능한 엔드포인트

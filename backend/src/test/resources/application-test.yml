@@ -53,3 +53,8 @@ cloud:
       bucket: test-bucket
       cdn-url: https://test-cdn.gearshow.com
       endpoint: http://localhost:4566
+
+# WebSocket 테스트용 설정
+gearshow:
+  websocket:
+    allowed-origins: http://localhost:*
