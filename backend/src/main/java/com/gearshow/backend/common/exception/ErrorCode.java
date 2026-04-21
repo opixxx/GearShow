@@ -96,7 +96,14 @@ public enum ErrorCode {
     CHAT_MESSAGE_NOT_OWNER(403, "본인이 보낸 메시지만 삭제할 수 있습니다"),
     CHAT_MESSAGE_SYSTEM_UNDELETABLE(400, "시스템 메시지는 삭제할 수 없습니다"),
     CHAT_MESSAGE_INVALID(400, "유효하지 않은 채팅 메시지입니다"),
-    DUPLICATE_CLIENT_MESSAGE_ID(409, "이미 전송된 메시지입니다");
+    DUPLICATE_CLIENT_MESSAGE_ID(409, "이미 전송된 메시지입니다"),
+
+    // CHAT WebSocket (STOMP)
+    CHAT_WS_AUTH_FAILED(401, "인증에 실패했습니다. 유효한 JWT 토큰을 제공해주세요"),
+    CHAT_WS_UNAUTHENTICATED_SESSION(401, "인증되지 않은 WebSocket 세션입니다"),
+    CHAT_WS_INVALID_DESTINATION(400, "허용되지 않는 구독 경로입니다"),
+    CHAT_WS_ROOM_NOT_FOUND(404, "구독 대상 채팅방을 찾을 수 없습니다"),
+    CHAT_WS_SUBSCRIBE_DENIED(403, "채팅방 구독 권한이 없습니다");
 
     private final int status;
     private final String message;

@@ -3,6 +3,7 @@ package com.gearshow.backend.chat.adapter.in.websocket;
 import com.gearshow.backend.chat.adapter.in.websocket.dto.StompChatMessageRequest;
 import com.gearshow.backend.chat.application.dto.SendChatMessageCommand;
 import com.gearshow.backend.chat.application.port.in.SendChatMessageUseCase;
+import com.gearshow.backend.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.MessageDeliveryException;
@@ -34,7 +35,7 @@ public class ChatWebSocketController {
             Principal principal) {
 
         if (!(principal instanceof StompPrincipal stompPrincipal)) {
-            throw new MessageDeliveryException("인증되지 않은 WebSocket 세션입니다.");
+            throw new MessageDeliveryException(ErrorCode.CHAT_WS_UNAUTHENTICATED_SESSION.getMessage());
         }
         Long userId = stompPrincipal.userId();
 
