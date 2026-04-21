@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
@@ -415,10 +416,7 @@ class _MainShellState extends State<MainShell> {
     _screens = [
       HomeScreen(controller: widget.controller),
       ShowcaseCreateScreen(controller: widget.controller),
-      const UnsupportedFeatureScreen(
-        title: '채팅',
-        description: '와이어프레임은 유지했지만 현재 backend에는 chat API가 없습니다.',
-      ),
+      ChatListScreen(controller: widget.controller),
       MyPageScreen(controller: widget.controller),
     ];
   }
@@ -1193,10 +1191,35 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                                 ),
                               ),
-                              OutlinedButton(
-                                onPressed: () => _showSnack(context, '채팅 API는 현재 backend에 없습니다.'),
-                                child: const Text('채팅하기'),
-                              ),
+                              if (detail.ownerId != widget.controller.currentUserId)
+                                OutlinedButton(
+                                  onPressed: () async {
+                                    try {
+                                      final roomId = await widget.controller.api.createOrGetChatRoom(
+                                        baseUrl: widget.controller.baseUrl,
+                                        accessToken: widget.controller.session!.accessToken,
+                                        showcaseId: detail.showcaseId,
+                                      );
+                                      if (context.mounted) {
+                                        final primaryImg = detail.images.isNotEmpty
+                                            ? detail.images.first.imageUrl
+                                            : null;
+                                        Navigator.pushNamed(context, '/chat/room',
+                                          arguments: ChatRoomArgs(
+                                            chatRoomId: roomId,
+                                            title: ownerProfile?.nickname ?? '판매자',
+                                            showcaseId: detail.showcaseId,
+                                            showcaseTitle: detail.title,
+                                            showcaseThumbnailUrl: primaryImg,
+                                            peerProfileImageUrl: ownerProfile?.profileImageUrl,
+                                          ));
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) _showSnack(context, e.toString());
+                                    }
+                                  },
+                                  child: const Text('채팅하기'),
+                                ),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -4128,6 +4151,695 @@ class _NicknameSetupScreenState extends State<NicknameSetupScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 채팅
+// ---------------------------------------------------------------------------
+
+String _formatKoreanTime(String sentAt) {
+  try {
+    final dt = DateTime.parse(sentAt).toLocal();
+    final isPm = dt.hour >= 12;
+    final h = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    return '${isPm ? "오후" : "오전"} $h:${dt.minute.toString().padLeft(2, '0')}';
+  } catch (_) {
+    return '';
+  }
+}
+
+String _formatRelativeTime(String? isoTime) {
+  if (isoTime == null) return '';
+  try {
+    final dt = DateTime.parse(isoTime).toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return '방금';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+    if (diff.inHours < 24) return '${diff.inHours}시간 전';
+    if (diff.inDays == 1) return '어제';
+    if (diff.inDays < 7) return '${diff.inDays}일 전';
+    return '${dt.month}월 ${dt.day}일';
+  } catch (_) {
+    return '';
+  }
+}
+
+bool _isSameDay(String? a, String? b) {
+  if (a == null || b == null) return false;
+  try {
+    final da = DateTime.parse(a).toLocal();
+    final db = DateTime.parse(b).toLocal();
+    return da.year == db.year && da.month == db.month && da.day == db.day;
+  } catch (_) {
+    return false;
+  }
+}
+
+class ChatRoomArgs {
+  const ChatRoomArgs({
+    required this.chatRoomId,
+    this.title,
+    this.showcaseId,
+    this.showcaseTitle,
+    this.showcaseThumbnailUrl,
+    this.peerProfileImageUrl,
+  });
+  final int chatRoomId;
+  final String? title;
+  final int? showcaseId;
+  final String? showcaseTitle;
+  final String? showcaseThumbnailUrl;
+  final String? peerProfileImageUrl;
+}
+
+// [7] 필터 탭 enum
+enum _ChatFilter { all, unread }
+
+class ChatListScreen extends StatefulWidget {
+  const ChatListScreen({super.key, required this.controller});
+  final AppController controller;
+
+  @override
+  State<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends State<ChatListScreen> {
+  List<ChatRoom> _rooms = [];
+  bool _loading = true;
+  String? _error;
+  _ChatFilter _filter = _ChatFilter.all;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final page = await widget.controller.api.listChatRooms(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: widget.controller.session!.accessToken,
+      );
+      setState(() { _rooms = page.items; _loading = false; });
+    } catch (e) {
+      setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  List<ChatRoom> get _filtered {
+    switch (_filter) {
+      case _ChatFilter.all:
+        return _rooms;
+      case _ChatFilter.unread:
+        return _rooms.where((r) => r.unreadCount > 0).toList();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    return Scaffold(
+      appBar: AppBar(title: const Text('채팅')),
+      body: Column(
+        children: [
+          // [7] 필터 탭
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              children: [
+                _filterChip('전체', _ChatFilter.all),
+                const SizedBox(width: 8),
+                _filterChip('안읽음', _ChatFilter.unread),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, style: const TextStyle(color: Colors.red)),
+                          const SizedBox(height: 8),
+                          ElevatedButton(onPressed: _load, child: const Text('다시 시도')),
+                        ],
+                      ))
+                    : filtered.isEmpty
+                        ? const Center(child: Text('채팅방이 없습니다', style: TextStyle(color: Colors.grey)))
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.separated(
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFF222222)),
+                              itemBuilder: (context, index) {
+                                final room = filtered[index];
+                                return _ChatRoomTile(
+                                  room: room,
+                                  onTap: () => Navigator.pushNamed(
+                                    context, '/chat/room',
+                                    arguments: ChatRoomArgs(
+                                      chatRoomId: room.chatRoomId,
+                                      title: room.otherUserNickname ?? room.showcaseTitle ?? '채팅',
+                                      showcaseId: room.showcaseId,
+                                      showcaseTitle: room.showcaseTitle,
+                                      showcaseThumbnailUrl: room.showcasePrimaryImageUrl,
+                                      peerProfileImageUrl: room.otherUserProfileImageUrl,
+                                    ),
+                                  ).then((_) => _load()),
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, _ChatFilter value) {
+    final selected = _filter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : const Color(0xFF222222),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.black : Colors.grey,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatRoomTile extends StatelessWidget {
+  const _ChatRoomTile({required this.room, required this.onTap});
+  final ChatRoom room;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: const Color(0xFF333333),
+              backgroundImage: room.otherUserProfileImageUrl != null
+                  ? NetworkImage(room.otherUserProfileImageUrl!)
+                  : null,
+              child: room.otherUserProfileImageUrl == null
+                  ? const Icon(Icons.person, color: Colors.grey)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          room.otherUserNickname ?? '알 수 없음',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                        ),
+                      ),
+                      // [6] 상대 시간 표시
+                      if (room.lastMessageAt != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          _formatRelativeTime(room.lastMessageAt),
+                          style: const TextStyle(color: Color(0xFF888888), fontSize: 12),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    room.lastMessageContent ?? '메시지가 없습니다',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (room.unreadCount > 0)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF19C37D),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('${room.unreadCount}',
+                        style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                if (room.showcasePrimaryImageUrl != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      room.showcasePrimaryImageUrl!,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _showcasePlaceholder(),
+                    ),
+                  )
+                else
+                  _showcasePlaceholder(),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _showcasePlaceholder() {
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFF333333),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Icon(Icons.image, color: Colors.grey, size: 20),
+    );
+  }
+}
+
+class ChatRoomScreen extends StatefulWidget {
+  const ChatRoomScreen({super.key, required this.controller, required this.args});
+  final AppController controller;
+  final ChatRoomArgs args;
+
+  @override
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
+}
+
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  final List<ChatMessage> _messages = [];
+  final _inputController = TextEditingController();
+  final _scrollController = ScrollController();
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+    widget.controller.subscribeChatRoom(widget.args.chatRoomId);
+    widget.controller.onStompMessage = _onStompMessage;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.onStompMessage = null;
+    widget.controller.unsubscribeChatRoom(widget.args.chatRoomId);
+    _inputController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onStompMessage(ChatMessage msg) {
+    if (!mounted) return;
+    final isDuplicate = _messages.any((m) => m.chatMessageId == msg.chatMessageId);
+    if (isDuplicate) return;
+    setState(() => _messages.add(msg));
+    _scrollToBottom();
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      final page = await widget.controller.api.listMessages(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: widget.controller.session!.accessToken,
+        chatRoomId: widget.args.chatRoomId,
+      );
+      setState(() {
+        _messages.clear();
+        _messages.addAll(page.items);
+        _messages.sort((a, b) => a.seq.compareTo(b.seq));
+        _loading = false;
+      });
+      _scrollToBottom();
+      if (_messages.isNotEmpty) {
+        widget.controller.api.markRead(
+          baseUrl: widget.controller.baseUrl,
+          accessToken: widget.controller.session!.accessToken,
+          chatRoomId: widget.args.chatRoomId,
+          lastReadMessageId: _messages.last.chatMessageId,
+        );
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _send() {
+    final text = _inputController.text.trim();
+    if (text.isEmpty) return;
+    _inputController.clear();
+
+    final clientMsgId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(99999)}';
+
+    if (widget.controller.isStompConnected) {
+      widget.controller.sendStompMessage(widget.args.chatRoomId, text, clientMsgId);
+    } else {
+      widget.controller.api.sendMessage(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: widget.controller.session!.accessToken,
+        chatRoomId: widget.args.chatRoomId,
+        content: text,
+        clientMessageId: clientMsgId,
+      ).then((_) => _loadMessages());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final myId = widget.controller.currentUserId;
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.args.title ?? '채팅')),
+      body: Column(
+        children: [
+          // [1] 상품 카드 고정 바
+          _ChatProductCard(args: widget.args),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _messages.isEmpty
+                    ? const Center(child: Text('메시지가 없습니다', style: TextStyle(color: Colors.grey)))
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = _messages[index];
+                          final isMine = msg.senderId == myId;
+                          final prevMsg = index > 0 ? _messages[index - 1] : null;
+                          final nextMsg = index < _messages.length - 1 ? _messages[index + 1] : null;
+
+                          // [3] 날짜 구분선
+                          final showDateSep = prevMsg == null || !_isSameDay(prevMsg.sentAt, msg.sentAt);
+
+                          // [5] 메시지 그룹핑
+                          final isFirstInGroup = prevMsg == null
+                              || prevMsg.senderId != msg.senderId
+                              || showDateSep;
+                          final isLastInGroup = nextMsg == null
+                              || nextMsg.senderId != msg.senderId
+                              || !_isSameDay(msg.sentAt, nextMsg.sentAt);
+
+                          return Column(
+                            children: [
+                              if (showDateSep) _DateSeparator(sentAt: msg.sentAt),
+                              _MessageBubble(
+                                message: msg,
+                                isMine: isMine,
+                                showAvatar: !isMine && isFirstInGroup,
+                                showTime: isLastInGroup,
+                                peerProfileImageUrl: widget.args.peerProfileImageUrl,
+                                isFirstInGroup: isFirstInGroup,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+          ),
+          // 입력 바
+          Container(
+            padding: EdgeInsets.only(
+              left: 12, right: 4, top: 8,
+              bottom: max(MediaQuery.of(context).padding.bottom, 8),
+            ),
+            decoration: const BoxDecoration(
+              color: Color(0xFF111111),
+              border: Border(top: BorderSide(color: Color(0xFF333333))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF222222),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: TextField(
+                      controller: _inputController,
+                      onSubmitted: (_) => _send(),
+                      decoration: const InputDecoration(
+                        hintText: '메시지 보내기',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Color(0xFF19C37D)),
+                  onPressed: _send,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// [1] 상품 카드 고정 바
+class _ChatProductCard extends StatelessWidget {
+  const _ChatProductCard({required this.args});
+  final ChatRoomArgs args;
+
+  @override
+  Widget build(BuildContext context) {
+    if (args.showcaseTitle == null && args.showcaseThumbnailUrl == null) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A1A),
+        border: Border(bottom: BorderSide(color: Color(0xFF333333))),
+      ),
+      child: InkWell(
+        onTap: args.showcaseId != null
+            ? () => Navigator.pushNamed(context, '/showcase/detail',
+                arguments: ShowcaseDetailArgs(args.showcaseId!))
+            : null,
+        child: Row(
+          children: [
+            if (args.showcaseThumbnailUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  args.showcaseThumbnailUrl!,
+                  width: 44, height: 44,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 44, height: 44,
+                    color: const Color(0xFF333333),
+                    child: const Icon(Icons.image, color: Colors.grey, size: 20),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF333333),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.image, color: Colors.grey, size: 20),
+              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                args.showcaseTitle ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// [3] 날짜 구분선
+class _DateSeparator extends StatelessWidget {
+  const _DateSeparator({required this.sentAt});
+  final String sentAt;
+
+  @override
+  Widget build(BuildContext context) {
+    String label;
+    try {
+      final dt = DateTime.parse(sentAt).toLocal();
+      label = '${dt.year}년 ${dt.month}월 ${dt.day}일';
+    } catch (_) {
+      label = '';
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Text(label, style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+      ),
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({
+    required this.message,
+    required this.isMine,
+    required this.showAvatar,
+    required this.showTime,
+    this.peerProfileImageUrl,
+    required this.isFirstInGroup,
+  });
+  final ChatMessage message;
+  final bool isMine;
+  final bool showAvatar;
+  final bool showTime;
+  final String? peerProfileImageUrl;
+  final bool isFirstInGroup;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeStr = _formatKoreanTime(message.sentAt);
+
+    if (isMine) {
+      return Padding(
+        padding: EdgeInsets.only(top: isFirstInGroup ? 8 : 2, bottom: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // [4] 시간 (오전/오후)
+            if (showTime)
+              Padding(
+                padding: const EdgeInsets.only(right: 6, bottom: 2),
+                child: Text(timeStr, style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
+              ),
+            Container(
+              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF19C37D),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: Radius.circular(isFirstInGroup ? 16 : 6),
+                  bottomLeft: const Radius.circular(16),
+                  bottomRight: const Radius.circular(4),
+                ),
+              ),
+              child: Text(
+                message.content,
+                style: const TextStyle(color: Colors.black, fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // [2] 상대 메시지 + 아바타
+    return Padding(
+      padding: EdgeInsets.only(top: isFirstInGroup ? 8 : 2, bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // [5] 그룹 첫 메시지에만 아바타
+          if (showAvatar)
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF333333),
+              backgroundImage: peerProfileImageUrl != null
+                  ? NetworkImage(peerProfileImageUrl!)
+                  : null,
+              child: peerProfileImageUrl == null
+                  ? const Icon(Icons.person, color: Colors.grey, size: 18)
+                  : null,
+            )
+          else
+            const SizedBox(width: 36),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(isFirstInGroup ? 16 : 6),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: const Radius.circular(4),
+                      bottomRight: const Radius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    message.content,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                  ),
+                ),
+                if (showTime)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6, bottom: 2),
+                    child: Text(timeStr, style: const TextStyle(color: Color(0xFF888888), fontSize: 11)),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

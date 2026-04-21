@@ -25,9 +25,11 @@ class GearShowApiClient {
   }
 
   /// 개발용 로그인. OAuth 없이 테스트 사용자로 JWT를 발급한다.
-  Future<AuthSession> devLogin({required String baseUrl}) async {
+  Future<AuthSession> devLogin({required String baseUrl, int? userId}) async {
     final response = await http.post(
-      _uri(baseUrl, '/api/v1/auth/dev-login'),
+      _uri(baseUrl, '/api/v1/auth/dev-login', query: {
+        if (userId != null) 'userId': '$userId',
+      }),
       headers: _jsonHeaders,
     );
     return AuthSession.fromJson(_extractData(response));
@@ -462,6 +464,91 @@ class GearShowApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException('이미지 업로드에 실패했습니다 (${response.statusCode}).');
     }
+  }
+
+  /// 채팅방 목록 조회 (api-spec §8-1).
+  Future<PageInfo<ChatRoom>> listChatRooms({
+    required String baseUrl,
+    required String accessToken,
+    String? pageToken,
+    int size = 20,
+  }) async {
+    final response = await http.get(
+      _uri(baseUrl, '/api/v1/chat-rooms', query: {
+        'pageToken': pageToken,
+        'size': '$size',
+      }),
+      headers: _headers(accessToken: accessToken),
+    );
+    return _parsePageInfo(_extractData(response), ChatRoom.fromJson);
+  }
+
+  /// 채팅방 생성 또는 기존 조회 (api-spec §8-3).
+  Future<int> createOrGetChatRoom({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+  }) async {
+    final response = await http.post(
+      _uri(baseUrl, '/api/v1/chat-rooms'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({'showcaseId': showcaseId}),
+    );
+    final data = _extractData(response);
+    return (data['chatRoomId'] as num?)?.toInt() ?? 0;
+  }
+
+  /// 메시지 목록 조회 (api-spec §8-4).
+  Future<PageInfo<ChatMessage>> listMessages({
+    required String baseUrl,
+    required String accessToken,
+    required int chatRoomId,
+    int? before,
+    int size = 50,
+  }) async {
+    final response = await http.get(
+      _uri(baseUrl, '/api/v1/chat-rooms/$chatRoomId/messages', query: {
+        if (before != null) 'before': '$before',
+        'size': '$size',
+      }),
+      headers: _headers(accessToken: accessToken),
+    );
+    return _parsePageInfo(_extractData(response), ChatMessage.fromJson);
+  }
+
+  /// 메시지 발신 — HTTP fallback (api-spec §8-5).
+  Future<Map<String, dynamic>> sendMessage({
+    required String baseUrl,
+    required String accessToken,
+    required int chatRoomId,
+    required String content,
+    required String clientMessageId,
+  }) async {
+    final response = await http.post(
+      _uri(baseUrl, '/api/v1/chat-rooms/$chatRoomId/messages'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({
+        'messageType': 'TEXT',
+        'content': content,
+        'clientMessageId': clientMessageId,
+      }),
+    );
+    return _extractData(response);
+  }
+
+  /// 읽음 처리 (api-spec §8-7).
+  Future<void> markRead({
+    required String baseUrl,
+    required String accessToken,
+    required int chatRoomId,
+    required int lastReadMessageId,
+  }) async {
+    final response = await http.post(
+      _uri(baseUrl, '/api/v1/chat-rooms/$chatRoomId/read'),
+      headers: _headers(accessToken: accessToken),
+      body: jsonEncode({'lastReadMessageId': lastReadMessageId}),
+    );
+    _extractData(response);
   }
 
   PageInfo<T> _parsePageInfo<T>(
