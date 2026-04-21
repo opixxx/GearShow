@@ -2,6 +2,8 @@ package com.gearshow.backend.chat.adapter.out.persistence;
 
 import com.gearshow.backend.chat.application.dto.ChatRoomListProjection;
 import com.gearshow.backend.chat.domain.model.ChatRoom;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +26,9 @@ class ChatRoomPersistenceAdapterIntegrationTest {
 
     @Autowired private ChatRoomJpaRepository chatRoomJpaRepository;
     @Autowired private ChatMessageJpaRepository chatMessageJpaRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private ChatRoomPersistenceAdapter adapter;
     private ChatMessagePersistenceAdapter messageAdapter;
@@ -122,33 +128,44 @@ class ChatRoomPersistenceAdapterIntegrationTest {
     @Test
     @DisplayName("touchLastMessageAt: 최초 호출은 1 row 를 업데이트하고 lastMessageAt 이 반영된다")
     void touchLastMessageAt_updatesRow() {
-        // Given
-        ChatRoom room = adapter.save(ChatRoom.open(100L, 1L, 2L));
-        Instant later = room.getCreatedAt().plusSeconds(60);
+        // Given: 초 단위 저장 → DB precision 이슈 배제
+        Instant originalLastMessageAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        ChatRoom room = adapter.save(buildRoom(originalLastMessageAt));
+        entityManager.flush();
+        entityManager.clear();
+        Instant later = originalLastMessageAt.plusSeconds(60);
 
         // When
         int affected = adapter.touchLastMessageAt(room.getId(), later);
+        entityManager.clear();
 
         // Then
         assertThat(affected).isEqualTo(1);
-        assertThat(adapter.findById(room.getId()).orElseThrow().getLastMessageAt())
-                .isEqualTo(later);
+        Instant stored = adapter.findById(room.getId()).orElseThrow().getLastMessageAt();
+        assertThat(stored).isAfter(originalLastMessageAt);
+        assertThat(stored.truncatedTo(ChronoUnit.MICROS))
+                .isEqualTo(later.truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test
     @DisplayName("touchLastMessageAt: 시간 역진 요청은 no-op (0 row)")
     void touchLastMessageAt_rejectsBackwardTime() {
-        // Given
-        ChatRoom room = adapter.save(ChatRoom.open(100L, 1L, 2L));
-        Instant earlier = room.getCreatedAt().minusSeconds(60);
+        // Given: 초 단위 저장으로 precision 이슈 배제
+        Instant originalLastMessageAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        ChatRoom room = adapter.save(buildRoom(originalLastMessageAt));
+        entityManager.flush();
+        entityManager.clear();
+        Instant earlier = originalLastMessageAt.minusSeconds(60);
 
         // When
         int affected = adapter.touchLastMessageAt(room.getId(), earlier);
+        entityManager.clear();
 
         // Then: 0 row, 기존 lastMessageAt 유지
         assertThat(affected).isZero();
-        assertThat(adapter.findById(room.getId()).orElseThrow().getLastMessageAt())
-                .isEqualTo(room.getLastMessageAt());
+        Instant stored = adapter.findById(room.getId()).orElseThrow().getLastMessageAt();
+        assertThat(stored.truncatedTo(ChronoUnit.MICROS))
+                .isEqualTo(originalLastMessageAt.truncatedTo(ChronoUnit.MICROS));
     }
 
     @Test
@@ -159,5 +176,16 @@ class ChatRoomPersistenceAdapterIntegrationTest {
 
         // Then
         assertThat(affected).isZero();
+    }
+
+    private ChatRoom buildRoom(Instant at) {
+        return ChatRoom.builder()
+                .showcaseId(100L)
+                .sellerId(1L)
+                .buyerId(2L)
+                .status(com.gearshow.backend.chat.domain.vo.ChatRoomStatus.ACTIVE)
+                .createdAt(at)
+                .lastMessageAt(at)
+                .build();
     }
 }
