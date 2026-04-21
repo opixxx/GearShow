@@ -495,7 +495,11 @@ class GearShowApiClient {
       body: jsonEncode({'showcaseId': showcaseId}),
     );
     final data = _extractData(response);
-    return (data['chatRoomId'] as num?)?.toInt() ?? 0;
+    final chatRoomId = (data['chatRoomId'] as num?)?.toInt();
+    if (chatRoomId == null || chatRoomId <= 0) {
+      throw const ApiException('채팅방 응답에 chatRoomId가 없습니다.');
+    }
+    return chatRoomId;
   }
 
   /// 메시지 목록 조회 (api-spec §8-4).
@@ -517,7 +521,7 @@ class GearShowApiClient {
   }
 
   /// 메시지 발신 — HTTP fallback (api-spec §8-5).
-  Future<Map<String, dynamic>> sendMessage({
+  Future<SendChatMessageResult> sendMessage({
     required String baseUrl,
     required String accessToken,
     required int chatRoomId,
@@ -533,7 +537,7 @@ class GearShowApiClient {
         'clientMessageId': clientMessageId,
       }),
     );
-    return _extractData(response);
+    return SendChatMessageResult.fromJson(_extractData(response));
   }
 
   /// 읽음 처리 (api-spec §8-7).

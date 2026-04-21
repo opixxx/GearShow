@@ -923,6 +923,37 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
     super.dispose();
   }
 
+  /// 상단·하단 CTA 공용: 채팅방 생성/입장 흐름.
+  Future<void> _openChatRoom(ShowcaseDetail detail, UserProfile? ownerProfile) async {
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '채팅은 로그인 후 이용 가능합니다.');
+      return;
+    }
+    try {
+      final roomId = await widget.controller.api.createOrGetChatRoom(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: detail.showcaseId,
+      );
+      if (!mounted) return;
+      final primaryImg =
+          detail.images.isNotEmpty ? detail.images.first.imageUrl : null;
+      Navigator.pushNamed(context, '/chat/room',
+          arguments: ChatRoomArgs(
+            chatRoomId: roomId,
+            title: ownerProfile?.nickname ?? '판매자',
+            showcaseId: detail.showcaseId,
+            showcaseTitle: detail.title,
+            showcaseThumbnailUrl: primaryImg,
+            peerProfileImageUrl: ownerProfile?.profileImageUrl,
+          ));
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(context, e.toString());
+    }
+  }
+
   Future<({ShowcaseDetail detail, CatalogItemDetail? catalog, List<ShowcaseComment> comments, UserProfile? ownerProfile})> _load() async {
     final detail = await widget.controller.api.getShowcaseDetail(
       baseUrl: widget.controller.baseUrl,
@@ -1193,36 +1224,7 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                               ),
                               if (detail.ownerId != widget.controller.currentUserId)
                                 OutlinedButton(
-                                  onPressed: () async {
-                                    final token = widget.controller.session?.accessToken;
-                                    if (token == null || token.isEmpty) {
-                                      _showSnack(context, '채팅은 로그인 후 이용 가능합니다.');
-                                      return;
-                                    }
-                                    try {
-                                      final roomId = await widget.controller.api.createOrGetChatRoom(
-                                        baseUrl: widget.controller.baseUrl,
-                                        accessToken: token,
-                                        showcaseId: detail.showcaseId,
-                                      );
-                                      if (context.mounted) {
-                                        final primaryImg = detail.images.isNotEmpty
-                                            ? detail.images.first.imageUrl
-                                            : null;
-                                        Navigator.pushNamed(context, '/chat/room',
-                                          arguments: ChatRoomArgs(
-                                            chatRoomId: roomId,
-                                            title: ownerProfile?.nickname ?? '판매자',
-                                            showcaseId: detail.showcaseId,
-                                            showcaseTitle: detail.title,
-                                            showcaseThumbnailUrl: primaryImg,
-                                            peerProfileImageUrl: ownerProfile?.profileImageUrl,
-                                          ));
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) _showSnack(context, e.toString());
-                                    }
-                                  },
+                                  onPressed: () => _openChatRoom(detail, ownerProfile),
                                   child: const Text('채팅하기'),
                                 ),
                             ],
@@ -1334,11 +1336,12 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                   ],
                 ),
               ),
-              _BottomActionBar(
-                label: detail.isForSale ? '채팅으로 문의하기' : '판매중이 아닌 장비입니다',
-                enabled: detail.isForSale,
-                onPressed: () => _showSnack(context, '거래/채팅 backend API가 아직 없습니다.'),
-              ),
+              if (detail.ownerId != widget.controller.currentUserId)
+                _BottomActionBar(
+                  label: detail.isForSale ? '채팅으로 문의하기' : '판매중이 아닌 장비입니다',
+                  enabled: detail.isForSale,
+                  onPressed: () => _openChatRoom(detail, ownerProfile),
+                ),
             ],
           ),
         );
@@ -4472,20 +4475,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final List<ChatMessage> _messages = [];
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  StreamSubscription<ChatMessage>? _messageSubscription;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
-    widget.controller.subscribeChatRoom(widget.args.chatRoomId);
-    widget.controller.onStompMessage = _onStompMessage;
+    // 1. 히스토리 로드 먼저 → 2. 실시간 구독. 역순이면 STOMP 선수신 메시지가 clear()로 소실된다.
+    _loadMessages().whenComplete(_attachRealtime);
+  }
+
+  void _attachRealtime() {
+    if (!mounted) return;
+    widget.controller.realtime.subscribeChatRoom(widget.args.chatRoomId);
+    _messageSubscription = widget.controller.realtime.messages
+        .where((msg) => msg.chatRoomId == widget.args.chatRoomId)
+        .listen(_onStompMessage);
   }
 
   @override
   void dispose() {
-    widget.controller.onStompMessage = null;
-    widget.controller.unsubscribeChatRoom(widget.args.chatRoomId);
+    _messageSubscription?.cancel();
+    widget.controller.realtime.unsubscribeChatRoom(widget.args.chatRoomId);
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -4500,29 +4512,45 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _loadMessages() async {
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '로그인이 필요합니다';
+      });
+      return;
+    }
     try {
       final page = await widget.controller.api.listMessages(
         baseUrl: widget.controller.baseUrl,
-        accessToken: widget.controller.session!.accessToken,
+        accessToken: token,
         chatRoomId: widget.args.chatRoomId,
       );
+      if (!mounted) return;
       setState(() {
-        _messages.clear();
-        _messages.addAll(page.items);
+        _messages
+          ..clear()
+          ..addAll(page.items);
         _messages.sort((a, b) => a.seq.compareTo(b.seq));
         _loading = false;
+        _error = null;
       });
       _scrollToBottom();
       if (_messages.isNotEmpty) {
-        widget.controller.api.markRead(
+        unawaited(widget.controller.api.markRead(
           baseUrl: widget.controller.baseUrl,
-          accessToken: widget.controller.session!.accessToken,
+          accessToken: token,
           chatRoomId: widget.args.chatRoomId,
           lastReadMessageId: _messages.last.chatMessageId,
-        );
+        ).catchError((Object e) => debugPrint('markRead 실패: $e')));
       }
     } catch (e) {
-      setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '메시지를 불러오지 못했습니다';
+      });
     }
   }
 
@@ -4538,23 +4566,53 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     });
   }
 
-  void _send() {
+  Future<void> _send() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
     _inputController.clear();
+    final clientMsgId =
+        '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(99999)}';
 
-    final clientMsgId = '${DateTime.now().millisecondsSinceEpoch}-${Random().nextInt(99999)}';
+    // STOMP 가 연결되어 있으면 실시간 전송 — 수신 이벤트가 _onStompMessage 로 append
+    final sentViaStomp = widget.controller.realtime
+        .sendMessage(widget.args.chatRoomId, text, clientMsgId);
+    if (sentViaStomp) return;
 
-    if (widget.controller.isStompConnected) {
-      widget.controller.sendStompMessage(widget.args.chatRoomId, text, clientMsgId);
-    } else {
-      widget.controller.api.sendMessage(
+    // HTTP fallback: 응답값만으로 로컬 append (전체 재조회 비용 제거)
+    try {
+      final result = await widget.controller.api.sendMessage(
         baseUrl: widget.controller.baseUrl,
-        accessToken: widget.controller.session!.accessToken,
+        accessToken: token,
         chatRoomId: widget.args.chatRoomId,
         content: text,
         clientMessageId: clientMsgId,
-      ).then((_) => _loadMessages());
+      );
+      if (!mounted) return;
+      final newMsg = ChatMessage(
+        chatMessageId: result.chatMessageId,
+        senderId: widget.controller.currentUserId,
+        seq: result.seq,
+        messageType: 'TEXT',
+        content: text,
+        payloadJson: null,
+        messageStatus: 'ACTIVE',
+        sentAt: result.sentAt,
+      );
+      setState(() {
+        if (!_messages.any((m) => m.chatMessageId == newMsg.chatMessageId)) {
+          _messages.add(newMsg);
+        }
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(context, '메시지 전송에 실패했습니다.');
+      _inputController.text = text; // 사용자가 재시도 가능하게 원문 복원
     }
   }
 
@@ -4567,6 +4625,48 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         children: [
           // [1] 상품 카드 고정 바
           _ChatProductCard(args: widget.args),
+          // 연결 상태 배너 — realtime.isConnected 가 false 이면 표시
+          ListenableBuilder(
+            listenable: widget.controller.realtime,
+            builder: (context, _) {
+              if (widget.controller.realtime.isConnected) {
+                return const SizedBox.shrink();
+              }
+              return Container(
+                width: double.infinity,
+                color: const Color(0xFF7C2D12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: const Text(
+                  '실시간 연결이 끊어졌습니다. 재연결을 시도 중입니다.',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              );
+            },
+          ),
+          // 메시지 로드 에러 배너
+          if (_error != null)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFF7F1D1D),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(_error!, style: const TextStyle(color: Colors.white)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _loading = true;
+                        _error = null;
+                      });
+                      _loadMessages();
+                    },
+                    child: const Text('재시도', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
