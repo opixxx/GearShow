@@ -7,7 +7,7 @@ import com.gearshow.backend.platform.outbox.application.port.out.OutboxMessagePo
 import com.gearshow.backend.platform.outbox.domain.OutboxMessage;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
-import com.gearshow.backend.showcase.infrastructure.config.KafkaConfig;
+import com.gearshow.backend.showcase.infrastructure.config.ShowcaseKafkaTopicConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -53,7 +53,7 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
                 AGGREGATE_TYPE,
                 showcase3dModelId,
                 EVENT_TYPE,
-                KafkaConfig.MODEL_GENERATION_REQUEST_TOPIC,
+                ShowcaseKafkaTopicConfig.MODEL_GENERATION_REQUEST_TOPIC,
                 String.valueOf(showcaseId),
                 messageId,
                 payload
