@@ -1,5 +1,7 @@
 package com.gearshow.backend.platform.idempotency.application.service;
 
+import com.gearshow.backend.common.exception.CustomException;
+import com.gearshow.backend.common.exception.ErrorCode;
 import com.gearshow.backend.platform.idempotency.application.dto.ApiIdempotencyAcquireResult;
 import com.gearshow.backend.platform.idempotency.application.dto.ApiIdempotencyRecord;
 import com.gearshow.backend.platform.idempotency.application.exception.ApiIdempotencyConflictException;
@@ -28,21 +30,32 @@ public class AcquireApiIdempotencyService implements AcquireApiIdempotencyUseCas
 
     @Override
     public ApiIdempotencyAcquireResult acquire(String idempotencyKey, Long userId, Duration ttl) {
-        Instant expiresAt = Instant.now().plus(ttl);
-        boolean acquired = apiIdempotencyPort.saveIfAbsent(idempotencyKey, userId, expiresAt);
-        if (acquired) {
+        if (tryInsertNew(idempotencyKey, userId, ttl)) {
             return new ApiIdempotencyAcquireResult.New();
         }
+        return resolveExisting(idempotencyKey, userId);
+    }
 
+    @Override
+    public void markDone(String idempotencyKey, int httpStatus, String responseBody) {
+        apiIdempotencyPort.markDone(idempotencyKey, httpStatus, responseBody);
+    }
+
+    @Override
+    public void discardOnFailure(String idempotencyKey) {
+        apiIdempotencyPort.discardOnFailure(idempotencyKey);
+    }
+
+    private boolean tryInsertNew(String idempotencyKey, Long userId, Duration ttl) {
+        Instant expiresAt = Instant.now().plus(ttl);
+        return apiIdempotencyPort.saveIfAbsent(idempotencyKey, userId, expiresAt);
+    }
+
+    private ApiIdempotencyAcquireResult resolveExisting(String idempotencyKey, Long userId) {
         ApiIdempotencyRecord existing = apiIdempotencyPort.findByKey(idempotencyKey)
-                .orElseThrow(() -> new IllegalStateException(
-                        "saveIfAbsent 실패 직후 레코드가 사라졌습니다. key=" + idempotencyKey));
+                .orElseThrow(() -> new CustomException(ErrorCode.IDEMPOTENCY_KEY_MISSING_AFTER_ACQUIRE));
 
-        if (!existing.userId().equals(userId)) {
-            log.warn("멱등성 키 소유권 불일치 — key={}, ownerUserId={}, requestUserId={}",
-                    idempotencyKey, existing.userId(), userId);
-            throw new ApiIdempotencyOwnershipMismatchException();
-        }
+        verifyOwnership(existing, userId, idempotencyKey);
 
         if (existing.isDone()) {
             log.info("멱등성 키 캐시 적중 — key={}, httpStatus={}", idempotencyKey, existing.httpStatus());
@@ -54,8 +67,11 @@ public class AcquireApiIdempotencyService implements AcquireApiIdempotencyUseCas
         throw new ApiIdempotencyConflictException();
     }
 
-    @Override
-    public void markDone(String idempotencyKey, int httpStatus, String responseBody) {
-        apiIdempotencyPort.markDone(idempotencyKey, httpStatus, responseBody);
+    private void verifyOwnership(ApiIdempotencyRecord existing, Long userId, String idempotencyKey) {
+        if (!existing.userId().equals(userId)) {
+            log.warn("멱등성 키 소유권 불일치 — key={}, ownerUserId={}, requestUserId={}",
+                    idempotencyKey, existing.userId(), userId);
+            throw new ApiIdempotencyOwnershipMismatchException();
+        }
     }
 }

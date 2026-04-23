@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.application.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
+import com.gearshow.backend.showcase.application.dto.CreateShowcaseOutcome;
 import com.gearshow.backend.showcase.application.exception.ShowcaseSpecSerializationException;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -47,15 +48,17 @@ public class CreateShowcaseService {
     private final ObjectMapper objectMapper;
 
     /**
-     * 쇼케이스, 이미지, 스펙을 DB에 저장한다. contentHash 기반 10분 창 중복 감지 시 기존 쇼케이스를 반환한다.
+     * 쇼케이스, 이미지, 스펙을 DB에 저장한다. contentHash 기반 10분 창 중복 감지 시
+     * 기존 쇼케이스를 {@link CreateShowcaseOutcome.Deduped} 로 반환하여 호출자가 후속 외부 I/O 를
+     * 스킵하도록 한다 (ADR-011 ②).
      */
     @Transactional
-    public Showcase saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
+    public CreateShowcaseOutcome saveShowcaseWithSpec(CreateShowcaseCommand command, List<String> imageUrls) {
         Optional<Showcase> existing = findRecentDuplicate(command);
         if (existing.isPresent()) {
             log.info("content_hash 기반 중복 등록 감지 — 기존 쇼케이스 반환. ownerId={}, showcaseId={}",
                     command.ownerId(), existing.get().getId());
-            return existing.get();
+            return new CreateShowcaseOutcome.Deduped(existing.get());
         }
 
         String primaryImageUrl = imageUrls.get(command.primaryImageIndex());
@@ -74,7 +77,7 @@ public class CreateShowcaseService {
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
         saveSpec(saved.getId(), command.category(), command);
 
-        return saved;
+        return new CreateShowcaseOutcome.Created(saved);
     }
 
     private Optional<Showcase> findRecentDuplicate(CreateShowcaseCommand command) {

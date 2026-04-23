@@ -108,7 +108,9 @@ public enum ErrorCode {
     // API Idempotency (3D 파이프라인 P1-B)
     IDEMPOTENCY_IN_PROGRESS(409, "다른 요청이 같은 멱등성 키로 처리 중입니다"),
     IDEMPOTENCY_OWNERSHIP_MISMATCH(403, "다른 사용자의 멱등성 키는 사용할 수 없습니다"),
-    IDEMPOTENCY_RESPONSE_SERIALIZATION_FAILED(500, "멱등성 응답 직렬화에 실패했습니다");
+    IDEMPOTENCY_RESPONSE_SERIALIZATION_FAILED(500, "요청 처리 중 오류가 발생했습니다"),
+    IDEMPOTENCY_KEY_MISSING_AFTER_ACQUIRE(500, "요청 처리 중 오류가 발생했습니다"),
+    IDEMPOTENCY_INVALID_STATUS_TRANSITION(500, "요청 처리 중 오류가 발생했습니다");
 
     private final int status;
     private final String message;

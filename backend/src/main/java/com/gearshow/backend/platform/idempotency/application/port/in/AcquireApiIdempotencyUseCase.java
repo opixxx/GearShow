@@ -28,4 +28,10 @@ public interface AcquireApiIdempotencyUseCase {
      * 처리 완료를 기록한다. 이후 같은 키로 오는 요청은 캐싱된 응답을 반환받는다.
      */
     void markDone(String idempotencyKey, int httpStatus, String responseBody);
+
+    /**
+     * 비즈니스 로직 실패 시 {@code IN_PROGRESS} 레코드를 제거한다. 같은 키로 재시도가 가능하도록
+     * 보상 삭제하여 좀비 상태를 방지한다.
+     */
+    void discardOnFailure(String idempotencyKey);
 }

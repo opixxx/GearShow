@@ -33,4 +33,10 @@ public interface ApiIdempotencyPort {
      * 처리 완료를 기록한다. {@code IN_PROGRESS} 가 아닌 상태에서 호출하면 예외가 발생할 수 있다.
      */
     void markDone(String idempotencyKey, int httpStatus, String responseBody);
+
+    /**
+     * 비즈니스 로직 실패 시 {@code IN_PROGRESS} 레코드를 제거하여 좀비 상태로 잠기지 않도록 보상한다.
+     * TTL 만료 전에 같은 키로 재시도할 수 있게 허용한다.
+     */
+    void discardOnFailure(String idempotencyKey);
 }

@@ -1,5 +1,7 @@
 package com.gearshow.backend.platform.idempotency.adapter.out.persistence;
 
+import com.gearshow.backend.common.exception.CustomException;
+import com.gearshow.backend.common.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -95,8 +97,7 @@ public class IdempotencyKeyJpaEntity {
      */
     public void markDone(int httpStatus, String responseBody) {
         if (this.status != Status.IN_PROGRESS) {
-            throw new IllegalStateException(
-                    "IN_PROGRESS 상태에서만 markDone 호출 가능. 현재 상태: " + this.status);
+            throw new CustomException(ErrorCode.IDEMPOTENCY_INVALID_STATUS_TRANSITION);
         }
         this.status = Status.DONE;
         this.httpStatus = httpStatus;
