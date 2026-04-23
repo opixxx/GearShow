@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 쇼케이스 JPA 저장소.
@@ -87,4 +88,14 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE ShowcaseJpaEntity s SET s.has3dModel = :has3dModel WHERE s.id = :showcaseId")
     void updateHas3dModel(@Param("showcaseId") Long showcaseId, @Param("has3dModel") boolean has3dModel);
+
+    /**
+     * 같은 소유자가 {@code createdAfter} 이후에 생성한, 같은 {@code contentHash} 를 가진
+     * 가장 최근 쇼케이스를 조회한다. ADR-011 ② content_hash fallback 멱등성에 사용된다.
+     *
+     * <p>인덱스 활용: {@code idx_showcase_owner_content_created (owner_id, content_hash, created_at)} 에
+     * {@code equality, equality, range} 순서로 맞춰진다.</p>
+     */
+    Optional<ShowcaseJpaEntity> findTop1ByOwnerIdAndContentHashAndCreatedAtAfterOrderByCreatedAtDesc(
+            Long ownerId, String contentHash, Instant createdAfter);
 }

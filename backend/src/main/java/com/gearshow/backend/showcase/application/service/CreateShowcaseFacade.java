@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
+import com.gearshow.backend.showcase.application.dto.CreateShowcaseOutcome;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.exception.InvalidImageKeyException;
@@ -58,10 +59,18 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
         List<String> imageUrls = imageKeys.stream()
                 .map(imageStoragePort::toUrl)
                 .toList();
-        Showcase saved = createShowcaseService.saveShowcaseWithSpec(command, imageUrls);
+        CreateShowcaseOutcome outcome = createShowcaseService.saveShowcaseWithSpec(command, imageUrls);
+        Showcase saved = outcome.showcase();
 
         // 4. 3D 모델 비동기 요청
-        ModelStatus modelStatus = requestModelIfNeeded(saved.getId(), modelSourceImageKeys);
+        //    ADR-011 ②: content_hash 기반 dedup 히트 시엔 기존 쇼케이스 상태를 그대로 사용해
+        //    Tripo 중복 호출을 방지한다 (이미 이전 생성 요청이 진행 중이거나 완료됨).
+        ModelStatus modelStatus = switch (outcome) {
+            case CreateShowcaseOutcome.Created created ->
+                    requestModelIfNeeded(created.showcase().getId(), modelSourceImageKeys);
+            case CreateShowcaseOutcome.Deduped deduped ->
+                    deduped.showcase().isHas3dModel() ? ModelStatus.COMPLETED : null;
+        };
 
         return new CreateShowcaseResult(saved.getId(), modelStatus);
     }

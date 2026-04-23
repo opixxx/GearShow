@@ -85,8 +85,7 @@ class IdempotencyKeyJpaRepositoryTest {
             assertThat(entity.isDone()).isTrue();
             org.assertj.core.api.Assertions.assertThatThrownBy(
                             () -> entity.markDone(500, "{\"error\":true}"))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("IN_PROGRESS");
+                    .isInstanceOf(com.gearshow.backend.common.exception.CustomException.class);
         }
     }
 

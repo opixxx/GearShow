@@ -103,7 +103,14 @@ public enum ErrorCode {
     CHAT_WS_UNAUTHENTICATED_SESSION(401, "인증되지 않은 WebSocket 세션입니다"),
     CHAT_WS_INVALID_DESTINATION(400, "허용되지 않는 구독 경로입니다"),
     CHAT_WS_ROOM_NOT_FOUND(404, "구독 대상 채팅방을 찾을 수 없습니다"),
-    CHAT_WS_SUBSCRIBE_DENIED(403, "채팅방 구독 권한이 없습니다");
+    CHAT_WS_SUBSCRIBE_DENIED(403, "채팅방 구독 권한이 없습니다"),
+
+    // API Idempotency (3D 파이프라인 P1-B)
+    IDEMPOTENCY_IN_PROGRESS(409, "다른 요청이 같은 멱등성 키로 처리 중입니다"),
+    IDEMPOTENCY_OWNERSHIP_MISMATCH(403, "다른 사용자의 멱등성 키는 사용할 수 없습니다"),
+    IDEMPOTENCY_RESPONSE_SERIALIZATION_FAILED(500, "요청 처리 중 오류가 발생했습니다"),
+    IDEMPOTENCY_KEY_MISSING_AFTER_ACQUIRE(500, "요청 처리 중 오류가 발생했습니다"),
+    IDEMPOTENCY_INVALID_STATUS_TRANSITION(500, "요청 처리 중 오류가 발생했습니다");
 
     private final int status;
     private final String message;
