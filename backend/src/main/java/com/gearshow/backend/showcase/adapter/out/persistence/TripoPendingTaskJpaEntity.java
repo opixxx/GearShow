@@ -44,9 +44,10 @@ public class TripoPendingTaskJpaEntity {
     }
 
     /**
-     * Tripo POST 성공 직후 선저장을 생성한다.
+     * Tripo {@code POST /task} 성공 직후 워크플로우의 {@code task_id} 를 선저장한다.
+     * 워커가 TX2 커밋 전에 크래시하는 경우를 대비한 임시 기록이며, TX2 에서 DELETE 된다.
      */
-    public static TripoPendingTaskJpaEntity of(Long workflowId, String taskId) {
+    public static TripoPendingTaskJpaEntity preservingTaskId(Long workflowId, String taskId) {
         return new TripoPendingTaskJpaEntity(workflowId, taskId, Instant.now());
     }
 }

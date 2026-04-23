@@ -87,13 +87,12 @@ class ModelGenerationWorkflowJpaRepositoryTest {
             repository.saveAndFlush(
                     ModelGenerationWorkflowJpaEntity.requested(20L, "idem-b", 2));
 
-            assertThat(repository.findAll())
-                    .extracting(ModelGenerationWorkflowJpaEntity::getShowcaseId,
-                                ModelGenerationWorkflowJpaEntity::getAttemptNo)
-                    .contains(
-                            org.assertj.core.groups.Tuple.tuple(20L, 1),
-                            org.assertj.core.groups.Tuple.tuple(20L, 2)
-                    );
+            // 다른 테스트 데이터로부터 격리: showcaseId=20 만 필터
+            assertThat(repository.findAll().stream()
+                    .filter(e -> e.getShowcaseId() == 20L)
+                    .toList())
+                    .extracting(ModelGenerationWorkflowJpaEntity::getAttemptNo)
+                    .containsExactlyInAnyOrder(1, 2);
         }
     }
 }

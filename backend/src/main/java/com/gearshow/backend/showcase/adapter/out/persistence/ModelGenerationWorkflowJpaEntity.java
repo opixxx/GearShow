@@ -79,7 +79,7 @@ public class ModelGenerationWorkflowJpaEntity {
     @Column(name = "tripo_succeeded_at")
     private Instant tripoSucceededAt;
 
-    @Column(name = "retry_count", nullable = false, columnDefinition = "INT NOT NULL DEFAULT 0")
+    @Column(name = "retry_count", nullable = false)
     private int retryCount;
 
     @Column(name = "failure_code", length = 64)
@@ -110,7 +110,7 @@ public class ModelGenerationWorkflowJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Builder
+    @Builder(access = AccessLevel.PRIVATE)
     private ModelGenerationWorkflowJpaEntity(Long id, Long showcaseId, String idempotencyKey,
                                              int attemptNo, CurrentStep currentStep,
                                              String tripoTaskId, String tripoTraceId,

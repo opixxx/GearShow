@@ -32,7 +32,7 @@ class TripoPendingTaskJpaRepositoryTest {
         @Test
         @DisplayName("workflow_id 를 PK 로 저장하고 그대로 조회한다")
         void save_and_findById() {
-            TripoPendingTaskJpaEntity entity = TripoPendingTaskJpaEntity.of(100L, "task-xyz");
+            TripoPendingTaskJpaEntity entity = TripoPendingTaskJpaEntity.preservingTaskId(100L, "task-xyz");
 
             repository.saveAndFlush(entity);
 
@@ -50,7 +50,7 @@ class TripoPendingTaskJpaRepositoryTest {
         @Test
         @DisplayName("TX2 에서 DELETE 후 재조회 시 빈 Optional")
         void delete_then_findById_returnsEmpty() {
-            repository.saveAndFlush(TripoPendingTaskJpaEntity.of(101L, "task-to-delete"));
+            repository.saveAndFlush(TripoPendingTaskJpaEntity.preservingTaskId(101L, "task-to-delete"));
 
             repository.deleteById(101L);
             repository.flush();

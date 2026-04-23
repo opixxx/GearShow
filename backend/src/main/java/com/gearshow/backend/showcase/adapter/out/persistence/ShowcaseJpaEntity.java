@@ -82,6 +82,11 @@ public class ShowcaseJpaEntity {
      * 4장 쇼케이스 이미지의 결정적 SHA-256 해시 (hex 64자).
      * 같은 사용자의 짧은 시간 창 내 중복 등록을 application 계층에서 감지할 때 사용한다.
      * 기존 행 보호를 위해 nullable.
+     *
+     * <p><b>P1-B TODO</b>: 현재 {@link com.gearshow.backend.showcase.domain.model.Showcase}
+     * 도메인 모델에는 이 필드가 없어 {@code ShowcaseMapper} 의 왕복 경로에 포함되지 않는다.
+     * P1-B 에서 {@code ContentHash} 도메인 VO 를 도입하고 {@code Showcase.create(...)} 시그니처에
+     * 추가한 뒤 Mapper 양방향 매핑을 보강해야 한다 (ADR-011 ②).</p>
      */
     @Column(name = "content_hash", length = 64)
     private String contentHash;

@@ -72,7 +72,21 @@ class IdempotencyKeyJpaRepositoryTest {
             IdempotencyKeyJpaEntity reloaded = repository.findByIdempotencyKey("key-002").orElseThrow();
             assertThat(reloaded.isDone()).isTrue();
             assertThat(reloaded.getHttpStatus()).isEqualTo(200);
-            assertThat(reloaded.getResponseBody()).contains("showcaseId");
+            assertThat(reloaded.getResponseBody()).isEqualTo("{\"showcaseId\":1}");
+        }
+
+        @Test
+        @DisplayName("IN_PROGRESS 가 아닌 상태에서 markDone 호출 시 IllegalStateException")
+        void markDone_notInProgress_throws() {
+            IdempotencyKeyJpaEntity entity = IdempotencyKeyJpaEntity.createInProgress(
+                    "key-guard", 1L, null);
+            entity.markDone(200, "{}");
+
+            assertThat(entity.isDone()).isTrue();
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> entity.markDone(500, "{\"error\":true}"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("IN_PROGRESS");
         }
     }
 

@@ -47,7 +47,11 @@ public class IdempotencyKeyJpaEntity {
     @Column(name = "http_status")
     private Integer httpStatus;
 
-    @Column(name = "response_body", columnDefinition = "JSON")
+    /**
+     * 응답 본문 캐싱. 이 컬럼은 key 로 조회 후 전체 반환 용도이며 JSON 부분 추출 쿼리를 쓰지 않으므로
+     * MySQL {@code JSON} 타입 대신 {@code TEXT} 로 저장한다. 본문 크기 증가 시 {@code MEDIUMTEXT} 로 승격 검토.
+     */
+    @Column(name = "response_body", columnDefinition = "TEXT")
     private String responseBody;
 
     @Enumerated(EnumType.STRING)
@@ -83,8 +87,17 @@ public class IdempotencyKeyJpaEntity {
     /**
      * 처리 완료 시 HTTP 응답을 캐싱하고 {@link Status#DONE} 으로 전이한다.
      * 재도달한 요청은 이 응답을 그대로 반환받는다.
+     *
+     * <p>상태 전이 가드: 호출 시점 상태가 {@link Status#IN_PROGRESS} 가 아니면 예외를 던진다.
+     * 이중 완료·종료된 엔티티 덮어쓰기 같은 잘못된 호출을 초기에 차단한다.</p>
+     *
+     * @throws IllegalStateException {@code IN_PROGRESS} 가 아닌 상태에서 호출된 경우
      */
-    public void markDone(Integer httpStatus, String responseBody) {
+    public void markDone(int httpStatus, String responseBody) {
+        if (this.status != Status.IN_PROGRESS) {
+            throw new IllegalStateException(
+                    "IN_PROGRESS 상태에서만 markDone 호출 가능. 현재 상태: " + this.status);
+        }
         this.status = Status.DONE;
         this.httpStatus = httpStatus;
         this.responseBody = responseBody;

@@ -64,7 +64,11 @@ class ShowcaseJpaEntityContentHashTest {
             repository.saveAndFlush(baseBuilder().contentHash(hash).build());
             repository.saveAndFlush(baseBuilder().contentHash(hash).build());
 
-            assertThat(repository.findAll()).hasSize(2);
+            // 다른 테스트 데이터로부터 격리: 이 테스트가 저장한 해시만 카운트
+            long count = repository.findAll().stream()
+                    .filter(e -> hash.equals(e.getContentHash()))
+                    .count();
+            assertThat(count).isEqualTo(2);
         }
     }
 
