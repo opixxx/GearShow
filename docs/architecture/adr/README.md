@@ -24,5 +24,10 @@
 | [ADR-005](./ADR-005-chat-protocol.md) | 채팅 프로토콜 — WebSocket + STOMP + Kafka | Accepted | 채팅 |
 | [ADR-006](./ADR-006-transaction-ticket-pattern.md) | Transaction Ticket 패턴 채택 | Accepted | 거래 |
 | [ADR-007](./ADR-007-chat-transaction-payment-boundaries.md) | 채팅/거래/결제 Bounded Context 경계 | Accepted | 아키텍처 |
+| [ADR-008](./ADR-008-chat-jwt-verification-port.md) | 채팅 JWT 검증 포트 분리 | Accepted | 채팅 |
+| [ADR-009](./ADR-009-chat-broadcast-port.md) | 채팅 브로드캐스트 — Outbound Port + AFTER_COMMIT 리스너 | Accepted | 채팅 |
+| [ADR-010](./ADR-010-3d-pipeline-table-split.md) | 3D 파이프라인 — 도메인/프로세스 테이블 분리 | Accepted | 3D 생성 |
+| [ADR-011](./ADR-011-3d-pipeline-multilayer-idempotency.md) | 3D 파이프라인 — 다층 멱등성 전략 | Accepted | 3D 생성 |
+| [ADR-012](./ADR-012-3d-pipeline-conditional-update-concurrency.md) | 3D 파이프라인 — 선택적 분산 락 + 조건부 UPDATE 동시성 | Accepted | 3D 생성 |
 
 > ADR-001 ~ ADR-004 는 향후 기존 주요 결정(헥사고날 채택, Kafka EDA, Tripo 선택 등)을 역추적해 채울 예정.
