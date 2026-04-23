@@ -534,32 +534,41 @@ class ChatMessage {
   const ChatMessage({
     required this.chatMessageId,
     required this.senderId,
+    this.chatRoomId,
     required this.seq,
     required this.messageType,
     required this.content,
     this.payloadJson,
-    required this.messageStatus,
+    this.messageStatus,
     required this.sentAt,
   });
 
   final int chatMessageId;
   final int? senderId;
+
+  /// 실시간 브로드캐스트 payload 에만 포함된다. REST 응답은 URL path 로 방 ID 가 암시되어 생략된다.
+  /// 수신 메시지를 화면별로 필터링할 때 사용.
+  final int? chatRoomId;
   final int seq;
   final String messageType;
   final String content;
   final String? payloadJson;
-  final String messageStatus;
+
+  /// 서버 STOMP payload 에는 현재 포함되지 않는다. REST 응답에만 존재.
+  /// 하드코딩된 'ACTIVE' 대신 null 을 허용해 미래 EDIT/DELETE 이벤트 수신 시 거짓말 상태를 피한다.
+  final String? messageStatus;
   final String sentAt;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
       chatMessageId: (json['chatMessageId'] as num?)?.toInt() ?? 0,
       senderId: (json['senderId'] as num?)?.toInt(),
+      chatRoomId: (json['chatRoomId'] as num?)?.toInt(),
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       messageType: json['messageType'] as String? ?? 'TEXT',
       content: json['content'] as String? ?? '',
       payloadJson: json['payloadJson'] as String?,
-      messageStatus: json['messageStatus'] as String? ?? 'ACTIVE',
+      messageStatus: json['messageStatus'] as String?,
       sentAt: json['sentAt'] as String? ?? '',
     );
   }
@@ -568,11 +577,33 @@ class ChatMessage {
     return ChatMessage(
       chatMessageId: (json['chatMessageId'] as num?)?.toInt() ?? 0,
       senderId: (json['senderId'] as num?)?.toInt(),
+      chatRoomId: (json['chatRoomId'] as num?)?.toInt(),
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       messageType: json['messageType'] as String? ?? 'TEXT',
       content: json['content'] as String? ?? '',
       payloadJson: json['payloadJson'] as String?,
-      messageStatus: 'ACTIVE',
+      messageStatus: null,
+      sentAt: json['sentAt'] as String? ?? '',
+    );
+  }
+}
+
+/// HTTP `POST /messages` 응답 (api-spec §8-5).
+class SendChatMessageResult {
+  const SendChatMessageResult({
+    required this.chatMessageId,
+    required this.seq,
+    required this.sentAt,
+  });
+
+  final int chatMessageId;
+  final int seq;
+  final String sentAt;
+
+  factory SendChatMessageResult.fromJson(Map<String, dynamic> json) {
+    return SendChatMessageResult(
+      chatMessageId: (json['chatMessageId'] as num?)?.toInt() ?? 0,
+      seq: (json['seq'] as num?)?.toInt() ?? 0,
       sentAt: json['sentAt'] as String? ?? '',
     );
   }

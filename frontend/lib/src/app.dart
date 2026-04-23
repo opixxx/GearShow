@@ -1,10 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:stomp_dart_client/stomp_dart_client.dart';
 
 import 'api.dart';
+import 'chat_realtime_controller.dart';
 import 'models.dart';
 import 'screens.dart';
 
@@ -39,9 +37,8 @@ class AppController extends ChangeNotifier {
   AuthSession? session;
   UserProfile? profile;
 
-  StompClient? _stompClient;
-  final Map<int, StompUnsubscribe> _stompSubscriptions = {};
-  void Function(ChatMessage)? onStompMessage;
+  /// 실시간 메시징 전용 컨트롤러. 세션/네비게이션 과 책임 분리.
+  final ChatRealtimeController realtime = ChatRealtimeController();
 
   bool get isLoggedIn => session?.accessToken.isNotEmpty ?? false;
 
@@ -67,12 +64,11 @@ class AppController extends ChangeNotifier {
     const devUserIdStr = String.fromEnvironment('DEV_USER_ID');
     final devUserId = devUserIdStr.isNotEmpty ? int.tryParse(devUserIdStr) : null;
     final nextSession = await api.devLogin(baseUrl: baseUrl, userId: devUserId);
-    session = nextSession;
+    _onSessionChanged(nextSession);
     profile = await api.getMyProfile(
       baseUrl: baseUrl,
       accessToken: nextSession.accessToken,
     );
-    connectStomp();
     notifyListeners();
   }
 
@@ -87,13 +83,18 @@ class AppController extends ChangeNotifier {
       authorizationCode: authorizationCode,
       accessToken: accessToken,
     );
-    session = nextSession;
+    _onSessionChanged(nextSession);
     profile = await api.getMyProfile(
       baseUrl: baseUrl,
       accessToken: nextSession.accessToken,
     );
-    connectStomp();
     notifyListeners();
+  }
+
+  /// 세션이 교체될 때 realtime 을 재연결한다. 로그인 경로가 추가되어도 이 훅만 호출.
+  void _onSessionChanged(AuthSession nextSession) {
+    session = nextSession;
+    realtime.connect(baseUrl: baseUrl, accessToken: nextSession.accessToken);
   }
 
   Future<void> refreshSession() async {
@@ -143,7 +144,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    disconnectStomp();
+    realtime.disconnect();
     final token = session?.accessToken;
     if (token != null && token.isNotEmpty) {
       await api.logout(baseUrl: baseUrl, accessToken: token);
@@ -153,67 +154,10 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void connectStomp() {
-    final token = session?.accessToken;
-    if (token == null || token.isEmpty) return;
-
-    disconnectStomp();
-    final wsUrl = '${baseUrl.replaceFirst('http', 'http')}/ws';
-    _stompClient = StompClient(
-      config: StompConfig.sockJS(
-        url: wsUrl,
-        stompConnectHeaders: {'Authorization': 'Bearer $token'},
-        onConnect: (_) => notifyListeners(),
-        onDisconnect: (_) => notifyListeners(),
-        onWebSocketError: (error) => debugPrint('WebSocket 에러: $error'),
-      ),
-    );
-    _stompClient!.activate();
-  }
-
-  void disconnectStomp() {
-    for (final unsub in _stompSubscriptions.values) {
-      unsub(unsubscribeHeaders: {});
-    }
-    _stompSubscriptions.clear();
-    _stompClient?.deactivate();
-    _stompClient = null;
-  }
-
-  bool get isStompConnected => _stompClient?.connected ?? false;
-
-  void subscribeChatRoom(int chatRoomId) {
-    if (_stompClient == null || !_stompClient!.connected) return;
-    if (_stompSubscriptions.containsKey(chatRoomId)) return;
-
-    final unsub = _stompClient!.subscribe(
-      destination: '/topic/chat-rooms/$chatRoomId',
-      callback: (frame) {
-        if (frame.body == null) return;
-        final json = jsonDecode(frame.body!) as Map<String, dynamic>;
-        final payload = json['payload'] as Map<String, dynamic>?;
-        if (payload != null) {
-          onStompMessage?.call(ChatMessage.fromStompPayload(payload));
-        }
-      },
-    );
-    _stompSubscriptions[chatRoomId] = unsub;
-  }
-
-  void unsubscribeChatRoom(int chatRoomId) {
-    _stompSubscriptions.remove(chatRoomId)?.call(unsubscribeHeaders: {});
-  }
-
-  void sendStompMessage(int chatRoomId, String content, String clientMessageId) {
-    if (_stompClient == null || !_stompClient!.connected) return;
-    _stompClient!.send(
-      destination: '/app/chat-rooms/$chatRoomId/send',
-      body: jsonEncode({
-        'messageType': 'TEXT',
-        'content': content,
-        'clientMessageId': clientMessageId,
-      }),
-    );
+  @override
+  void dispose() {
+    realtime.dispose();
+    super.dispose();
   }
 }
 
