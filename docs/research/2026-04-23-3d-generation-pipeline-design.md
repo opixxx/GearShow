@@ -125,6 +125,7 @@ CREATE TABLE model_generation_workflow (
   current_step         ENUM('REQUESTED','PREPARING','GENERATING',
                             'COMPLETED','FAILED') NOT NULL,
   tripo_task_id        VARCHAR(64),
+  tripo_trace_id       VARCHAR(64),         -- X-Tripo-Trace-ID 저장 (Tripo 측 장애 문의 시 필수)
   tripo_succeeded_at   TIMESTAMP(6) NULL,   -- GENERATING 내부 서브-단계 구분
                                             -- NULL = Tripo 처리 중
                                             -- NOT NULL = S3 미러링 중
@@ -195,7 +196,18 @@ CREATE TABLE processed_message (
 | **① API** | `Idempotency-Key` 헤더 | 클라 UUID, localStorage persist | 따닥 / 세션 재진입 / 새로고침 |
 | **② 비즈니스 fallback** | `UNIQUE(user_id, content_hash, 10min)` | 서버 sha256 계산 | ①이 실패한 경우 내용 기반 dedup |
 | **③ Kafka Consumer** | `processed_message.event_id = hash(idempotency_key)` | ①에서 결정적 파생 | 브로커 재전송 / rebalance |
-| **④ Tripo** | `Idempotency-Key` 헤더 (`workflowId`) + `tripo_pending_task` 선저장 | workflow | 이중 과금 |
+| **④ Tripo (사후 정리)** | `tripo_pending_task` 선저장 + Reconcile 중복 task cancel | workflow | 이중 과금 |
+
+### ④ Tripo 계층 상세
+
+Tripo API 는 `Idempotency-Key` 헤더를 **지원하지 않음** (2026-04 기준). 대신 Tripo 의 과금 구조를 활용한 **사후 정리 전략** 을 쓴다:
+
+- **과금 확정 시점**: Tripo 는 task 가 `success` 로 완료된 시점에만 `consumed_credit` 를 차감한다 (문서 §3.2 참조). POST /task 자체로는 과금되지 않음.
+- **전략**:
+  1. POST /task 성공 직후 `tripo_pending_task(workflow_id, task_id)` 선저장 → 워커 크래시 시에도 task_id 유실 방지
+  2. Reconcile 배치가 PREPARING stuck 감지 시 `tripo_pending_task` 에서 task_id 복구 → 중복 POST 회피
+  3. 그래도 중복 task 가 생긴 경우 (예: 선저장 전 크래시), Reconcile 이 Tripo 응답에서 **같은 workflow 의 여러 running task 감지 → 가장 최근 것만 유지, 나머지 POST /task/{taskId}/cancel** 로 `cancelled` 전이시켜 과금 0 확정.
+- **리스크 한도**: 가장 최근 task 가 이미 success 로 완료된 극단적 상황에서만 이중 과금 가능. 발생 빈도는 "크래시 발생 × task 완료 우연적 동시 발생" 확률이라 운영상 무시 가능 수준.
 
 ---
 
@@ -325,19 +337,23 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
 [5] [락 밖]
     S3 GET × 4
     (주기적 heartbeat UPDATE)
-    Tripo /v2/upload/sts × 4 → file_token × 4
-    tripo:queue ZSET 대기 (피크 시) + 세마포어 획득
-    POST /v2/task
-       Header: Idempotency-Key: <workflowId>
-       Body:   { type: 'multiview_to_model', file_tokens }
-    → task_id 획득
-    INSERT tripo_pending_task(workflow_id, task_id)   -- 선저장
+    Tripo `POST /upload` × 4 (multipart) → file_token × 4
+       # STS 방식(`POST /upload/sts/token`) 은 Phase 2 최적화로 보류
+    tripo:queue ZSET 대기 (피크 시) + tripo:semaphore 획득
+    POST /task
+       Body: {
+         type: 'multiview_to_model',
+         files: [{type, file_token}, ...]   # 순서: [front, left, back, right]
+       }
+    → task_id 획득, X-Tripo-Trace-ID 헤더 저장
+    INSERT tripo_pending_task(workflow_id, task_id)   -- 선저장 (④ 멱등성 참조)
 
 [6] Worker:
     redisson.lock("workflow:lock:" + workflowId) [10s]
     BEGIN TX2
       SELECT FOR UPDATE workflow WHERE id=?
-      UPDATE current_step='GENERATING', tripo_task_id=?, heartbeat_at=NOW()
+      UPDATE current_step='GENERATING', tripo_task_id=?, tripo_trace_id=?,
+             heartbeat_at=NOW()
         WHERE id=? AND current_step='PREPARING'
       affected_rows == 0 → 좀비 워커, rollback 후 task_id 폐기
       INSERT processed_message(event_id)
@@ -452,10 +468,9 @@ void tryLockAndRecover(w):
 
         switch (fresh.currentStep, fresh.tripoSucceededAt):
             (PREPARING, _):
-                - tripo_pending_task 조회로 task_id 복구 (있으면)
-                - 없으면 Tripo list (metadata 필터) 로 기존 task 조회
-                - 없으면 재 POST (Idempotency-Key = workflowId)
-                - TX2 로 진행
+                - tripo_pending_task 조회로 task_id 복구 (있으면 그대로 TX2)
+                - 없으면 재 POST /task → 새 task_id 확보 후 TX2 로 진행
+                  ※ 선저장 실패 전 크래시로 중복 task 생성 가능 → 아래 정리 배치가 사후 처리
             (GENERATING, NULL):       -- Tripo 처리 중 stuck
                 - Tripo GET → 현재 상태에 따라 분기
                 - 응답 없음/404 → failure_code=POLLING_LOST
@@ -464,6 +479,17 @@ void tryLockAndRecover(w):
                 - 없으면 재다운로드
     finally:
         lock.unlock()
+
+# 중복 task 정리 (별도 배치, 매 5분)
+# 같은 workflow_id 에 running task 가 2개 이상이면 가장 최근 것만 남기고 cancel
+for w in workflows WHERE current_step IN ('PREPARING','GENERATING'):
+    tripoTasks = tripo.listTasksByInputSignature(w.imageS3Keys)  # Tripo list API
+    runningTasks = tripoTasks.filter(t -> t.status IN ('queued','running'))
+    if runningTasks.size() >= 2:
+        latest = runningTasks.maxBy(t -> t.create_time)
+        for t in runningTasks except latest:
+            tripo.cancel(t.task_id)   # POST /task/{taskId}/cancel
+            log.warn("duplicate task cancelled", workflow=w.id, task=t.task_id)
 ```
 
 **stuck 임계값 (초기, 운영 1주 후 튜닝)**
@@ -475,19 +501,64 @@ void tryLockAndRecover(w):
 | GENERATING + tripo_succeeded_at IS NULL + (last_polled_at 갭 > 8min) | Tripo 처리 stuck |
 | GENERATING + tripo_succeeded_at IS NOT NULL + (heartbeat 갭 > 5min) | S3 미러링 stuck |
 
+### 8.5 Tripo Balance 모니터 스케줄러
+
+**사전 체크 방식은 채택하지 않는다.** 이유:
+- 체크와 POST 사이 레이스로 보장 불가 (결국 POST 실패 처리 필요)
+- `multiview_to_model` 단가가 문서에 명시 없음 → 판단 기준 불명확
+- `balance`/`frozen` 필드의 의미 모호 → 실측 필요
+- 호출마다 GET 추가 → rate limit 부담
+
+대신 **주기 모니터링 + 운영 알림** 으로 전환:
+
+```
+@Scheduled(fixedDelay = 5 * 60 * 1000)   # 5분 주기
+void monitorCredit():
+    var b = tripo.getBalance()           # GET /user/balance
+    var effective = b.balance - b.frozen
+    
+    metrics.gauge("tripo.balance.effective", effective)
+    
+    if effective < LOW_WATERMARK:        # 예: 50 credit
+        alertOps.warn("Tripo balance low", effective)
+    if effective < CRITICAL_WATERMARK:   # 예: 10 credit
+        alertOps.critical("Tripo balance critical", effective)
+        # Phase 2: creditCircuitBreaker.open()
+```
+
+| 항목 | 내용 |
+|---|---|
+| 호출 주기 | 5분 (일 288회, Tripo rate limit 여유 충분) |
+| 임계값 | LOW=50 / CRITICAL=10 (운영 1개월 관측 후 재설정) |
+| Alert 채널 | Slack `#ops-alerts` + PagerDuty (CRITICAL) |
+| Circuit Breaker | Phase 2 에서 도입 (CRITICAL 시 신규 workflow 수락 거부) |
+
+사용자가 개별로 겪는 `INSUFFICIENT_CREDIT` 실패는 기존 failure_code 경로 그대로 처리 (§9).
+
 ---
 
 ## 9. failure_code 분류표
 
-| code | source | 재시도 | DLQ | 사용자 액션 |
-|---|---|---|---|---|
-| `TRIPO_429_RATE_LIMIT` | TRIPO_API | ✅ | ❌ | 자동 재시도 |
-| `TRIPO_TIMEOUT_GENERATING_15M` | SCHEDULER | ❌ | ✅ | 운영 알림, 수동 재시도 |
-| `TRIPO_REJECTED_INVALID_IMAGE` | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
-| `INSUFFICIENT_CREDIT` | TRIPO_API | ❌ | ✅ | 운영 알림 (크레딧 충전) |
-| `S3_UPLOAD_FAILED` | S3 | ✅ | ❌ | 자동 재시도 |
-| `POLLING_LOST` | SCHEDULER | ❌ | ✅ | 수동 조사 |
-| `UNKNOWN_TRIPO_RESPONSE` | TRIPO_API | ❌ | ✅ | 수동 조사 |
+Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
+
+| failure_code | Tripo code | HTTP | source | 재시도 | DLQ | 사용자 액션 |
+|---|---|---|---|---|---|---|
+| `TRIPO_429_RATE_LIMIT` | 1007 / 2000 | 429 | TRIPO_API | ✅ (Retry-After 준수) | ❌ | 자동 재시도 |
+| `TRIPO_SERVER_ERROR` | 1000 / 1001 / 2014 | 500 | TRIPO_API | ✅ | ❌ | 자동 재시도 |
+| `TRIPO_AUTH_FAILED` | 1002 | 401 | TRIPO_API | ❌ | ✅ | **긴급 Alert** (API key 만료/무효) |
+| `TRIPO_INVALID_REQUEST` | 1003 / 1004 | 400 | TRIPO_API | ❌ | ✅ | 운영 조사 (클라이언트 버그 가능성) |
+| `TRIPO_CONTENT_POLICY_VIOLATION` | 2008 | 400 | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
+| `TRIPO_INVALID_IMAGE` | 2003 / 2004 / 2020 | 400 | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
+| `INSUFFICIENT_CREDIT` | 2010 | 403 | TRIPO_API | ❌ | ✅ | 운영 Alert (크레딧 충전) |
+| `TRIPO_TIMEOUT_GENERATING_15M` | — | — | SCHEDULER | ❌ | ✅ | 운영 알림, 수동 재시도 |
+| `POLLING_LOST` | — | — | SCHEDULER | ❌ | ✅ | 수동 조사 |
+| `TRIPO_TASK_CANCELLED` | — | — | SYSTEM | ❌ | ❌ | 정상 (중복 task 정리 결과) |
+| `TRIPO_TASK_BANNED` | — | — | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
+| `TRIPO_TASK_EXPIRED` | — | — | TRIPO_API | ✅ (새 workflow) | ❌ | 사용자 재시도 |
+| `S3_UPLOAD_FAILED` | — | — | S3 | ✅ | ❌ | 자동 재시도 |
+| `UNKNOWN_TRIPO_RESPONSE` | — | — | TRIPO_API | ❌ | ✅ | 수동 조사 + Trace ID 로 Tripo 문의 |
+
+**status=`cancelled` 처리**: 중복 task 정리 배치가 cancel 시킨 경우 workflow 는 실패 아님 → 남긴 task 가 정상 진행됨. cancel 당한 task 쪽은 이벤트 로그만 남기고 failure 로 카운트하지 않음.
 
 ---
 
@@ -523,12 +594,14 @@ void tryLockAndRecover(w):
 
 ## 12. 구현 전 확정 필요 결정
 
-| # | 결정 | 영향 | 방법 |
+| # | 결정 | 상태 | 결과 / 대체 전략 |
 |---|---|---|---|
-| 1 | Tripo API `Idempotency-Key` 헤더 지원 여부 | 미지원 시 A-2 이중과금 리스크 수용 or 대안 필요 | Tripo support 문의 |
-| 2 | Tripo task list API + metadata 필터 지원 여부 | 1번 미지원 시 fallback 수단 | API 문서 재확인 / 테스트 |
-| 3 | Tripo `GET /v2/task` 가 매번 새 download URL 발급하는지 | S3 미러링 복구 경로 결정 | 실측 테스트 |
-| 4 | Redis 인스턴스 배치 (동일 VPC? 별도?) | 네트워크 레이턴시 | 인프라 결정 |
+| 1 | Tripo API `Idempotency-Key` 헤더 지원 여부 | ✅ 조사 완료 (2026-04-23) | **미지원**. 대체: `tripo_pending_task` 선저장 + 과금은 `success` 시점 확정(§3.2) 이므로 Reconcile 이 중복 running task 를 cancel 하면 과금 0. §4 ④ 참조. |
+| 2 | Tripo task list API + metadata 필터 | ✅ 조사 완료 (2026-04-23) | 명시 없음. Reconcile 중복 정리는 **입력 파일 서명(imageS3Keys) 기반 조회** 로 대체. 실측 후 구현 세부는 P1-G 에서 확정. |
+| 3 | Tripo `GET /v2/task` 가 매번 새 download URL 발급하는지 | ✅ 해결 (2026-04-23) | **지원** (tripo-api-reference §3 "만료 시 task 재조회로 새 URL 획득"). S3 미러링 크래시 시 Tripo GET 으로 새 URL 획득 후 재다운로드. |
+| 4 | Redis 인스턴스 배치 (동일 VPC? 별도?) | 🟡 미결 | 인프라 결정. Phase 1 은 자체호스팅 EC2 1대 + RDB+AOF. 동일 VPC 배치 권장. |
+| 5 | `multiview_to_model` 크레딧 단가 | 🟡 미결 | 문서 명시 없음. Phase 1 시작 전 실측 1회 (Tripo staging 과금 확인). Balance 모니터 임계값 설정 근거. |
+| 6 | Tripo `balance` / `frozen` 필드 의미 | 🟡 미결 | 보수적으로 `effective = balance - frozen` 로 가정. Tripo support 문의 또는 실측으로 검증. |
 
 ---
 
@@ -544,6 +617,7 @@ void tryLockAndRecover(w):
 
 ## 14. 변경 이력
 
-| 날짜 | 내용 |
-|---|---|
-| 2026-04-23 | v1 초안 — 4-state 머신 (`tripo_succeeded_at` 컬럼) + 폴링 락 제거 방향 확정 |
+| 날짜 | 버전 | 내용 |
+|---|---|---|
+| 2026-04-23 | v1.0 | 초안 — 4-state 머신 (`tripo_succeeded_at` 컬럼) + 폴링 락 제거 방향 확정 |
+| 2026-04-23 | v1.1 | Tripo API 조사 반영 — Idempotency-Key 미지원 확인 후 **사후 cancel 전략** 으로 ④ 계층 재설계. 사전 balance 체크 기각, 주기 모니터링(§8.5) 으로 전환. failure_code 를 Tripo 공식 에러 코드와 1:1 매핑. `tripo_trace_id` 컬럼 추가. |
