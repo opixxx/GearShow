@@ -88,7 +88,7 @@ public class ShowcaseJpaEntity {
      * P1-B 에서 {@code ContentHash} 도메인 VO 를 도입하고 {@code Showcase.create(...)} 시그니처에
      * 추가한 뒤 Mapper 양방향 매핑을 보강해야 한다 (ADR-011 ②).</p>
      */
-    @Column(name = "content_hash", length = 64)
+    @Column(name = "content_hash", length = 64, columnDefinition = "CHAR(64)")
     private String contentHash;
 
     @Column(name = "has_3d_model", nullable = false)
