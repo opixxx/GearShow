@@ -13,9 +13,24 @@ import java.time.Instant;
 
 /**
  * 쇼케이스 JPA 엔티티.
+ *
+ * <p><b>인덱스</b>:</p>
+ * <ul>
+ *   <li>{@code idx_showcase_owner_content_created}: 같은 사용자가 짧은 시간 창(예: 10분) 내에
+ *       같은 이미지 조합으로 중복 등록하는 것을 application 레벨에서 감지하기 위한 조회 인덱스.
+ *       {@code content_hash} 는 SHA-256 hex 64 문자. 실제 중복 판단은 application 에서
+ *       {@code created_at > NOW() - 10min} 조건과 함께 수행하며, DB UNIQUE 는 걸지 않는다
+ *       (사용자가 정당하게 10분 밖에서 같은 이미지를 재업로드하는 케이스를 허용하기 위함).</li>
+ * </ul>
  */
 @Entity
-@Table(name = "showcase")
+@Table(
+        name = "showcase",
+        indexes = @Index(
+                name = "idx_showcase_owner_content_created",
+                columnList = "owner_id, content_hash, created_at"
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ShowcaseJpaEntity {
@@ -63,6 +78,19 @@ public class ShowcaseJpaEntity {
     @Column(name = "primary_image_url")
     private String primaryImageUrl;
 
+    /**
+     * 4장 쇼케이스 이미지의 결정적 SHA-256 해시 (hex 64자).
+     * 같은 사용자의 짧은 시간 창 내 중복 등록을 application 계층에서 감지할 때 사용한다.
+     * 기존 행 보호를 위해 nullable.
+     *
+     * <p><b>P1-B TODO</b>: 현재 {@link com.gearshow.backend.showcase.domain.model.Showcase}
+     * 도메인 모델에는 이 필드가 없어 {@code ShowcaseMapper} 의 왕복 경로에 포함되지 않는다.
+     * P1-B 에서 {@code ContentHash} 도메인 VO 를 도입하고 {@code Showcase.create(...)} 시그니처에
+     * 추가한 뒤 Mapper 양방향 매핑을 보강해야 한다 (ADR-011 ②).</p>
+     */
+    @Column(name = "content_hash", length = 64, columnDefinition = "CHAR(64)")
+    private String contentHash;
+
     @Column(name = "has_3d_model", nullable = false)
     private boolean has3dModel;
 
@@ -81,7 +109,7 @@ public class ShowcaseJpaEntity {
                               Category category, String brand, String modelCode,
                               String title, String description, String userSize,
                               ConditionGrade conditionGrade, int wearCount, boolean forSale,
-                              String primaryImageUrl, boolean has3dModel,
+                              String primaryImageUrl, String contentHash, boolean has3dModel,
                               ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -96,6 +124,7 @@ public class ShowcaseJpaEntity {
         this.wearCount = wearCount;
         this.forSale = forSale;
         this.primaryImageUrl = primaryImageUrl;
+        this.contentHash = contentHash;
         this.has3dModel = has3dModel;
         this.status = status;
         this.createdAt = createdAt;
