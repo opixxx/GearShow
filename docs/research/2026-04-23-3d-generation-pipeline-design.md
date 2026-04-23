@@ -181,11 +181,15 @@ CREATE TABLE processed_message (
 
 ### 3.5 Kafka 토픽
 
-| 토픽 | 용도 | Key |
-|---|---|---|
-| `model-generation` | 메인 | `workflowId` |
-| `model-generation-retry` | `@RetryableTopic` exp backoff | `workflowId` |
-| `model-generation-dlq` | 최종 실패 | `workflowId` |
+실제 구현 상수 이름 (P1-C 기준). Spring Kafka DLT 관례에 맞춰 DLT 접미사는 `.DLT`, 재시도 토픽은 `-retry` 로 통일한다.
+
+| 토픽 | 용도 | Key | 비고 |
+|---|---|---|---|
+| `showcase.model-generation.request` | 메인 | `showcaseId` | 쇼케이스 단위 순서 보장 |
+| `showcase.model-generation.request-retry` | `@RetryableTopic` exp backoff (P1-D 소비자 연결 예정) | `showcaseId` | 파티션/복제본 메인과 동일 |
+| `showcase.model-generation.request.DLT` | 최종 실패 (Spring Kafka DLT 관례) | `showcaseId` | 운영 수동 확인/재처리 |
+
+메시지 식별자는 페이로드 `messageId` 에 포함한다 (= `SHA-256(Idempotency-Key)` 결정적 파생, ADR-011 ③). `workflowId` 도 페이로드에 포함되어 Consumer 가 workflow 테이블 조회에 사용한다.
 
 ---
 
@@ -582,8 +586,8 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P0-ADR** | ADR-010/011/012 작성 및 리뷰 | — | 낮음 | ✅ PR #38 |
 | **P1-A** | DB 스키마 마이그레이션 | P0 | 중 | ✅ PR #39 |
 | **P1-B-α+β** | `Idempotency-Key` 헤더 처리 + `ContentHash` VO + 10분 창 dedup | P1-A | 중 | ✅ PR #40 |
-| **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | 🚧 본 PR |
-| **P1-C** | Outbox Relay (기존 재사용) + Kafka 토픽 구성 | P1-B-γ | 낮음 | ⏳ |
+| **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | ✅ PR #41 |
+| **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | 🚧 본 PR |
 | **P1-D** | Worker: TX1/TX2 + Tripo upload/task + pending_task 선저장 | P1-C | 높음 |
 | **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D | 중 |
 | **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 |
