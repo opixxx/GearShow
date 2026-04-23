@@ -1,7 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.port.in.RecoverStuckModelsUseCase;
-import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.vo.ModelStatus;
@@ -36,7 +35,6 @@ import java.util.List;
 public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
 
     private final Showcase3dModelPort showcase3dModelPort;
-    private final ModelGenerationEventPublisher modelGenerationEventPublisher;
     private final StuckRecoveryProperties properties;
 
     @Override
@@ -49,9 +47,13 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
     }
 
     /**
-     * REQUESTED 상태에서 오래 머물러 있는 모델을 Outbox 에 재등록한다.
+     * REQUESTED 상태에서 오래 머물러 있는 모델을 감지한다.
      *
-     * @return 실제로 재등록에 성공한 모델 수
+     * <p><b>P1-B-γ 임시 조치</b>: Outbox 재발행에는 워크플로우/멱등성 키 연계가 필요한데
+     * 이 경로는 워크플로우 테이블 도입 이전 레거시다. 자동 재발행을 보류하고 운영 감시 로그만
+     * 남긴다. P1-G Reconcile 배치가 도입되면 대체된다.</p>
+     *
+     * @return stuck 으로 감지된 모델 수 (재발행 없음, 경보용 카운터)
      */
     private int recoverStuckRequested() {
         Instant threshold = Instant.now()
@@ -60,18 +62,11 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
         List<Showcase3dModel> stuck = showcase3dModelPort
                 .findStaleByStatus(ModelStatus.REQUESTED, threshold, properties.batchSize());
 
-        int recovered = 0;
         for (Showcase3dModel model : stuck) {
-            try {
-                modelGenerationEventPublisher.publishRequested(model.getId(), model.getShowcaseId());
-                log.warn("REQUESTED stuck 복구 - Outbox 재등록 - showcase3dModelId: {}",
-                        model.getId());
-                recovered++;
-            } catch (RuntimeException e) {
-                log.error("REQUESTED stuck 복구 실패 - showcase3dModelId: {}", model.getId(), e);
-            }
+            log.warn("ALERT: REQUESTED stuck 감지 - 자동 재발행 보류 (P1-G 대체 예정) "
+                    + "- showcase3dModelId: {}", model.getId());
         }
-        return recovered;
+        return stuck.size();
     }
 
     /**
@@ -103,13 +98,12 @@ public class RecoverStuckModelsService implements RecoverStuckModelsUseCase {
                             + "showcase3dModelId: {}, retryCount: {}",
                             model.getId(), model.getRetryCount());
                 } else {
-                    // retryCount < 3 → REQUESTED 로 되돌리고 Outbox 재등록
+                    // retryCount < 3 → REQUESTED 로 되돌리고 ALERT.
+                    // Outbox 재등록은 워크플로우/멱등성 키 연계 재설계(P1-G Reconcile) 에서 다시 붙인다.
                     Showcase3dModel reset = model.resetForRetry(model.getGenerationProvider());
                     showcase3dModelPort.save(reset);
-                    modelGenerationEventPublisher.publishRequested(
-                            model.getId(), model.getShowcaseId());
-                    log.warn("PREPARING stuck 복구 - 자동 재시도 (retryCount: {} → {}) "
-                                    + "- showcase3dModelId: {}",
+                    log.warn("ALERT: PREPARING stuck - REQUESTED 로 되돌림 (Outbox 재등록 보류, "
+                                    + "P1-G 대체 예정) - retryCount: {} → {}, showcase3dModelId: {}",
                             model.getRetryCount(), reset.getRetryCount(), model.getId());
                 }
                 recovered++;

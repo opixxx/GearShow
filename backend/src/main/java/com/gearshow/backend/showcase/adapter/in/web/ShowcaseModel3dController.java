@@ -28,18 +28,23 @@ public class ShowcaseModel3dController {
     /**
      * 3D 모델 생성을 재요청한다.
      * 클라이언트가 Presigned URL로 S3에 소스 이미지를 직접 업로드한 후 S3 키 목록을 전달한다.
+     *
+     * <p><b>멱등성</b>: {@code Idempotency-Key} 헤더는 필수다 (ADR-011 ①).
+     * 재시도마다 클라이언트가 새 UUID 를 생성해 전송해야 하며, 서버는 이 값으로
+     * 워크플로우 UNIQUE 식별자와 Outbox {@code event_id} 를 파생한다.</p>
      */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, Object>> requestGeneration(
             Authentication authentication,
             @PathVariable Long showcaseId,
+            @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
             @Valid @RequestBody RequestModelGenerationRequest request) {
 
         Long ownerId = (Long) authentication.getPrincipal();
 
         ModelGenerationResult result = requestModelGenerationUseCase.requestRetry(
-                showcaseId, ownerId, request.modelSourceImageKeys());
+                showcaseId, ownerId, idempotencyKey, request.modelSourceImageKeys());
 
         return ApiResponse.of(202, "3D 모델 생성 요청 완료",
                 Map.of("showcase3dModelId", result.showcase3dModelId(),

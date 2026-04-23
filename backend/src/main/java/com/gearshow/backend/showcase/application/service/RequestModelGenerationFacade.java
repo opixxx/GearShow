@@ -37,7 +37,9 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     private final ImageStoragePort imageStoragePort;
 
     @Override
-    public ModelGenerationResult requestOnCreate(Long showcaseId, List<String> modelSourceImageKeys) {
+    public ModelGenerationResult requestOnCreate(Long showcaseId,
+                                                  String idempotencyKey,
+                                                  List<String> modelSourceImageKeys) {
         // 1. 검증 (트랜잭션 밖)
         validateSourceImageCount(modelSourceImageKeys);
 
@@ -48,13 +50,16 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
 
         // 3. DB 저장 + Outbox 이벤트 기록 (단일 트랜잭션)
         //    커밋 성공 = Outbox Relay 가 반드시 Kafka 발행을 시도함
-        Showcase3dModel model = requestModelGenerationService.saveModelAndSourceImages(showcaseId, imageUrls);
+        Showcase3dModel model = requestModelGenerationService.saveModelAndSourceImages(
+                showcaseId, idempotencyKey, imageUrls);
 
         return new ModelGenerationResult(model.getId(), model.getModelStatus());
     }
 
     @Override
-    public ModelGenerationResult requestRetry(Long showcaseId, Long ownerId,
+    public ModelGenerationResult requestRetry(Long showcaseId,
+                                               Long ownerId,
+                                               String idempotencyKey,
                                                List<String> modelSourceImageKeys) {
         // 1. 검증 (트랜잭션 밖)
         validateOwner(showcaseId, ownerId);
@@ -68,7 +73,7 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
 
         // 3. DB 저장 + Outbox 이벤트 기록 (단일 트랜잭션)
         Showcase3dModel model = requestModelGenerationService
-                .resetOrCreateModelAndSaveSourceImages(showcaseId, imageUrls);
+                .resetOrCreateModelAndSaveSourceImages(showcaseId, idempotencyKey, imageUrls);
 
         return new ModelGenerationResult(model.getId(), model.getModelStatus());
     }

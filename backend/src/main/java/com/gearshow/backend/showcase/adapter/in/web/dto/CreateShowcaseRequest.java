@@ -75,10 +75,11 @@ public record CreateShowcaseRequest(
     /**
      * 요청을 커맨드로 변환한다.
      *
-     * @param ownerId 소유자 ID
+     * @param ownerId        소유자 ID
+     * @param idempotencyKey {@code Idempotency-Key} 헤더 값 (필수, ADR-011 ①)
      * @return 등록 커맨드
      */
-    public CreateShowcaseCommand toCommand(Long ownerId) {
+    public CreateShowcaseCommand toCommand(Long ownerId, String idempotencyKey) {
         List<String> safeModelSourceKeys = modelSourceImageKeys != null
                 ? modelSourceImageKeys : List.of();
         return new CreateShowcaseCommand(
@@ -97,7 +98,8 @@ public record CreateShowcaseRequest(
                 !safeModelSourceKeys.isEmpty(),
                 buildBootsSpec(),
                 buildUniformSpec(),
-                contentHash != null ? ContentHash.of(contentHash) : null);
+                contentHash != null ? ContentHash.of(contentHash) : null,
+                idempotencyKey);
     }
 
     /** 축구화 스펙 필드가 있으면 BootsSpecCommand를 생성한다. */

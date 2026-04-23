@@ -52,7 +52,8 @@ class ModelGenerationWorkerTest {
         @DisplayName("이미 처리된 메시지면 비즈니스 유스케이스를 호출하지 않는다")
         void processModelGeneration_duplicateMessage_skipsUseCase() {
             // Given
-            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(1L, 100L);
+            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(
+                    "msg-id-1", 11L, 1L, 100L);
             given(acquireIdempotencyUseCase.tryAcquire(message.messageId(),
                     IdempotencyDomain.SHOWCASE_MODEL_GENERATION)).willReturn(false);
 
@@ -74,7 +75,8 @@ class ModelGenerationWorkerTest {
         @DisplayName("처음 보는 메시지는 비즈니스 유스케이스에 위임한다")
         void processModelGeneration_newMessage_delegatesToUseCase() {
             // Given
-            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(5L, 100L);
+            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(
+                    "msg-id-5", 15L, 5L, 100L);
             given(acquireIdempotencyUseCase.tryAcquire(any(), any())).willReturn(true);
 
             // When
@@ -94,7 +96,8 @@ class ModelGenerationWorkerTest {
         @DisplayName("UseCase 가 예외를 던지면 release 후 그대로 전파한다 (Tripo 호출 전 실패)")
         void processModelGeneration_useCaseThrows_releasesAndRethrows() {
             // Given
-            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(5L, 100L);
+            ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(
+                    "msg-id-5", 15L, 5L, 100L);
             given(acquireIdempotencyUseCase.tryAcquire(any(), any())).willReturn(true);
             willThrow(new QueryTimeoutException("DB 일시 장애"))
                     .given(prepareModelGenerationUseCase).prepare(5L, 100L);

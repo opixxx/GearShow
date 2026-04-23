@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
@@ -20,6 +21,10 @@ import java.util.List;
  * <p>DB 저장과 Outbox 이벤트 기록을 단일 트랜잭션으로 묶어 원자성을 보장한다.
  * 실제 Kafka 발행은 Outbox Relay 스케줄러가 별도 스레드에서 수행한다.
  * 외부 I/O(S3 키 변환 등)는 {@link RequestModelGenerationFacade}에서 트랜잭션 밖에서 수행한다.</p>
+ *
+ * <p><b>P1-B-γ 추가</b>: 같은 트랜잭션 안에서 {@code model_generation_workflow} 행을
+ * 새로 INSERT 하고, Outbox {@code event_id} 를 {@code SHA-256(idempotencyKey)} 로
+ * 결정적 파생한다 (ADR-010, ADR-011 ③).</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -30,34 +35,47 @@ public class RequestModelGenerationService {
 
     private final Showcase3dModelPort showcase3dModelPort;
     private final ModelSourceImagePort modelSourceImagePort;
+    private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;
     private final ModelGenerationEventPublisher modelGenerationEventPublisher;
 
     /**
-     * 신규 3D 모델과 소스 이미지를 저장하고 Outbox 이벤트를 기록한다.
+     * 신규 3D 모델과 소스 이미지 · 워크플로우 행을 저장하고 Outbox 이벤트를 기록한다.
      *
-     * <p>세 작업이 같은 트랜잭션 안에서 수행되어, 커밋 성공 = 이후 Kafka 발행이
+     * <p>네 작업이 같은 트랜잭션 안에서 수행되어, 커밋 성공 = 이후 Kafka 발행이
      * Relay 에 의해 반드시 시도됨을 보장한다 (Transactional Outbox 패턴).</p>
      */
     @Transactional
-    public Showcase3dModel saveModelAndSourceImages(Long showcaseId, List<String> imageUrls) {
+    public Showcase3dModel saveModelAndSourceImages(Long showcaseId,
+                                                    String idempotencyKey,
+                                                    List<String> imageUrls) {
         Showcase3dModel model = createAndSaveModel(showcaseId);
         saveSourceImages(model.getId(), imageUrls);
-        modelGenerationEventPublisher.publishRequested(model.getId(), showcaseId);
+        long workflowId = modelGenerationWorkflowPort.saveRequested(showcaseId, idempotencyKey, 1);
+        modelGenerationEventPublisher.publishRequested(
+                workflowId, model.getId(), showcaseId, idempotencyKey);
         return model;
     }
 
     /**
      * 기존 3D 모델을 REQUESTED 상태로 재설정하거나, 없으면 새로 생성하고,
-     * 소스 이미지 저장 및 Outbox 이벤트 기록까지 단일 트랜잭션으로 처리한다.
+     * 소스 이미지 · 새 워크플로우 행 저장 및 Outbox 이벤트 기록까지 단일 트랜잭션으로 처리한다.
+     *
+     * <p>재시도는 {@code attempt_no} 를 증가시킨 새 워크플로우 행을 INSERT 한다 (ADR-010 — UPDATE 금지).</p>
      */
     @Transactional
-    public Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId, List<String> imageUrls) {
+    public Showcase3dModel resetOrCreateModelAndSaveSourceImages(Long showcaseId,
+                                                                 String idempotencyKey,
+                                                                 List<String> imageUrls) {
         Showcase3dModel model = showcase3dModelPort.findByShowcaseId(showcaseId)
                 .map(existing -> showcase3dModelPort.save(
                         existing.resetRequest(GENERATION_PROVIDER)))
                 .orElseGet(() -> createAndSaveModel(showcaseId));
         saveSourceImages(model.getId(), imageUrls);
-        modelGenerationEventPublisher.publishRequested(model.getId(), showcaseId);
+        int attemptNo = modelGenerationWorkflowPort.nextAttemptNo(showcaseId);
+        long workflowId = modelGenerationWorkflowPort.saveRequested(
+                showcaseId, idempotencyKey, attemptNo);
+        modelGenerationEventPublisher.publishRequested(
+                workflowId, model.getId(), showcaseId, idempotencyKey);
         return model;
     }
 

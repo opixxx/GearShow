@@ -94,5 +94,29 @@ class ModelGenerationWorkflowJpaRepositoryTest {
                     .extracting(ModelGenerationWorkflowJpaEntity::getAttemptNo)
                     .containsExactlyInAnyOrder(1, 2);
         }
+
+        @Test
+        @DisplayName("findTopByShowcaseIdOrderByAttemptNoDesc 는 가장 큰 attempt_no 행을 반환한다")
+        void findTopByShowcaseId_returnsLatest() {
+            repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(30L, "idem-x1", 1));
+            repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(30L, "idem-x2", 2));
+            repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(30L, "idem-x3", 5));
+
+            Optional<ModelGenerationWorkflowJpaEntity> latest =
+                    repository.findTopByShowcaseIdOrderByAttemptNoDesc(30L);
+
+            assertThat(latest).isPresent();
+            assertThat(latest.get().getAttemptNo()).isEqualTo(5);
+            assertThat(latest.get().getIdempotencyKey()).isEqualTo("idem-x3");
+        }
+
+        @Test
+        @DisplayName("findTopByShowcaseIdOrderByAttemptNoDesc 는 이력이 없으면 빈 Optional")
+        void findTopByShowcaseId_noHistory_returnsEmpty() {
+            assertThat(repository.findTopByShowcaseIdOrderByAttemptNoDesc(999L)).isEmpty();
+        }
     }
 }
