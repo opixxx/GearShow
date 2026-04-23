@@ -78,7 +78,7 @@ class ShowcaseServiceIntegrationTest {
                 ownerId, null, Category.BOOTS, "Nike", "DJ2839",
                 "테스트 쇼케이스", "테스트 설명",
                 "270", ConditionGrade.A, 5, false, 0, false,
-                null, null);
+                null, null, null);
     }
 
     private List<String> createFakeImageKeys(int count) {
@@ -123,7 +123,7 @@ class ShowcaseServiceIntegrationTest {
                     ConditionGrade.A, 5, false, 0, false,
                     new CreateShowcaseCommand.BootsSpecCommand(
                             StudType.FG, "Mercurial", "2025", "천연잔디", null),
-                    null);
+                    null, null);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -149,7 +149,8 @@ class ShowcaseServiceIntegrationTest {
                     ConditionGrade.S, 0, false, 0, false,
                     null,
                     new CreateShowcaseCommand.UniformSpecCommand(
-                            "Liverpool", "24-25", "EPL", KitType.HOME, null));
+                            "Liverpool", "24-25", "EPL", KitType.HOME, null),
+                    null);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -172,7 +173,7 @@ class ShowcaseServiceIntegrationTest {
                     1L, null, Category.BOOTS, "Adidas", null,
                     "카탈로그 없이 등록", null, null,
                     ConditionGrade.B, 0, false, 0, false,
-                    null, null);
+                    null, null, null);
 
             // When
             CreateShowcaseResult result = createShowcaseUseCase.create(
@@ -192,7 +193,7 @@ class ShowcaseServiceIntegrationTest {
                     1L, null, Category.BOOTS, "Nike", null,
                     "테스트", null, null,
                     ConditionGrade.A, 0, false, 0, true,
-                    null, null);
+                    null, null, null);
             List<String> images = createFakeImageKeys(1);
             List<String> modelSourceImages = createFakeImageKeys(4);
 
@@ -341,7 +342,7 @@ class ShowcaseServiceIntegrationTest {
                     1L, null, Category.BOOTS, "Nike", null,
                     "테스트", null, null,
                     ConditionGrade.A, 0, false, 5, false,
-                    null, null);
+                    null, null, null);
 
             // When & Then
             List<String> imageKeys = createFakeImageKeys(1);

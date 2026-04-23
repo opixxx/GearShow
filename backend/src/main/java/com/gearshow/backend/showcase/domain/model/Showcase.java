@@ -5,6 +5,7 @@ import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseStatusTransitionException;
 import com.gearshow.backend.showcase.domain.exception.NotOwnerShowcaseException;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseUpdate;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.Builder;
@@ -33,6 +34,8 @@ public class Showcase {
     private final int wearCount;
     private final boolean forSale;
     private final String primaryImageUrl;
+    /** 이미지 조합의 SHA-256 해시. 10분 창 내 중복 등록 감지용. null 허용 (기존 데이터 보호). */
+    private final ContentHash contentHash;
     private final boolean has3dModel;
     private final ShowcaseStatus status;
     private final Instant createdAt;
@@ -43,7 +46,7 @@ public class Showcase {
                      Category category, String brand, String modelCode,
                      String title, String description, String userSize,
                      ConditionGrade conditionGrade, int wearCount, boolean forSale,
-                     String primaryImageUrl, boolean has3dModel,
+                     String primaryImageUrl, ContentHash contentHash, boolean has3dModel,
                      ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -58,6 +61,7 @@ public class Showcase {
         this.wearCount = wearCount;
         this.forSale = forSale;
         this.primaryImageUrl = primaryImageUrl;
+        this.contentHash = contentHash;
         this.has3dModel = has3dModel;
         this.status = status;
         this.createdAt = createdAt;
@@ -87,7 +91,8 @@ public class Showcase {
                                   String title, String description,
                                   String userSize, ConditionGrade conditionGrade,
                                   int wearCount, boolean forSale,
-                                  String primaryImageUrl) {
+                                  String primaryImageUrl,
+                                  ContentHash contentHash) {
         validate(ownerId, category, brand, title, conditionGrade);
 
         Instant now = Instant.now();
@@ -104,6 +109,7 @@ public class Showcase {
                 .wearCount(wearCount)
                 .forSale(forSale)
                 .primaryImageUrl(primaryImageUrl)
+                .contentHash(contentHash)
                 .has3dModel(false)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
@@ -262,6 +268,7 @@ public class Showcase {
                 .wearCount(this.wearCount)
                 .forSale(this.forSale)
                 .primaryImageUrl(this.primaryImageUrl)
+                .contentHash(this.contentHash)
                 .has3dModel(this.has3dModel)
                 .status(this.status)
                 .createdAt(this.createdAt)

@@ -57,7 +57,7 @@ class CommentServiceIntegrationTest {
                 1L, null, Category.BOOTS, "Nike", null,
                 "테스트 쇼케이스", null, null,
                 ConditionGrade.A, 0, false, 0, false,
-                null, null);
+                null, null, null);
         List<String> imageKeys = List.of("showcases/images/test.jpg");
         CreateShowcaseResult result = createShowcaseUseCase.create(command, imageKeys, List.of());
         showcaseId = result.showcaseId();

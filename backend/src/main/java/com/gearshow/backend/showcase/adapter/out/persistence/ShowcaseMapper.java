@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
 import com.gearshow.backend.showcase.domain.model.Showcase;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +25,7 @@ public class ShowcaseMapper {
                 .wearCount(showcase.getWearCount())
                 .forSale(showcase.isForSale())
                 .primaryImageUrl(showcase.getPrimaryImageUrl())
+                .contentHash(showcase.getContentHash() != null ? showcase.getContentHash().value() : null)
                 .has3dModel(showcase.isHas3dModel())
                 .status(showcase.getStatus())
                 .createdAt(showcase.getCreatedAt())
@@ -46,6 +48,7 @@ public class ShowcaseMapper {
                 .wearCount(entity.getWearCount())
                 .forSale(entity.isForSale())
                 .primaryImageUrl(entity.getPrimaryImageUrl())
+                .contentHash(entity.getContentHash() != null ? ContentHash.of(entity.getContentHash()) : null)
                 .has3dModel(entity.isHas3dModel())
                 .status(entity.getStatus())
                 .createdAt(entity.getCreatedAt())

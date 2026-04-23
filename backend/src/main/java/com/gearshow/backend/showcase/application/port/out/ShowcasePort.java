@@ -1,6 +1,7 @@
 package com.gearshow.backend.showcase.application.port.out;
 
 import com.gearshow.backend.showcase.domain.model.Showcase;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 
 import java.time.Instant;
@@ -58,4 +59,18 @@ public interface ShowcasePort {
      * 다른 필드를 건드리지 않아 동시 수정 시 lost update를 방지한다.
      */
     void updateHas3dModel(Long showcaseId, boolean has3dModel);
+
+    /**
+     * 같은 소유자가 지정 시각 이후 같은 {@code contentHash} 로 생성한 가장 최근 쇼케이스를 조회한다.
+     *
+     * <p>ADR-011 ②: API 경계 Idempotency-Key 가 실패한 경우를 위한 내용 기반 fallback.
+     * 인덱스 {@code idx_showcase_owner_content_created} 를 활용한다.</p>
+     *
+     * @param ownerId       소유자 ID
+     * @param contentHash   이미지 조합 해시
+     * @param createdAfter  조회 대상 시각 하한 (예: 현재 시각 - 10분)
+     * @return 존재하면 해당 쇼케이스, 없으면 {@code Optional.empty()}
+     */
+    Optional<Showcase> findRecentByOwnerAndContentHash(Long ownerId, ContentHash contentHash,
+                                                      Instant createdAfter);
 }

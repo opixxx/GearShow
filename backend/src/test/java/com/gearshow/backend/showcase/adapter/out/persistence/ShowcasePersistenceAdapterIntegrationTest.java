@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -193,9 +194,81 @@ class ShowcasePersistenceAdapterIntegrationTest {
         }
     }
 
+    @Nested
+    @DisplayName("findRecentByOwnerAndContentHash")
+    class FindRecentByOwnerAndContentHash {
+
+        @Test
+        @DisplayName("창 내 같은 소유자·같은 해시 쇼케이스를 반환한다")
+        void within_window_same_owner_same_hash_returns_existing() {
+            // given
+            com.gearshow.backend.showcase.domain.vo.ContentHash hash =
+                    com.gearshow.backend.showcase.domain.vo.ContentHash.of("a".repeat(64));
+            Instant now = Instant.now();
+            adapter.save(showcaseWithHash(1L, hash, now.minus(Duration.ofMinutes(5))));
+
+            // when: threshold 는 현재 시각 - 10분
+            Instant threshold = now.minus(Duration.ofMinutes(10));
+
+            // then
+            assertThat(adapter.findRecentByOwnerAndContentHash(1L, hash, threshold))
+                    .isPresent();
+        }
+
+        @Test
+        @DisplayName("10분 창 밖 쇼케이스는 반환하지 않는다")
+        void outside_window_returns_empty() {
+            // given
+            com.gearshow.backend.showcase.domain.vo.ContentHash hash =
+                    com.gearshow.backend.showcase.domain.vo.ContentHash.of("b".repeat(64));
+            Instant now = Instant.now();
+            adapter.save(showcaseWithHash(1L, hash, now.minus(Duration.ofMinutes(15))));
+
+            // when
+            Instant threshold = now.minus(Duration.ofMinutes(10));
+
+            // then
+            assertThat(adapter.findRecentByOwnerAndContentHash(1L, hash, threshold))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("다른 소유자의 같은 해시는 반환하지 않는다")
+        void different_owner_returns_empty() {
+            // given
+            com.gearshow.backend.showcase.domain.vo.ContentHash hash =
+                    com.gearshow.backend.showcase.domain.vo.ContentHash.of("c".repeat(64));
+            Instant now = Instant.now();
+            adapter.save(showcaseWithHash(1L, hash, now.minus(Duration.ofMinutes(5))));
+
+            // when + then: 다른 ownerId
+            assertThat(adapter.findRecentByOwnerAndContentHash(2L, hash, now.minus(Duration.ofMinutes(10))))
+                    .isEmpty();
+        }
+    }
+
     // ===== Helper =====
 
     private static final Instant FIXED_TIME = Instant.parse("2026-01-01T12:00:00Z");
+
+    private Showcase showcaseWithHash(Long ownerId,
+                                      com.gearshow.backend.showcase.domain.vo.ContentHash hash,
+                                      Instant createdAt) {
+        return Showcase.builder()
+                .ownerId(ownerId)
+                .catalogItemId(null)
+                .category(Category.BOOTS)
+                .brand("Nike")
+                .title("dedup-test")
+                .conditionGrade(ConditionGrade.A)
+                .wearCount(0)
+                .forSale(false)
+                .status(ShowcaseStatus.ACTIVE)
+                .contentHash(hash)
+                .createdAt(createdAt)
+                .updatedAt(createdAt)
+                .build();
+    }
 
     private Showcase createShowcase(String title) {
         return Showcase.builder()

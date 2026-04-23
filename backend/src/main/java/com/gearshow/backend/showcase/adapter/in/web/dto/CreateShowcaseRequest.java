@@ -5,9 +5,11 @@ import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -49,6 +51,14 @@ public record CreateShowcaseRequest(
 
         List<String> modelSourceImageKeys,
 
+        /**
+         * 이미지 조합의 SHA-256 해시 (hex 64자). 10분 창 내 중복 등록 감지용. optional.
+         * 누락 시 중복 검증을 건너뛴다.
+         */
+        @Pattern(regexp = "^[0-9a-f]{64}$",
+                message = "contentHash 는 소문자 SHA-256 hex 64자여야 합니다")
+        String contentHash,
+
         // ── 축구화 스펙 (BOOTS) ──
         StudType studType,
         String siloName,
@@ -86,7 +96,8 @@ public record CreateShowcaseRequest(
                 primaryImageIndex != null ? primaryImageIndex : 0,
                 !safeModelSourceKeys.isEmpty(),
                 buildBootsSpec(),
-                buildUniformSpec());
+                buildUniformSpec(),
+                contentHash != null ? ContentHash.of(contentHash) : null);
     }
 
     /** 축구화 스펙 필드가 있으면 BootsSpecCommand를 생성한다. */

@@ -81,7 +81,7 @@ class CreateShowcaseFacadeS3KeyValidationTest {
                 1L, null, Category.BOOTS, "Nike", null,
                 "S3 키 검증 테스트", null, "270mm",
                 ConditionGrade.A, 0, false, 0, false,
-                null, null);
+                null, null, null);
     }
 
     @Test

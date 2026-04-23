@@ -4,6 +4,7 @@ import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 
 /**
  * 쇼케이스 등록 커맨드.
@@ -28,7 +29,9 @@ public record CreateShowcaseCommand(
         int primaryImageIndex,
         boolean hasModelSourceImages,
         BootsSpecCommand bootsSpec,
-        UniformSpecCommand uniformSpec
+        UniformSpecCommand uniformSpec,
+        /** 이미지 조합의 SHA-256 해시. 10분 창 내 중복 등록 감지용. null 허용. */
+        ContentHash contentHash
 ) {
 
     /**

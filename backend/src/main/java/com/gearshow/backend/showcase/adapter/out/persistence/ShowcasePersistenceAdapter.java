@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.out.persistence;
 
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.model.Showcase;
+import com.gearshow.backend.showcase.domain.vo.ContentHash;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -88,5 +89,14 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     @Override
     public void updateHas3dModel(Long showcaseId, boolean has3dModel) {
         showcaseJpaRepository.updateHas3dModel(showcaseId, has3dModel);
+    }
+
+    @Override
+    public Optional<Showcase> findRecentByOwnerAndContentHash(Long ownerId, ContentHash contentHash,
+                                                              Instant createdAfter) {
+        return showcaseJpaRepository
+                .findTop1ByOwnerIdAndContentHashAndCreatedAtAfterOrderByCreatedAtDesc(
+                        ownerId, contentHash.value(), createdAfter)
+                .map(showcaseMapper::toDomain);
     }
 }
