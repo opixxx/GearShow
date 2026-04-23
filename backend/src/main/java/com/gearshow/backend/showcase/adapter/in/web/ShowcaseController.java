@@ -28,6 +28,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -89,49 +90,46 @@ public class ShowcaseController {
      * 쇼케이스를 등록한다.
      * 클라이언트가 Presigned URL로 S3에 이미지를 직접 업로드한 후 S3 키 목록을 전달한다.
      *
-     * <p><b>멱등성</b>: {@code Idempotency-Key} 헤더가 제공되면 같은 키로 재도달한 요청은
-     * 캐싱된 응답을 반환한다 (ADR-011 ①). 비즈니스 로직 실패 시에는 보상 삭제를 수행하여
-     * 동일 키 재시도를 허용한다. 헤더 누락 시 기존 동작을 유지한다 (Phase 1 초기).</p>
+     * <p><b>멱등성</b>: {@code Idempotency-Key} 헤더는 필수다 (ADR-011 ①). 같은 키로 재도달한
+     * 요청은 캐싱된 응답을 그대로 반환하고, 비즈니스 로직 실패 시에는 보상 삭제로 동일 키
+     * 재시도를 허용한다. 누락 시 400 {@code MISSING_REQUIRED_HEADER} 를 반환한다.</p>
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Map<String, Object>> create(
             Authentication authentication,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateShowcaseRequest request) {
 
         Long ownerId = (Long) authentication.getPrincipal();
 
-        if (idempotencyKey != null) {
-            ApiIdempotencyAcquireResult acquired =
-                    apiIdempotencyUseCase.acquire(idempotencyKey, ownerId, IDEMPOTENCY_TTL);
-            if (acquired instanceof ApiIdempotencyAcquireResult.Cached cached) {
-                return apiResponseCodec.decode(cached.responseBody(), CACHED_RESPONSE_TYPE);
-            }
+        ApiIdempotencyAcquireResult acquired =
+                apiIdempotencyUseCase.acquire(idempotencyKey, ownerId, IDEMPOTENCY_TTL);
+        if (acquired instanceof ApiIdempotencyAcquireResult.Cached cached) {
+            return apiResponseCodec.decode(cached.responseBody(), CACHED_RESPONSE_TYPE);
         }
 
         ApiResponse<Map<String, Object>> response;
         try {
             CreateShowcaseResult result = createShowcaseUseCase.create(
-                    request.toCommand(ownerId),
+                    request.toCommand(ownerId, idempotencyKey),
                     request.imageKeys(),
                     request.modelSourceImageKeys() != null ? request.modelSourceImageKeys() : List.of());
 
-            response = ApiResponse.of(201, "쇼케이스 등록 성공",
-                    Map.of("showcaseId", result.showcaseId(),
-                            "model3dStatus", result.model3dStatus() != null
-                                    ? result.model3dStatus().name() : "null"));
+            // model3dStatus 는 3D 소스 이미지 없이 등록되거나 Deduped 경로에서 null 일 수 있으므로
+            // HashMap 으로 JSON null 직렬화를 보장한다 (Map.of 는 null 값을 허용하지 않음).
+            Map<String, Object> body = new HashMap<>();
+            body.put("showcaseId", result.showcaseId());
+            body.put("model3dStatus",
+                    result.model3dStatus() != null ? result.model3dStatus().name() : null);
+            response = ApiResponse.of(201, "쇼케이스 등록 성공", body);
         } catch (RuntimeException e) {
             // 비즈니스 실패 시 IN_PROGRESS 좀비 방지 — 보상 삭제로 동일 키 재시도 허용
-            if (idempotencyKey != null) {
-                discardSilently(idempotencyKey);
-            }
+            discardSilently(idempotencyKey);
             throw e;
         }
 
-        if (idempotencyKey != null) {
-            cacheResponseSilently(idempotencyKey, response);
-        }
+        cacheResponseSilently(idempotencyKey, response);
         return response;
     }
 

@@ -20,7 +20,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>이벤트 발행 흐름:</p>
  * <ol>
- *   <li>{@link ModelGenerationRequestMessage} 페이로드 생성 (messageId UUID 포함)</li>
+ *   <li>{@code Idempotency-Key} 를 {@link ShowcaseWorkflowEventIds} 로 해시하여
+ *       결정적 {@code messageId}(= Outbox {@code event_id}) 계산 (ADR-011 ③)</li>
+ *   <li>{@link ModelGenerationRequestMessage} 페이로드 생성</li>
  *   <li>Jackson 으로 JSON 직렬화</li>
  *   <li>{@link OutboxMessage} 도메인 객체 생성 후 Outbox 테이블에 저장</li>
  * </ol>
@@ -38,9 +40,13 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
     private final ObjectMapper objectMapper;
 
     @Override
-    public void publishRequested(Long showcase3dModelId, Long showcaseId) {
+    public void publishRequested(Long workflowId,
+                                 Long showcase3dModelId,
+                                 Long showcaseId,
+                                 String idempotencyKey) {
+        String messageId = ShowcaseWorkflowEventIds.deriveMessageId(idempotencyKey);
         ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(
-                showcase3dModelId, showcaseId);
+                messageId, workflowId, showcase3dModelId, showcaseId);
         String payload = serialize(message);
 
         OutboxMessage outboxMessage = OutboxMessage.create(
@@ -49,7 +55,7 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
                 EVENT_TYPE,
                 KafkaConfig.MODEL_GENERATION_REQUEST_TOPIC,
                 String.valueOf(showcaseId),
-                message.messageId(),
+                messageId,
                 payload
         );
         outboxMessagePort.save(outboxMessage);

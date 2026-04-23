@@ -28,19 +28,28 @@ import java.time.Instant;
 @Entity
 @Table(
         name = "model_generation_workflow",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_mgw_idempotency_key",
-                columnNames = "idempotency_key"
-        ),
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_mgw_idempotency_key",
+                        columnNames = "idempotency_key"
+                ),
+                // P1-B-γ 리뷰 대응: 서로 다른 idempotency_key 로 같은 쇼케이스에 동시 재시도가 들어오면
+                // nextAttemptNo → saveRequested 사이 race 로 동일 attempt_no 가 중복 INSERT 될 수 있다.
+                // DB 레벨 UNIQUE 로 직렬화를 강제해 재시도 이력 무결성을 보장한다.
+                @UniqueConstraint(
+                        name = "uk_mgw_showcase_attempt",
+                        columnNames = {"showcase_id", "attempt_no"}
+                )
+        },
         indexes = {
                 @Index(name = "idx_mgw_step_heartbeat",
                         columnList = "current_step, heartbeat_at"),
                 @Index(name = "idx_mgw_step_tripo_succeeded",
                         columnList = "current_step, tripo_succeeded_at"),
                 @Index(name = "idx_mgw_step_last_polled",
-                        columnList = "current_step, last_polled_at"),
-                @Index(name = "idx_mgw_showcase_attempt",
-                        columnList = "showcase_id, attempt_no")
+                        columnList = "current_step, last_polled_at")
+                // 기존 idx_mgw_showcase_attempt 는 uk_mgw_showcase_attempt UNIQUE 가 동일 prefix 를
+                // 커버하므로 삭제했다 — UNIQUE 인덱스가 조회 인덱스 역할을 겸한다.
         }
 )
 @Getter

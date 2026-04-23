@@ -67,7 +67,9 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
         //    Tripo 중복 호출을 방지한다 (이미 이전 생성 요청이 진행 중이거나 완료됨).
         ModelStatus modelStatus = switch (outcome) {
             case CreateShowcaseOutcome.Created created ->
-                    requestModelIfNeeded(created.showcase().getId(), modelSourceImageKeys);
+                    requestModelIfNeeded(created.showcase().getId(),
+                            command.idempotencyKey(),
+                            modelSourceImageKeys);
             case CreateShowcaseOutcome.Deduped deduped ->
                     deduped.showcase().isHas3dModel() ? ModelStatus.COMPLETED : null;
         };
@@ -102,12 +104,14 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
     /**
      * 3D 모델 소스 이미지 키가 있으면 비동기로 생성을 요청한다.
      */
-    private ModelStatus requestModelIfNeeded(Long showcaseId, List<String> modelSourceImageKeys) {
+    private ModelStatus requestModelIfNeeded(Long showcaseId,
+                                              String idempotencyKey,
+                                              List<String> modelSourceImageKeys) {
         if (modelSourceImageKeys == null || modelSourceImageKeys.isEmpty()) {
             return null;
         }
         ModelGenerationResult result = requestModelGenerationUseCase.requestOnCreate(
-                showcaseId, modelSourceImageKeys);
+                showcaseId, idempotencyKey, modelSourceImageKeys);
         return result.modelStatus();
     }
 }

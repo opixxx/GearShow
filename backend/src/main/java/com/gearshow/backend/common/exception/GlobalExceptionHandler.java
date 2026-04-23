@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -41,6 +42,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.error(400, "INVALID_INPUT", message));
+    }
+
+    /**
+     * 필수 요청 헤더 누락 예외를 400 으로 처리한다.
+     *
+     * <p>예: {@code Idempotency-Key} 헤더를 required=true 로 선언한 엔드포인트에서
+     * 헤더가 빠진 경우 Spring MVC 가 {@link MissingRequestHeaderException} 을 던진다.</p>
+     */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingRequestHeader(
+            MissingRequestHeaderException e) {
+        ErrorCode errorCode = ErrorCode.MISSING_REQUIRED_HEADER;
+        String message = errorCode.getMessage() + ": " + e.getHeaderName();
+        log.warn("필수 헤더 누락: header={}", e.getHeaderName());
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ApiResponse.error(errorCode.getStatus(), errorCode.name(), message));
     }
 
     /**

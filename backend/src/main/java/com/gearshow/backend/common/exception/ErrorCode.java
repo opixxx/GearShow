@@ -46,6 +46,7 @@ public enum ErrorCode {
     SHOWCASE_MIN_IMAGE_REQUIRED(400, "최소 1개의 이미지가 필요합니다"),
     SHOWCASE_PRIMARY_IMAGE_REQUIRED(400, "대표 이미지가 반드시 1개 존재해야 합니다"),
     SHOWCASE_MODEL_ALREADY_GENERATING(400, "3D 모델이 이미 생성 중입니다"),
+    SHOWCASE_MODEL_RETRY_IN_PROGRESS(409, "동시 재시도 요청이 감지되어 처리를 중단했습니다. 잠시 후 다시 시도해 주세요"),
     SHOWCASE_MODEL_INVALID_STATUS_TRANSITION(400, "유효하지 않은 3D 모델 상태 전이입니다"),
     SHOWCASE_MODEL_INVALID_TASK_ID(400, "유효하지 않은 3D 모델 생성 task_id 입니다"),
     SHOWCASE_MODEL_GENERATION_START_FAILED(500, "3D 모델 생성을 시작하지 못했습니다"),
@@ -110,7 +111,8 @@ public enum ErrorCode {
     IDEMPOTENCY_OWNERSHIP_MISMATCH(403, "다른 사용자의 멱등성 키는 사용할 수 없습니다"),
     IDEMPOTENCY_RESPONSE_SERIALIZATION_FAILED(500, "요청 처리 중 오류가 발생했습니다"),
     IDEMPOTENCY_KEY_MISSING_AFTER_ACQUIRE(500, "요청 처리 중 오류가 발생했습니다"),
-    IDEMPOTENCY_INVALID_STATUS_TRANSITION(500, "요청 처리 중 오류가 발생했습니다");
+    IDEMPOTENCY_INVALID_STATUS_TRANSITION(500, "요청 처리 중 오류가 발생했습니다"),
+    MISSING_REQUIRED_HEADER(400, "필수 요청 헤더가 누락되었습니다");
 
     private final int status;
     private final String message;

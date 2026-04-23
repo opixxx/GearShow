@@ -123,7 +123,13 @@ public class AuthStepDefinitions {
     @And("응답의 data의 {string} 필드는 {string}이다")
     public void 응답_data_필드_값_확인(String fieldName, String expectedValue) {
         Map<String, Object> data = extractData(context.getLastResponse());
-        assertThat(data.get(fieldName).toString()).isEqualTo(expectedValue);
+        Object actual = data.get(fieldName);
+        if ("null".equals(expectedValue)) {
+            // JSON null 을 가리키는 시나리오 표현 — Java null 과 매핑
+            assertThat(actual).isNull();
+        } else {
+            assertThat(actual).asString().isEqualTo(expectedValue);
+        }
     }
 
     // ===== Helper =====

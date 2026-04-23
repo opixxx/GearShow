@@ -31,7 +31,13 @@ public record CreateShowcaseCommand(
         BootsSpecCommand bootsSpec,
         UniformSpecCommand uniformSpec,
         /** 이미지 조합의 SHA-256 해시. 10분 창 내 중복 등록 감지용. null 허용. */
-        ContentHash contentHash
+        ContentHash contentHash,
+        /**
+         * API {@code Idempotency-Key} 헤더 값 (ADR-011 ①).
+         * 컨트롤러가 필수화했으므로 non-null / non-blank. 이후 Outbox {@code event_id} 의
+         * 결정적 파생(ADR-011 ③)과 {@code model_generation_workflow.idempotency_key} UNIQUE 식별자로 사용한다.
+         */
+        String idempotencyKey
 ) {
 
     /**
