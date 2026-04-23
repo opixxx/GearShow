@@ -577,12 +577,13 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 
 ## 11. 구현 Phase 분할
 
-| Phase | 내용 | 의존 | 난이도 |
-|---|---|---|---|
-| **P0-ADR** | ADR-010/011/012 작성 및 리뷰 | — | 낮음 |
-| **P1-A** | DB 스키마 마이그레이션 | P0 | 중 |
-| **P1-B** | API: `/showcase/images/upload-urls`, `/showcase` + Idempotency-Key | P1-A | 중 |
-| **P1-C** | Outbox Relay (기존 재사용) + Kafka 토픽 구성 | P1-B | 낮음 |
+| Phase | 내용 | 의존 | 난이도 | 진행 |
+|---|---|---|---|---|
+| **P0-ADR** | ADR-010/011/012 작성 및 리뷰 | — | 낮음 | ✅ PR #38 |
+| **P1-A** | DB 스키마 마이그레이션 | P0 | 중 | ✅ PR #39 |
+| **P1-B-α+β** | `Idempotency-Key` 헤더 처리 + `ContentHash` VO + 10분 창 dedup | P1-A | 중 | ✅ PR #40 |
+| **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | 🚧 본 PR |
+| **P1-C** | Outbox Relay (기존 재사용) + Kafka 토픽 구성 | P1-B-γ | 낮음 | ⏳ |
 | **P1-D** | Worker: TX1/TX2 + Tripo upload/task + pending_task 선저장 | P1-C | 높음 |
 | **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D | 중 |
 | **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 |
