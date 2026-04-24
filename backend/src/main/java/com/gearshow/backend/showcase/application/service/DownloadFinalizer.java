@@ -45,7 +45,7 @@ public class DownloadFinalizer {
      * @return 완료 이벤트까지 발행된 경우 {@code true}. affected=0 으로 skip 된 모든 경로는 {@code false}.
      */
     @Transactional
-    public boolean finalize(Long workflowId, Long showcaseId, GenerationResult result) {
+    public boolean finalizeDownload(Long workflowId, Long showcaseId, GenerationResult result) {
         int workflowAffected = workflowPort.markCompleted(workflowId);
         if (workflowAffected == 0) {
             log.info("markCompleted affected=0 — 다른 Downloader 가 이미 처리. skip. "

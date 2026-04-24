@@ -68,7 +68,7 @@ class DownloadFinalizerTest {
                 eq(SHOWCASE_ID), eq(MODEL_URL), eq(PREVIEW_URL), any(Instant.class)))
                 .willReturn(1);
 
-        boolean completed = finalizer.finalize(WORKFLOW_ID, SHOWCASE_ID, anyResult());
+        boolean completed = finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult());
 
         assertThat(completed).isTrue();
         verify(eventPublisher, times(1)).publishCompleted(
@@ -80,7 +80,7 @@ class DownloadFinalizerTest {
     void workflowReentry_returnsFalse() {
         given(workflowPort.markCompleted(WORKFLOW_ID)).willReturn(0);
 
-        boolean completed = finalizer.finalize(WORKFLOW_ID, SHOWCASE_ID, anyResult());
+        boolean completed = finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult());
 
         assertThat(completed).isFalse();
         verify(showcase3dModelPort, never()).markCompletedByShowcaseId(
@@ -97,7 +97,7 @@ class DownloadFinalizerTest {
                 eq(SHOWCASE_ID), anyString(), anyString(), any(Instant.class)))
                 .willReturn(0);
 
-        assertThatThrownBy(() -> finalizer.finalize(WORKFLOW_ID, SHOWCASE_ID, anyResult()))
+        assertThatThrownBy(() -> finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult()))
                 .isInstanceOf(IllegalStateException.class);
         verify(eventPublisher, never()).publishCompleted(
                 anyLong(), anyLong(), anyString(), anyString());

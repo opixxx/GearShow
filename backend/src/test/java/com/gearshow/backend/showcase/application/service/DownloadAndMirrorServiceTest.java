@@ -140,11 +140,11 @@ class DownloadAndMirrorServiceTest {
         }
 
         @Test
-        @DisplayName("Happy: 락 안에서 DownloadFinalizer.finalize 호출")
+        @DisplayName("Happy: 락 안에서 DownloadFinalizer.finalizeDownload 호출")
         void happy_delegatesToFinalizer() {
             service.download(WORKFLOW_ID, TASK_ID);
 
-            verify(downloadFinalizer, times(1)).finalize(
+            verify(downloadFinalizer, times(1)).finalizeDownload(
                     eq(WORKFLOW_ID), eq(SHOWCASE_ID), any());
         }
     }
@@ -164,7 +164,7 @@ class DownloadAndMirrorServiceTest {
             service.download(WORKFLOW_ID, TASK_ID);
 
             verify(workflowLockPort, never()).withLock(anyLong(), any());
-            verify(downloadFinalizer, never()).finalize(anyLong(), anyLong(), any());
+            verify(downloadFinalizer, never()).finalizeDownload(anyLong(), anyLong(), any());
         }
 
         @Test
@@ -179,7 +179,7 @@ class DownloadAndMirrorServiceTest {
 
             service.download(WORKFLOW_ID, TASK_ID);
 
-            verify(downloadFinalizer, never()).finalize(anyLong(), anyLong(), any());
+            verify(downloadFinalizer, never()).finalizeDownload(anyLong(), anyLong(), any());
         }
 
         @Test
@@ -190,7 +190,7 @@ class DownloadAndMirrorServiceTest {
             given(modelGenerationClient.fetchResult(TASK_ID, SHOWCASE_ID))
                     .willReturn(new GenerationResult(MODEL_URL, PREVIEW_URL));
             doThrow(new IllegalStateException("Showcase3dModel 행 누락"))
-                    .when(downloadFinalizer).finalize(anyLong(), anyLong(), any());
+                    .when(downloadFinalizer).finalizeDownload(anyLong(), anyLong(), any());
 
             service.download(WORKFLOW_ID, TASK_ID);  // throw 금지
         }
@@ -203,7 +203,7 @@ class DownloadAndMirrorServiceTest {
             given(modelGenerationClient.fetchResult(TASK_ID, SHOWCASE_ID))
                     .willReturn(new GenerationResult(MODEL_URL, PREVIEW_URL));
             doThrow(new DataAccessResourceFailureException("DB 일시 오류"))
-                    .when(downloadFinalizer).finalize(anyLong(), anyLong(), any());
+                    .when(downloadFinalizer).finalizeDownload(anyLong(), anyLong(), any());
 
             service.download(WORKFLOW_ID, TASK_ID);  // throw 금지
         }

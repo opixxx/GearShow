@@ -94,7 +94,7 @@ public class DownloadAndMirrorService implements DownloadAndMirrorUseCase {
         Long workflowId = snapshot.id();
         try {
             workflowLockPort.withLock(workflowId, () ->
-                    downloadFinalizer.finalize(workflowId, snapshot.showcaseId(), result));
+                    downloadFinalizer.finalizeDownload(workflowId, snapshot.showcaseId(), result));
         } catch (WorkflowLockBusyException e) {
             log.warn("TX_final 락 busy — 다른 Downloader 가 처리 중 추정. skip. "
                     + "workflowId: {}", workflowId);
