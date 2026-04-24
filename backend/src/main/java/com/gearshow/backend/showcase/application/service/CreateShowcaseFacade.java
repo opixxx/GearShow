@@ -35,12 +35,14 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
     private final CreateShowcaseService createShowcaseService;
     private final ImageStoragePort imageStoragePort;
     private final RequestModelGenerationUseCase requestModelGenerationUseCase;
+    private final TripoCircuitGuard tripoCircuitGuard;
 
     /**
      * 쇼케이스 등록 전체 흐름을 오케스트레이션한다.
      * <ol>
      *   <li>이미지 키 유효성 검증 (트랜잭션 밖)</li>
-     *   <li>S3 키 존재 여부 확인 — 클라이언트가 업로드를 완료했는지 검증 (트랜잭션 밖)</li>
+     *   <li>Tripo Circuit 가드 — 3D 생성 포함 요청이면 OPEN 상태 사전 거부 (503)</li>
+     *   <li>S3 키 존재 여부 확인 (트랜잭션 밖)</li>
      *   <li>S3 키 → URL 변환 후 DB 저장 (트랜잭션 안)</li>
      *   <li>3D 모델 생성 비동기 요청 (트랜잭션 밖)</li>
      * </ol>
@@ -49,22 +51,18 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
     public CreateShowcaseResult create(CreateShowcaseCommand command,
                                         List<String> imageKeys,
                                         List<String> modelSourceImageKeys) {
-        // 1. 이미지 키 유효성 검증
         validateImageKeys(imageKeys, command.primaryImageIndex());
-
-        // 2. S3 실제 존재 여부 확인
+        rejectIfTripoCircuitOpen(modelSourceImageKeys);
         validateKeysExist(imageKeys);
 
-        // 3. S3 키 → URL 변환 후 DB 저장
         List<String> imageUrls = imageKeys.stream()
                 .map(imageStoragePort::toUrl)
                 .toList();
         CreateShowcaseOutcome outcome = createShowcaseService.saveShowcaseWithSpec(command, imageUrls);
         Showcase saved = outcome.showcase();
 
-        // 4. 3D 모델 비동기 요청
-        //    ADR-011 ②: content_hash 기반 dedup 히트 시엔 기존 쇼케이스 상태를 그대로 사용해
-        //    Tripo 중복 호출을 방지한다 (이미 이전 생성 요청이 진행 중이거나 완료됨).
+        // ADR-011 ②: content_hash 기반 dedup 히트 시엔 기존 쇼케이스 상태를 그대로 사용해
+        // Tripo 중복 호출을 방지한다 (이미 이전 생성 요청이 진행 중이거나 완료됨).
         ModelStatus modelStatus = switch (outcome) {
             case CreateShowcaseOutcome.Created created ->
                     requestModelIfNeeded(created.showcase().getId(),
@@ -75,6 +73,17 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
         };
 
         return new CreateShowcaseResult(saved.getId(), modelStatus);
+    }
+
+    /**
+     * 3D 생성이 포함된 요청이면 Tripo Circuit 상태를 사전 확인해 OPEN 이면 즉시 503.
+     * {@code modelSourceImageKeys} 가 비어있으면 Tripo 와 무관하므로 건너뛴다.
+     */
+    private void rejectIfTripoCircuitOpen(List<String> modelSourceImageKeys) {
+        if (modelSourceImageKeys == null || modelSourceImageKeys.isEmpty()) {
+            return;
+        }
+        tripoCircuitGuard.rejectIfOpen();
     }
 
     /**
@@ -91,7 +100,6 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
 
     /**
      * 모든 이미지 키가 S3에 실제로 존재하는지 확인한다.
-     * 존재하지 않는 키가 하나라도 있으면 {@link InvalidImageKeyException}을 발생시킨다.
      */
     private void validateKeysExist(List<String> imageKeys) {
         for (String key : imageKeys) {

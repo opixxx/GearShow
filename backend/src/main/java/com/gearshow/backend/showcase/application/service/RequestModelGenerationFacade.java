@@ -35,6 +35,7 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     private final ShowcasePort showcasePort;
     private final Showcase3dModelPort showcase3dModelPort;
     private final ImageStoragePort imageStoragePort;
+    private final TripoCircuitGuard tripoCircuitGuard;
 
     @Override
     public ModelGenerationResult requestOnCreate(Long showcaseId,
@@ -65,6 +66,9 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
         validateOwner(showcaseId, ownerId);
         validateSourceImageCount(modelSourceImageKeys);
         validateNotAlreadyGenerating(showcaseId);
+
+        // Tripo Circuit OPEN 이면 재시도 요청도 즉시 거부 (CreateShowcaseFacade 와 UX 일관).
+        tripoCircuitGuard.rejectIfOpen();
 
         // 2. S3 키 → URL 변환 (트랜잭션 밖)
         List<String> imageUrls = modelSourceImageKeys.stream()

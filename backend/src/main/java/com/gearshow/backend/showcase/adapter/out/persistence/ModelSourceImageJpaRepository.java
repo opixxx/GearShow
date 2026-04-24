@@ -39,4 +39,18 @@ public interface ModelSourceImageJpaRepository extends JpaRepository<ModelSource
              ORDER BY m.sortOrder ASC
             """)
     List<String> findImageUrlsByShowcaseId(@Param("showcaseId") Long showcaseId);
+
+    /**
+     * showcaseId 로 ModelSourceImage 전체 행을 {@code sort_order} 순서로 조회한다.
+     * Tripo 업로드가 {@code AngleType} + {@code imageUrl} 을 함께 필요로 해 확장 조인 조회.
+     */
+    @Query("""
+            SELECT m
+              FROM ModelSourceImageJpaEntity m
+             INNER JOIN Showcase3dModelJpaEntity s
+                ON s.id = m.showcase3dModelId
+             WHERE s.showcaseId = :showcaseId
+             ORDER BY m.sortOrder ASC
+            """)
+    List<ModelSourceImageJpaEntity> findByShowcaseIdSorted(@Param("showcaseId") Long showcaseId);
 }

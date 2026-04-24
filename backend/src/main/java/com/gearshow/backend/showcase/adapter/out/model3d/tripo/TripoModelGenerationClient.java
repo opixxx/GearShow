@@ -64,13 +64,13 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     }
 
     @Override
-    public String startGeneration(Long showcase3dModelId, Long showcaseId) {
-        log.info("Tripo startGeneration - showcase3dModelId: {}, showcaseId: {}",
-                showcase3dModelId, showcaseId);
+    public String startGeneration(Long workflowId, Long showcaseId) {
+        log.info("Tripo startGeneration - workflowId: {}, showcaseId: {}",
+                workflowId, showcaseId);
 
-        // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서)
+        // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서) — showcaseId 로 직접 조회해 showcase3dModel 역조회 제거
         List<ModelSourceImage> sourceImages = modelSourceImagePort
-                .findByShowcase3dModelId(showcase3dModelId)
+                .findByShowcaseId(showcaseId)
                 .stream()
                 .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
                 .toList();
@@ -82,8 +82,7 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
         TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
                 tripoConfig.getModelVersion(), imageTokens);
         String taskId = tripoApiClient.createTask(taskRequest);
-        log.info("Tripo task 생성 성공 - showcase3dModelId: {}, taskId: {}",
-                showcase3dModelId, taskId);
+        log.info("Tripo task 생성 성공 - workflowId: {}, taskId: {}", workflowId, taskId);
         return taskId;
     }
 
