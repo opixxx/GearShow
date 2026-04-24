@@ -6,6 +6,8 @@ import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
+import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
+import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +26,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,6 +45,7 @@ import static org.mockito.Mockito.verify;
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("PrepareWorkflowService")
 class PrepareWorkflowServiceTest {
 
@@ -54,11 +61,21 @@ class PrepareWorkflowServiceTest {
     @Mock
     private ImageStoragePort imageStoragePort;
 
+    @Mock
+    private WorkflowLockPort workflowLockPort;
+
     private PrepareWorkflowService service;
 
     @BeforeEach
     void setUp() {
-        service = new PrepareWorkflowService(workflowPort, modelSourceImagePort, imageStoragePort);
+        service = new PrepareWorkflowService(
+                workflowPort, modelSourceImagePort, imageStoragePort, workflowLockPort);
+        // 기본: 락 획득 성공 → action 즉시 실행 (락 없는 것처럼 동작)
+        doAnswer(invocation -> {
+            WorkflowLockPort.LockedAction action = invocation.getArgument(1);
+            action.run();
+            return null;
+        }).when(workflowLockPort).withLock(anyLong(), any());
     }
 
     private WorkflowSnapshot requestedSnapshot() {
@@ -91,6 +108,20 @@ class PrepareWorkflowServiceTest {
 
             service.prepare(WORKFLOW_ID);
 
+            verify(modelSourceImagePort, never()).findImageUrlsByShowcaseId(anyLong());
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("분산 락이 busy 면 조건부 UPDATE 도 호출하지 않고 skip 한다")
+        void lockBusy_skipsWithoutAnyWrite() {
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            doThrow(new WorkflowLockBusyException(WORKFLOW_ID))
+                    .when(workflowLockPort).withLock(eq(WORKFLOW_ID), any());
+
+            service.prepare(WORKFLOW_ID);
+
+            verify(workflowPort, never()).updateStepIfCurrent(anyLong(), any(), any());
             verify(modelSourceImagePort, never()).findImageUrlsByShowcaseId(anyLong());
             verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
         }

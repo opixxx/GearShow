@@ -7,6 +7,7 @@
 # 구성:
 #   - MySQL 8.0 (포트 3306)
 #   - Kafka 3.9 (KRaft 모드, 포트 9092)
+#   - Redis 7 (포트 6379) — 3D 파이프라인 분산 락 (workflow:lock:*) 용
 #
 # 주의: 백엔드는 이 compose에 포함되지 않는다.
 #       개발자는 IDE(IntelliJ 등)에서 직접 실행하며
@@ -82,6 +83,29 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  redis:
+    # 3D 파이프라인 분산 락 (Redisson watchdog) + 향후 Poller 의 DelayedQueue·세마포어 대상.
+    # 로컬 개발자가 IDE 에서 실행하는 백엔드가 localhost:6379 로 접속.
+    image: redis:7.4-alpine
+    container_name: gearshow-redis
+    ports:
+      - "6379:6379"
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+      - "--save"
+      - "60"
+      - "1000"
+    volumes:
+      - gearshow-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   # ===========================================
   # Observability Stack (로컬 개발용)
   # ===========================================
@@ -150,5 +174,6 @@ services:
 volumes:
   gearshow-mysql-data:
   gearshow-kafka-data:
+  gearshow-redis-data:
   gearshow-prometheus-data:
   gearshow-grafana-data:

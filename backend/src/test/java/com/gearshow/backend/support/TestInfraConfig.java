@@ -97,6 +97,7 @@ public class TestInfraConfig {
         return mock(ModelGenerationClient.class);
     }
 
+
     /**
      * 테스트용 프로필 이미지 저장소 Stub.
      * 실제 S3 연동 없이 호출 내역만 추적하고 가짜 URL을 반환한다.
