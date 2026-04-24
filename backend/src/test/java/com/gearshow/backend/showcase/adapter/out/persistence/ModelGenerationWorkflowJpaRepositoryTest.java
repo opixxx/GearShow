@@ -1,5 +1,7 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
+import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -9,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,7 +49,7 @@ class ModelGenerationWorkflowJpaRepositoryTest {
             assertThat(found.get().getShowcaseId()).isEqualTo(10L);
             assertThat(found.get().getAttemptNo()).isEqualTo(1);
             assertThat(found.get().getCurrentStep())
-                    .isEqualTo(ModelGenerationWorkflowJpaEntity.CurrentStep.REQUESTED);
+                    .isEqualTo(WorkflowStep.REQUESTED);
             assertThat(found.get().getRetryCount()).isZero();
             assertThat(found.get().getCreatedAt()).isNotNull();
             assertThat(found.get().getUpdatedAt()).isNotNull();
@@ -117,6 +120,82 @@ class ModelGenerationWorkflowJpaRepositoryTest {
         @DisplayName("findTopByShowcaseIdOrderByAttemptNoDesc 는 이력이 없으면 빈 Optional")
         void findTopByShowcaseId_noHistory_returnsEmpty() {
             assertThat(repository.findTopByShowcaseIdOrderByAttemptNoDesc(999L)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("상태 전이 (ADR-012 조건부 UPDATE)")
+    class StateTransition {
+
+        @Test
+        @DisplayName("REQUESTED → PREPARING 조건부 UPDATE 는 affected=1 반환하고 started_at 을 초기화한다")
+        void updateStepIfCurrent_fromRequested_succeeds() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(40L, "idem-40a", 1));
+            assertThat(saved.getStartedAt()).isNull();
+
+            int affected = repository.updateStepIfCurrent(
+                    saved.getId(), WorkflowStep.REQUESTED, WorkflowStep.PREPARING, Instant.now());
+
+            assertThat(affected).isEqualTo(1);
+            ModelGenerationWorkflowJpaEntity reloaded = repository.findById(saved.getId()).orElseThrow();
+            assertThat(reloaded.getCurrentStep()).isEqualTo(WorkflowStep.PREPARING);
+            assertThat(reloaded.getStartedAt()).isNotNull();
+            assertThat(reloaded.getHeartbeatAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("이미 PREPARING 인 행에 REQUESTED→PREPARING 을 재호출하면 affected=0")
+        void updateStepIfCurrent_alreadyTransitioned_returnsZero() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(41L, "idem-41a", 1));
+            repository.updateStepIfCurrent(
+                    saved.getId(), WorkflowStep.REQUESTED, WorkflowStep.PREPARING, Instant.now());
+
+            int affected = repository.updateStepIfCurrent(
+                    saved.getId(), WorkflowStep.REQUESTED, WorkflowStep.PREPARING, Instant.now());
+
+            assertThat(affected).isZero();
+        }
+
+        @Test
+        @DisplayName("markFailed 는 FAILED 로 전이 + failure_* 를 채운다")
+        void markFailed_fromPreparing_succeeds() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(42L, "idem-42a", 1));
+            repository.updateStepIfCurrent(
+                    saved.getId(), WorkflowStep.REQUESTED, WorkflowStep.PREPARING, Instant.now());
+
+            int affected = repository.markFailed(
+                    saved.getId(),
+                    WorkflowFailureCode.S3_KEY_MISSING.name(),
+                    "test failure",
+                    "S3",
+                    Instant.now());
+
+            assertThat(affected).isEqualTo(1);
+            ModelGenerationWorkflowJpaEntity reloaded = repository.findById(saved.getId()).orElseThrow();
+            assertThat(reloaded.getCurrentStep()).isEqualTo(WorkflowStep.FAILED);
+            assertThat(reloaded.getFailureCode()).isEqualTo("S3_KEY_MISSING");
+            assertThat(reloaded.getFailureMessage()).isEqualTo("test failure");
+            assertThat(reloaded.getFailureSource()).isEqualTo("S3");
+            assertThat(reloaded.getFinishedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("이미 FAILED 인 행에 markFailed 재호출하면 affected=0 (덮어쓰기 방지)")
+        void markFailed_alreadyFailed_returnsZero() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(43L, "idem-43a", 1));
+            repository.markFailed(saved.getId(),
+                    WorkflowFailureCode.S3_KEY_MISSING.name(), "first", "S3", Instant.now());
+
+            int affected = repository.markFailed(saved.getId(),
+                    WorkflowFailureCode.SOURCE_IMAGES_MISSING.name(), "second", "INTERNAL", Instant.now());
+
+            assertThat(affected).isZero();
+            ModelGenerationWorkflowJpaEntity reloaded = repository.findById(saved.getId()).orElseThrow();
+            assertThat(reloaded.getFailureCode()).isEqualTo("S3_KEY_MISSING"); // 원본 유지
         }
     }
 }

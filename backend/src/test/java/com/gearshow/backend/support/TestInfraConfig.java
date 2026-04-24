@@ -49,6 +49,12 @@ public class TestInfraConfig {
             }
 
             @Override
+            public boolean existsByUrl(String imageUrl) {
+                // 테스트에서는 모든 URL 을 존재하는 것으로 처리
+                return true;
+            }
+
+            @Override
             public void delete(String imageUrl) {
                 // 테스트에서는 삭제 무시
             }
@@ -90,6 +96,7 @@ public class TestInfraConfig {
     public ModelGenerationClient testModelGenerationClient() {
         return mock(ModelGenerationClient.class);
     }
+
 
     /**
      * 테스트용 프로필 이미지 저장소 Stub.

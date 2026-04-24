@@ -48,6 +48,13 @@ dependencies {
 	// Kafka
 	implementation 'org.springframework.kafka:spring-kafka'
 
+	// Redis — 3D 파이프라인 분산 락 (Redisson watchdog)
+	// Redisson core 만 사용 (spring-boot-starter 미사용).
+	// 이유: Redisson auto-config 가 spring.data.redis.* 를 요구하는데 우리는 gearshow.redis.* 커스텀
+	// 플래그로 조건부 로드해야 한다 (Kafka 와 동일 패턴). 자동 설정 간섭 없이 수동 RedissonClient Bean
+	// 을 @ConditionalOnProperty 로 제공하는 것이 테스트 격리에 깔끔하다.
+	implementation 'org.redisson:redisson:3.31.0'
+
 	// WebSocket + STOMP
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
@@ -77,6 +84,8 @@ dependencies {
 	testImplementation 'org.testcontainers:mysql'
 	testImplementation 'org.testcontainers:kafka'
 	testImplementation 'org.testcontainers:junit-jupiter'
+	// Redis (본 PR P1-D-α+β: Worker 분산 락 통합 테스트)
+	// Testcontainers 1.20+ 는 GenericContainer 로 redis 이미지를 쉽게 띄울 수 있다.
 
 	// Kafka Test
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
@@ -145,6 +154,9 @@ ext.jacocoExcludes = [
 	'**/infrastructure/config/Kafka*.*',
 	'**/infrastructure/config/ShowcaseKafkaTopicConfig.*',
 	'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.*',
+	// Redis 인프라 (Redisson 설정 — 통합 테스트에서 Testcontainers 로 별도 검증)
+	'**/infrastructure/config/RedissonConfig.*',
+	'**/adapter/out/redis/**',
 	'**/messaging/kafka/**',
 	'**/messaging/dto/**',
 	'**/platform/outbox/adapter/out/kafka/**',
@@ -225,6 +237,8 @@ sonar {
 			'**/infrastructure/config/Kafka*.java',
 			'**/infrastructure/config/ShowcaseKafkaTopicConfig.java',
 			'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.java',
+			'**/infrastructure/config/RedissonConfig.java',
+			'**/adapter/out/redis/**',
 			'**/messaging/kafka/**',
 			'**/messaging/dto/**',
 			'**/platform/outbox/adapter/out/kafka/**',

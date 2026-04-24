@@ -1,7 +1,12 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Optional;
 
 public interface ModelGenerationWorkflowJpaRepository
@@ -15,4 +20,51 @@ public interface ModelGenerationWorkflowJpaRepository
      */
     Optional<ModelGenerationWorkflowJpaEntity>
             findTopByShowcaseIdOrderByAttemptNoDesc(Long showcaseId);
+
+    /**
+     * 조건부 상태 전이 (ADR-012). WHERE current_step = :expected 조건을 걸어 동시 Worker
+     * 중복 처리를 DB 레벨에서 차단한다. REQUESTED → PREPARING 전이일 때만 {@code started_at}
+     * 도 함께 초기화한다 (최초 시작 시각 고정).
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.currentStep = :next,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now,
+                   w.startedAt = CASE
+                       WHEN :expected = com.gearshow.backend.showcase.application.dto.WorkflowStep.REQUESTED
+                            AND :next = com.gearshow.backend.showcase.application.dto.WorkflowStep.PREPARING
+                       THEN :now
+                       ELSE w.startedAt
+                   END
+             WHERE w.id = :id
+               AND w.currentStep = :expected
+            """)
+    int updateStepIfCurrent(@Param("id") Long id,
+                            @Param("expected") WorkflowStep expected,
+                            @Param("next") WorkflowStep next,
+                            @Param("now") Instant now);
+
+    /**
+     * 워크플로우를 FAILED 로 마킹한다. 이미 종료된 상태(COMPLETED/FAILED)는 덮어쓰지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.FAILED,
+                   w.failureCode = :code,
+                   w.failureMessage = :message,
+                   w.failureSource = :source,
+                   w.finishedAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep <> com.gearshow.backend.showcase.application.dto.WorkflowStep.COMPLETED
+               AND w.currentStep <> com.gearshow.backend.showcase.application.dto.WorkflowStep.FAILED
+            """)
+    int markFailed(@Param("id") Long id,
+                   @Param("code") String code,
+                   @Param("message") String message,
+                   @Param("source") String source,
+                   @Param("now") Instant now);
 }

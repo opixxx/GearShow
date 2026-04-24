@@ -67,6 +67,15 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
     }
 
     /**
+     * DB 에 저장된 이미지 URL 기준으로 S3 객체 존재 여부를 확인한다.
+     * 내부적으로 CDN 접두어를 제거해 S3 key 로 변환한 뒤 {@link #exists(String)} 를 호출한다.
+     */
+    @Override
+    public boolean existsByUrl(String imageUrl) {
+        return exists(extractKeyFromUrl(imageUrl));
+    }
+
+    /**
      * S3에서 이미지 파일을 삭제한다.
      * imageUrl에서 CDN 접두어를 제거하여 S3 키를 추출한다.
      */
@@ -122,8 +131,18 @@ public class S3ImageStorageAdapter implements ImageStoragePort {
     /**
      * CDN URL에서 S3 키를 추출한다.
      * 예: "https://cdn.example.com/showcases/images/uuid.jpg" → "showcases/images/uuid.jpg"
+     *
+     * <p>반드시 {@code cdnUrl + "/"} 로 시작하는 URL 만 처리한다. prefix 가 일치하지 않으면
+     * {@link IllegalArgumentException} 을 던져 호출자가 잘못된 URL 을 조용히 S3 로 보내는 것을
+     * 막는다. 기존에 쓰던 {@code replace} 는 URL 내부에 prefix 와 같은 문자열이 나타나면
+     * 중간부도 치환되는 엣지 케이스가 있었다.</p>
      */
     private String extractKeyFromUrl(String imageUrl) {
-        return imageUrl.replace(cdnUrl + "/", "");
+        String prefix = cdnUrl + "/";
+        if (imageUrl == null || !imageUrl.startsWith(prefix)) {
+            throw new IllegalArgumentException(
+                    "CDN prefix 가 일치하지 않는 이미지 URL: " + imageUrl);
+        }
+        return imageUrl.substring(prefix.length());
     }
 }

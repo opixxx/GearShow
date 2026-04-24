@@ -22,6 +22,7 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     enabled: ${KAFKA_ENABLED:false}
 
+
   servlet:
     multipart:
       max-file-size: 10MB
@@ -111,10 +112,20 @@ oauth:
     token-uri: https://appleid.apple.com/auth/token
     redirect-uri: ${APPLE_REDIRECT_URI:http://localhost:8080/api/v1/auth/login/apple}
 
-# WebSocket 설정
+# ===========================================
+# GearShow 애플리케이션 커스텀 설정
+# ===========================================
 gearshow:
   websocket:
     # 기본값은 로컬 개발 편의상 localhost 만 허용. 프로파일별(application-prod.yml) override 필수.
     # 와일드카드 `*` 금지 — CSRF 유사 공격 경로 차단.
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*}
+
+  # Redis (3D 파이프라인 분산 락 · 향후 Poller DelayedQueue · Tripo 세마포어)
+  # Kafka 와 동일 패턴: enabled=false 시 어댑터/설정이 로드되지 않아 테스트 환경에서 격리된다.
+  # host/port 는 env 로만 주입 — 운영 기동 시 누락을 fail-fast 로 감지.
+  redis:
+    enabled: ${REDIS_ENABLED:false}
+    host: ${REDIS_HOST:}
+    port: ${REDIS_PORT:6379}
 

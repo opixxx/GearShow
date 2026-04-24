@@ -1,10 +1,16 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
+import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.exception.ConcurrentModelRetryException;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+
+import java.time.Instant;
+import java.util.Optional;
 
 /**
  * {@link ModelGenerationWorkflowPort} 의 JPA 기반 어댑터.
@@ -42,5 +48,35 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 .findTopByShowcaseIdOrderByAttemptNoDesc(showcaseId)
                 .map(entity -> entity.getAttemptNo() + 1)
                 .orElse(1);
+    }
+
+    @Override
+    public Optional<WorkflowSnapshot> findSnapshot(Long workflowId) {
+        return workflowJpaRepository.findById(workflowId)
+                .map(this::toSnapshot);
+    }
+
+    @Override
+    public int updateStepIfCurrent(Long workflowId, WorkflowStep expected, WorkflowStep next) {
+        return workflowJpaRepository.updateStepIfCurrent(
+                workflowId, expected, next, Instant.now());
+    }
+
+    @Override
+    public int markFailed(Long workflowId, WorkflowFailureCode code, String message, String source) {
+        return workflowJpaRepository.markFailed(
+                workflowId, code.name(), message, source, Instant.now());
+    }
+
+    private WorkflowSnapshot toSnapshot(ModelGenerationWorkflowJpaEntity entity) {
+        return new WorkflowSnapshot(
+                entity.getId(),
+                entity.getShowcaseId(),
+                entity.getIdempotencyKey(),
+                entity.getAttemptNo(),
+                entity.getCurrentStep(),
+                entity.getStartedAt(),
+                entity.getHeartbeatAt()
+        );
     }
 }

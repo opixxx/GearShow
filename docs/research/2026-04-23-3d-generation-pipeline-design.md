@@ -587,9 +587,11 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-A** | DB 스키마 마이그레이션 | P0 | 중 | ✅ PR #39 |
 | **P1-B-α+β** | `Idempotency-Key` 헤더 처리 + `ContentHash` VO + 10분 창 dedup | P1-A | 중 | ✅ PR #40 |
 | **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | ✅ PR #41 |
-| **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | 🚧 본 PR |
-| **P1-D** | Worker: TX1/TX2 + Tripo upload/task + pending_task 선저장 | P1-C | 높음 |
-| **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D | 중 |
+| **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | ✅ PR #42 |
+| **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 + **Redisson 분산 락** (workflow:lock:{workflowId}, TTL 10s watchdog) | P1-C | 중 | 🚧 본 PR |
+| **P1-D-γ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) | P1-D-α+β | 높음 | ⏳ |
+| **P1-D-δ** | `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 재정의 | P1-D-γ | 중 | ⏳ |
+| **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D-δ | 중 |
 | **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 |
 | **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 |
 | **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 |
@@ -604,7 +606,7 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | 1 | Tripo API `Idempotency-Key` 헤더 지원 여부 | ✅ 조사 완료 (2026-04-23) | **미지원**. 대체: `tripo_pending_task` 선저장 + 과금은 `success` 시점 확정(§3.2) 이므로 Reconcile 이 중복 running task 를 cancel 하면 과금 0. §4 ④ 참조. |
 | 2 | Tripo task list API + metadata 필터 | ✅ 조사 완료 (2026-04-23) | 명시 없음. Reconcile 중복 정리는 **입력 파일 서명(imageS3Keys) 기반 조회** 로 대체. 실측 후 구현 세부는 P1-G 에서 확정. |
 | 3 | Tripo `GET /v2/task` 가 매번 새 download URL 발급하는지 | ✅ 해결 (2026-04-23) | **지원** (tripo-api-reference §3 "만료 시 task 재조회로 새 URL 획득"). S3 미러링 크래시 시 Tripo GET 으로 새 URL 획득 후 재다운로드. |
-| 4 | Redis 인스턴스 배치 (동일 VPC? 별도?) | 🟡 미결 | 인프라 결정. Phase 1 은 자체호스팅 EC2 1대 + RDB+AOF. 동일 VPC 배치 권장. |
+| 4 | Redis 인스턴스 배치 (동일 VPC? 별도?) | 🟡 운영 인프라 미결 / ✅ 로컬·테스트 확정 (2026-04-24) | 로컬: docker-compose 로 Redis 7.4-alpine 기동 (`gearshow-redis`). 테스트: Testcontainers `redis:7.4-alpine`. 운영 Phase 1 은 자체호스팅 EC2 1대 + RDB+AOF, 동일 VPC 배치 권장 (미확정). Redisson 클라이언트 적용 완료 (P1-D-α+β). |
 | 5 | `multiview_to_model` 크레딧 단가 | 🟡 미결 | 문서 명시 없음. Phase 1 시작 전 실측 1회 (Tripo staging 과금 확인). Balance 모니터 임계값 설정 근거. |
 | 6 | Tripo `balance` / `frozen` 필드 의미 | 🟡 미결 | 보수적으로 `effective = balance - frozen` 로 가정. Tripo support 문의 또는 실측으로 검증. |
 
