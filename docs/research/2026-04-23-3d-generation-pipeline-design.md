@@ -587,9 +587,11 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-A** | DB 스키마 마이그레이션 | P0 | 중 | ✅ PR #39 |
 | **P1-B-α+β** | `Idempotency-Key` 헤더 처리 + `ContentHash` VO + 10분 창 dedup | P1-A | 중 | ✅ PR #40 |
 | **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | ✅ PR #41 |
-| **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | 🚧 본 PR |
-| **P1-D** | Worker: TX1/TX2 + Tripo upload/task + pending_task 선저장 | P1-C | 높음 |
-| **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D | 중 |
+| **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | ✅ PR #42 |
+| **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 | P1-C | 중 | 🚧 본 PR |
+| **P1-D-γ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) | P1-D-α+β | 높음 | ⏳ |
+| **P1-D-δ** | `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 재정의 | P1-D-γ | 중 | ⏳ |
+| **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D-δ | 중 |
 | **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 |
 | **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 |
 | **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 |
