@@ -72,4 +72,16 @@ public interface ModelGenerationWorkflowPort {
      * @return 1=마킹 성공, 0=이미 종료되었거나 존재하지 않음
      */
     int markFailed(Long workflowId, WorkflowFailureCode code, String message, String source);
+
+    /**
+     * 워크플로우를 {@code PREPARING → GENERATING} 으로 전이하며 Tripo task 식별자를 저장한다.
+     * 조건부 UPDATE (WHERE {@code current_step = PREPARING}) 로 race 를 차단하고,
+     * {@code tripo_task_id} · {@code heartbeat_at} · {@code updated_at} 을 함께 갱신한다.
+     *
+     * <p>{@code tripo_trace_id} 는 현재 TripoApiClient 가 응답 헤더를 캡처하지 않으므로
+     * null 로 유지. 후속 작업에서 X-Tripo-Trace-ID 헤더 파싱 추가 시 같은 메서드에 인자 확장.</p>
+     *
+     * @return 1=전이 성공, 0=이미 다른 상태로 이동했거나 존재하지 않음
+     */
+    int markGenerating(Long workflowId, String tripoTaskId);
 }

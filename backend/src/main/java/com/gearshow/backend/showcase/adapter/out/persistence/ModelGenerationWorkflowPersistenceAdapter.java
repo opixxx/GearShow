@@ -68,6 +68,11 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 workflowId, code.name(), message, source, Instant.now());
     }
 
+    @Override
+    public int markGenerating(Long workflowId, String tripoTaskId) {
+        return workflowJpaRepository.markGenerating(workflowId, tripoTaskId, Instant.now());
+    }
+
     private WorkflowSnapshot toSnapshot(ModelGenerationWorkflowJpaEntity entity) {
         return new WorkflowSnapshot(
                 entity.getId(),

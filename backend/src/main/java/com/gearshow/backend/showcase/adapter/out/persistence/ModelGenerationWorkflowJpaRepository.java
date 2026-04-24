@@ -67,4 +67,22 @@ public interface ModelGenerationWorkflowJpaRepository
                    @Param("message") String message,
                    @Param("source") String source,
                    @Param("now") Instant now);
+
+    /**
+     * PREPARING → GENERATING 전이 (TX2). {@code tripo_task_id} 를 저장하며 heartbeat 갱신.
+     * WHERE current_step=PREPARING 조건으로 race 차단.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING,
+                   w.tripoTaskId = :taskId,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.PREPARING
+            """)
+    int markGenerating(@Param("id") Long id,
+                       @Param("taskId") String taskId,
+                       @Param("now") Instant now);
 }

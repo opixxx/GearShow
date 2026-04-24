@@ -33,4 +33,10 @@ public interface ModelSourceImagePort {
      * 로 존재 여부를 확인한다.</p>
      */
     List<String> findImageUrlsByShowcaseId(Long showcaseId);
+
+    /**
+     * 쇼케이스 ID 를 통해 소스 이미지 도메인 객체를 {@code sort_order} 순서대로 조회한다.
+     * Tripo 업로드 어댑터가 {@code AngleType} + {@code imageUrl} 을 함께 필요로 할 때 사용한다.
+     */
+    List<ModelSourceImage> findByShowcaseId(Long showcaseId);
 }

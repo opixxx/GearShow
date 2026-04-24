@@ -80,6 +80,8 @@ public enum ErrorCode {
     // Tripo Retryable 에러 (일시적 장애, 자동 재시도 가능)
     TRIPO_RATE_LIMITED(429, "Tripo 요청 한도를 초과했습니다. 잠시 후 자동 재시도됩니다"),
     TRIPO_SERVER_ERROR(500, "Tripo 서버 오류가 발생했습니다. 잠시 후 자동 재시도됩니다"),
+    // Circuit Breaker OPEN 시 사용자 호출을 조기 차단하기 위한 503 응답 (P1-D-γ+δ)
+    TRIPO_UNAVAILABLE(503, "3D 모델 생성이 일시적으로 불가능합니다. 잠시 후 다시 시도해 주세요"),
 
     // OUTBOX (Transactional Outbox 패턴)
     OUTBOX_INVALID_MESSAGE(400, "Outbox 메시지 필수 값이 누락되었습니다"),
