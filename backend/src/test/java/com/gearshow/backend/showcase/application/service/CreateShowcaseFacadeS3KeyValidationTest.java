@@ -56,6 +56,11 @@ class CreateShowcaseFacadeS3KeyValidationTest {
                 }
 
                 @Override
+                public boolean existsByUrl(String imageUrl) {
+                    return false;
+                }
+
+                @Override
                 public void delete(String imageUrl) {
                     // 테스트에서는 삭제 무시
                 }

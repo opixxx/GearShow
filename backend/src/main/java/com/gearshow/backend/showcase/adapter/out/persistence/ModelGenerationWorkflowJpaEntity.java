@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -72,7 +73,7 @@ public class ModelGenerationWorkflowJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "current_step", nullable = false, length = 16)
-    private CurrentStep currentStep;
+    private WorkflowStep currentStep;
 
     @Column(name = "tripo_task_id", length = 64)
     private String tripoTaskId;
@@ -121,7 +122,7 @@ public class ModelGenerationWorkflowJpaEntity {
 
     @Builder(access = AccessLevel.PRIVATE)
     private ModelGenerationWorkflowJpaEntity(Long id, Long showcaseId, String idempotencyKey,
-                                             int attemptNo, CurrentStep currentStep,
+                                             int attemptNo, WorkflowStep currentStep,
                                              String tripoTaskId, String tripoTraceId,
                                              Instant tripoSucceededAt,
                                              int retryCount, String failureCode,
@@ -150,7 +151,7 @@ public class ModelGenerationWorkflowJpaEntity {
     }
 
     /**
-     * 신규 워크플로우를 {@link CurrentStep#REQUESTED} 상태로 생성한다.
+     * 신규 워크플로우를 {@link WorkflowStep#REQUESTED} 상태로 생성한다.
      * 재시도는 {@code attemptNo} 를 증가시켜 같은 {@code showcaseId} 로 새 엔티티를 만든다.
      */
     public static ModelGenerationWorkflowJpaEntity requested(Long showcaseId,
@@ -161,18 +162,11 @@ public class ModelGenerationWorkflowJpaEntity {
                 .showcaseId(showcaseId)
                 .idempotencyKey(idempotencyKey)
                 .attemptNo(attemptNo)
-                .currentStep(CurrentStep.REQUESTED)
+                .currentStep(WorkflowStep.REQUESTED)
                 .retryCount(0)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
     }
 
-    public enum CurrentStep {
-        REQUESTED,
-        PREPARING,
-        GENERATING,
-        COMPLETED,
-        FAILED
-    }
 }

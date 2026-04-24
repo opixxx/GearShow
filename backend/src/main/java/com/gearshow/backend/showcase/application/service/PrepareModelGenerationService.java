@@ -15,35 +15,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 
 /**
- * 3D 모델 생성 준비 서비스.
+ * 3D 모델 생성 준비 서비스 — <b>레거시 (P1-D-α+β 이후 Worker 경로에서 미호출)</b>.
  *
- * <p>Worker 가 수신한 메시지에 대해 다음을 수행한다:</p>
- * <ol>
- *   <li>모델 상태 확인 (REQUESTED 아니면 skip — 재전달/중복 메시지 방어)</li>
- *   <li><b>PREPARING 상태로 선행 전환</b> — "외부 API 호출 전에 의도를 기록"</li>
- *   <li>Tripo startGeneration 호출 (이미지 업로드 + task 생성)</li>
- *   <li>task_id 와 함께 모델을 GENERATING 으로 전환</li>
- * </ol>
- *
- * <p><b>설계 결정 #1 (PREPARING 선행 전환)</b>: Tripo 호출 전에 상태를 PREPARING 으로
- * 바꿔두어, Recovery 스케줄러와 다른 Worker 가 끼어드는 것을 방지한다.
- * PREPARING 상태에서 generationTaskId 는 반드시 NULL 이므로
- * Tripo 과금이 발생하지 않았음이 구조적으로 보장된다.</p>
- *
- * <p><b>설계 결정 #4 (Tripo 에러 분류)</b>:</p>
- * <ul>
- *   <li>{@link ModelGenerationRetryableException} (429, 500) → PREPARING 유지, Recovery 가 자동 재시도</li>
- *   <li>{@link ModelGenerationNonRetryableException} (400, 401, 403) → 즉시 FAILED</li>
- *   <li>{@link CallNotPermittedException} → UNAVAILABLE (Circuit Breaker)</li>
- * </ul>
- *
- * <p><b>트랜잭션 범위</b>: 이 메서드는 의도적으로 전체를 트랜잭션으로 감싸지 않는다.
- * Tripo 외부 호출 동안 DB 커넥션을 점유하면 HikariCP 풀이 고갈되기 때문.
- * 각 DB 조작은 Showcase3dModelPort 구현체의 @Transactional 로 개별 커밋된다.</p>
+ * @deprecated P1-D-α+β 부터 Worker 는 {@code PrepareWorkflowService} 를 호출한다. 이 구현체는
+ *     {@code showcase_3d_model.model_status} 기반 pre-P1 경로로, 더 이상 프로덕션 트래픽을 받지
+ *     않는다. P1-F (`showcase_3d_model` 프로세스 컬럼 축소) 에서 전체 제거 예정.
  */
+@Deprecated(forRemoval = true)
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("removal")
 public class PrepareModelGenerationService implements PrepareModelGenerationUseCase {
 
     private final Showcase3dModelPort showcase3dModelPort;

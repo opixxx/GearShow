@@ -25,6 +25,15 @@ public interface ImageStoragePort {
     boolean exists(String s3Key);
 
     /**
+     * 저장된 이미지 URL 이 가리키는 S3 객체가 실제로 존재하는지 확인한다.
+     *
+     * <p>DB 에는 {@link #toUrl(String)} 으로 변환된 URL 이 저장되므로, Worker 경로 등
+     * key 를 알 수 없는 호출자가 존재 여부를 확인할 때 사용한다. 구현체는 내부적으로
+     * URL → key 변환 후 {@link #exists(String)} 를 호출한다.</p>
+     */
+    boolean existsByUrl(String imageUrl);
+
+    /**
      * 이미지를 삭제한다.
      *
      * @param imageUrl 삭제할 이미지 URL

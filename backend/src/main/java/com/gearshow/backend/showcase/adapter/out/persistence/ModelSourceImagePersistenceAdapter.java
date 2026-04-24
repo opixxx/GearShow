@@ -38,4 +38,9 @@ public class ModelSourceImagePersistenceAdapter implements ModelSourceImagePort 
     public int countByShowcase3dModelId(Long showcase3dModelId) {
         return modelSourceImageJpaRepository.countByShowcase3dModelId(showcase3dModelId);
     }
+
+    @Override
+    public List<String> findImageUrlsByShowcaseId(Long showcaseId) {
+        return modelSourceImageJpaRepository.findImageUrlsByShowcaseId(showcaseId);
+    }
 }

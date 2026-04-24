@@ -1,16 +1,14 @@
 package com.gearshow.backend.showcase.application.port.in;
 
 /**
- * 3D 모델 생성 준비 유스케이스 (Inbound Port).
+ * 3D 모델 생성 준비 유스케이스 (Inbound Port) — <b>레거시</b>.
  *
- * <p>Worker 가 Kafka 메시지 수신 후 호출한다.
- * 이미지 업로드 + Tripo task 생성을 수행하고 즉시 반환하며,
- * 이후 Tripo 폴링은 별도 스케줄러가 담당한다.</p>
- *
- * <p>이 유스케이스는 <b>비즈니스 실패 시 예외를 던지지 않는다</b>.
- * 모델 상태를 FAILED 또는 UNAVAILABLE 로 직접 전환하고 정상 반환하여,
- * Kafka 재시도가 발생하지 않도록 한다 (재시도는 멱등성 가드에 막혀 무의미).</p>
+ * @deprecated P1-D-α+β 부터 Worker 경로는 {@link PrepareWorkflowUseCase} 를 호출한다.
+ *     이 포트는 {@code Showcase3dModel} 기반 pre-P1 구현체({@code PrepareModelGenerationService})
+ *     로 여전히 살아있지만 호출되지 않는다. {@code showcase_3d_model} 테이블의 프로세스 컬럼을
+ *     축소하는 P1-F 에서 구현체와 함께 물리 제거 예정이다.
  */
+@Deprecated(forRemoval = true)
 public interface PrepareModelGenerationUseCase {
 
     /**
@@ -18,6 +16,8 @@ public interface PrepareModelGenerationUseCase {
      *
      * @param showcase3dModelId 3D 모델 ID
      * @param showcaseId        쇼케이스 ID
+     * @deprecated {@link PrepareWorkflowUseCase#prepare(Long)} 를 사용한다.
      */
+    @Deprecated(forRemoval = true)
     void prepare(Long showcase3dModelId, Long showcaseId);
 }
