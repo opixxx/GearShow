@@ -295,4 +295,64 @@ class ModelGenerationWorkflowPersistenceAdapterIntegrationTest {
             assertThat(affected).isZero();
         }
     }
+
+    @Nested
+    @DisplayName("markCompleted — TX_final (P1-F)")
+    class MarkCompleted {
+
+        private long prepareGeneratingWithTripoSuccess() {
+            long id = saveRequested(nextShowcaseId());
+            workflowPort.updateStepIfCurrent(id, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(id, TASK_ID);
+            workflowPort.markTripoSucceeded(id);
+            return id;
+        }
+
+        @Test
+        @DisplayName("GENERATING + tripoSucceededAt NOT NULL → affected=1, currentStep=COMPLETED")
+        void generatingWithTripoSuccess_completes() {
+            long id = prepareGeneratingWithTripoSuccess();
+
+            int affected = workflowPort.markCompleted(id);
+
+            assertThat(affected).isEqualTo(1);
+            WorkflowSnapshot s = workflowPort.findSnapshot(id).orElseThrow();
+            assertThat(s.currentStep()).isEqualTo(WorkflowStep.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("GENERATING + tripoSucceededAt IS NULL → affected=0 (Poller SUCCESS 인지 전)")
+        void generatingBeforeTripoSuccess_returnsZero() {
+            long id = saveRequested(nextShowcaseId());
+            workflowPort.updateStepIfCurrent(id, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(id, TASK_ID);
+
+            int affected = workflowPort.markCompleted(id);
+
+            assertThat(affected).isZero();
+            WorkflowSnapshot s = workflowPort.findSnapshot(id).orElseThrow();
+            assertThat(s.currentStep()).isEqualTo(WorkflowStep.GENERATING);
+        }
+
+        @Test
+        @DisplayName("이미 COMPLETED 상태에 markCompleted 재시도: affected=0 (재진입 차단)")
+        void completedTwice_secondReturnsZero() {
+            long id = prepareGeneratingWithTripoSuccess();
+            workflowPort.markCompleted(id);
+
+            int affected = workflowPort.markCompleted(id);
+
+            assertThat(affected).isZero();
+        }
+
+        @Test
+        @DisplayName("REQUESTED 상태에서 markCompleted → affected=0")
+        void fromRequested_returnsZero() {
+            long id = saveRequested(nextShowcaseId());
+
+            int affected = workflowPort.markCompleted(id);
+
+            assertThat(affected).isZero();
+        }
+    }
 }

@@ -104,4 +104,13 @@ public interface ModelGenerationWorkflowPort {
      * @return 1=성공 (이 시점에만 TripoSuccessEvent 발행), 0=이미 전이됨
      */
     int markTripoSucceeded(Long workflowId);
+
+    /**
+     * Downloader 의 TX_final — {@code GENERATING → COMPLETED} 전이. {@code finished_at} 도 함께
+     * 기록한다. WHERE 절로 {@code current_step = GENERATING AND tripo_succeeded_at IS NOT NULL}
+     * 을 강제해 Poller SUCCESS 인지 전 재진입과 이미 COMPLETED 된 워크플로우 재전이를 모두 차단한다.
+     *
+     * @return 1=전이 성공 (도메인 UPDATE + Outbox 발행 진행), 0=다른 Downloader 가 이미 처리
+     */
+    int markCompleted(Long workflowId);
 }

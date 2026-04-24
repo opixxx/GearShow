@@ -118,4 +118,22 @@ public interface ModelGenerationWorkflowJpaRepository
                AND w.tripoSucceededAt IS NULL
             """)
     int markTripoSucceeded(@Param("id") Long id, @Param("now") Instant now);
+
+    /**
+     * TX_final: {@code GENERATING → COMPLETED} 전이 (설계 §5, §7 [8]). WHERE 에
+     * {@code current_step=GENERATING AND tripo_succeeded_at IS NOT NULL} 을 강제해 Poller SUCCESS
+     * 인지 전 재진입과 이미 COMPLETED 된 워크플로우 덮어쓰기를 차단한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.COMPLETED,
+                   w.finishedAt = :now,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING
+               AND w.tripoSucceededAt IS NOT NULL
+            """)
+    int markCompleted(@Param("id") Long id, @Param("now") Instant now);
 }

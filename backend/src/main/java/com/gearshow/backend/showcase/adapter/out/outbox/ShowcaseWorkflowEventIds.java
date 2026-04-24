@@ -24,6 +24,20 @@ final class ShowcaseWorkflowEventIds {
     }
 
     /**
+     * 완료 이벤트 {@code event_id} 를 결정적으로 파생한다 (P1-F, 설계 §7 [8]). TX_final 재진입 시
+     * 동일한 {@code messageId} 를 생성해 Consumer {@code processed_message} 중복 차단이 작동한다.
+     *
+     * <p>공식: {@code SHA-256("workflow:{workflowId}:COMPLETED")}. 문자열 리터럴 오타 방지를 위해
+     * 반드시 이 헬퍼를 경유한다.</p>
+     */
+    static String forCompletionEvent(Long workflowId) {
+        if (workflowId == null) {
+            throw new IllegalArgumentException("workflowId 는 필수입니다");
+        }
+        return deriveMessageId("workflow:" + workflowId + ":COMPLETED");
+    }
+
+    /**
      * 멱등성 키로부터 결정적 event_id 를 계산한다.
      *
      * @param idempotencyKey API 멱등성 키 (non-null, non-blank)

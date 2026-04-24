@@ -98,4 +98,11 @@ public class Showcase3dModelPersistenceAdapter implements Showcase3dModelPort {
                 .map(showcase3dModelMapper::toDomain)
                 .toList();
     }
+
+    @Override
+    public int markCompletedByShowcaseId(Long showcaseId, String modelFileUrl,
+                                         String previewImageUrl, Instant generatedAt) {
+        return showcase3dModelJpaRepository.markCompletedByShowcaseId(
+                showcaseId, modelFileUrl, previewImageUrl, generatedAt);
+    }
 }

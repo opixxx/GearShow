@@ -9,25 +9,27 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 
 /**
- * Tripo 폴링용 비동기 실행기 설정 (설계 §6.2).
+ * 쇼케이스 파이프라인용 비동기 실행기 설정 (설계 §6.2, §7 [8]).
  *
- * <p>{@code WorkflowPollingScheduler} 가 {@code ApplicationReadyEvent} 수신 즉시 단일
- * 장수명 스레드에서 {@code RBlockingQueue.take()} 블로킹 루프를 실행한다. Spring 기본
- * 실행기를 사용하면 컨테이너가 종료 시 공유 풀이 stuck 될 수 있으므로 전용 executor 를 분리한다.</p>
+ * <p><b>{@code @EnableAsync} 는 조건 없이 항상 활성</b>한다. 이유: Redis 가 꺼져 있어도
+ * Downloader 체인(수동 재처리, webhook 등 향후 유입 경로) 이나 다른 {@code @Async} 빈이
+ * 정상 동작해야 한다. {@code @EnableAsync} 를 Redis 조건에 묶으면 Redis 비활성 환경에서
+ * 모든 {@code @Async} 호출이 호출자 스레드에서 동기 실행되는 함정이 생긴다.</p>
  *
- * <p>{@code gearshow.redis.enabled=true} 일 때만 스캔되도록 해, Redis 미사용 환경에서는
- * {@code @EnableAsync} 자체가 활성화되지 않는다 (테스트 격리). Redis 어댑터/큐만 띄우고
- * 자동 Poller 루프만 끄고 싶은 통합 테스트는 {@code WorkflowPollingScheduler} 쪽 조건
- * ({@code app.tripo-polling.scheduler-enabled=false}) 을 사용한다. 이 때 실행기 Bean 은
- * 남지만 구독자가 없어 idle 상태.</p>
+ * <p>{@link #tripoPollingExecutor()} 는 Redis DelayedQueue 블로킹 소비자 전용이라 Redis 활성
+ * 조건부로 유지한다. {@link #downloadExecutor()} 는 Redis 와 무관하게 Tripo 결과 I/O 를
+ * 처리하므로 상시 활성.</p>
  */
 @Configuration
 @EnableAsync
-@ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
 public class AsyncPollingConfig {
 
-    /** {@code WorkflowPollingScheduler} 메인 루프 전용. core=max=1 (단일 consumer). */
+    /**
+     * {@code WorkflowPollingScheduler} 메인 루프 전용. core=max=1 (단일 consumer). Redis
+     * DelayedQueue 가 없는 환경에서는 소비할 게 없으므로 생성하지 않는다.
+     */
     @Bean("tripoPollingExecutor")
+    @ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
     public Executor tripoPollingExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);
@@ -36,6 +38,26 @@ public class AsyncPollingConfig {
         executor.setThreadNamePrefix("tripo-poller-");
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.setAwaitTerminationSeconds(5);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * Downloader 실행기 (설계 §7 [8]). Tripo GET + S3 PUT 이 수 초~수십 초 걸릴 수 있어 Poller
+     * 스레드와 분리한다. {@code queueCapacity=50} 은 순간 피크를 흡수하고, 초과 시 caller-runs 로
+     * 백프레셔를 준다 — 메시지 드롭 없이 자연스럽게 Poller 가 느려지도록.
+     */
+    @Bean("downloadExecutor")
+    public Executor downloadExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("downloader-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.setRejectedExecutionHandler(
+                new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

@@ -92,4 +92,33 @@ public interface Showcase3dModelJpaRepository extends JpaRepository<Showcase3dMo
     List<Showcase3dModelJpaEntity> findStaleGeneratingWithoutTaskId(
             @Param("referenceAt") Instant referenceAt,
             Pageable pageable);
+
+    /**
+     * Downloader TX_final 용 — {@code showcase_id} 기반으로 완성 URL 3종을 직접 UPDATE 한다 (P1-F).
+     *
+     * <p>상태 머신 전이 검증은 ADR-010 을 따라 프로세스 진실성 원본({@code model_generation_workflow})
+     * 에서 수행되므로 여기서는 순수 UPDATE (행 없으면 affected=0) 를 담당. {@code model_status=COMPLETED}
+     * 세팅은 레거시 경로 호환용이며 P1-G 에서 프로세스 컬럼 축소 시 함께 제거된다 (Javadoc 에
+     * transitional 성격 명시).</p>
+     *
+     * <p>WHERE 절 {@code model_status <> COMPLETED} — ADR-012 조건부 UPDATE 원칙 적용.
+     * 다른 경로(수동 UPDATE 등) 로 이미 COMPLETED 된 행을 덮어쓰지 않는다.</p>
+     *
+     * @deprecated P1-G 에서 프로세스 컬럼 축소와 함께 제거 예정 (ADR-010). 신규 호출 경로 추가 금지.
+     */
+    @Deprecated(forRemoval = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE Showcase3dModelJpaEntity e
+               SET e.modelFileUrl = :modelFileUrl,
+                   e.previewImageUrl = :previewImageUrl,
+                   e.generatedAt = :generatedAt,
+                   e.modelStatus = com.gearshow.backend.showcase.domain.vo.ModelStatus.COMPLETED
+             WHERE e.showcaseId = :showcaseId
+               AND e.modelStatus <> com.gearshow.backend.showcase.domain.vo.ModelStatus.COMPLETED
+            """)
+    int markCompletedByShowcaseId(@Param("showcaseId") Long showcaseId,
+                                  @Param("modelFileUrl") String modelFileUrl,
+                                  @Param("previewImageUrl") String previewImageUrl,
+                                  @Param("generatedAt") Instant generatedAt);
 }

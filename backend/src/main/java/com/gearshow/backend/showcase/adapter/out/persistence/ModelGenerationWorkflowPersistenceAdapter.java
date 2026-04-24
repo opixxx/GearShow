@@ -90,6 +90,11 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
         return workflowJpaRepository.markTripoSucceeded(workflowId, Instant.now());
     }
 
+    @Override
+    public int markCompleted(Long workflowId) {
+        return workflowJpaRepository.markCompleted(workflowId, Instant.now());
+    }
+
     private WorkflowSnapshot toSnapshot(ModelGenerationWorkflowJpaEntity entity) {
         return new WorkflowSnapshot(
                 entity.getId(),

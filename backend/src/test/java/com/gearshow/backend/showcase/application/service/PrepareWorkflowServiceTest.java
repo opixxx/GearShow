@@ -4,6 +4,7 @@ import com.gearshow.backend.common.exception.ErrorCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
@@ -13,8 +14,6 @@ import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
-import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -27,10 +26,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessResourceFailureException;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,7 +40,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -82,21 +79,16 @@ class PrepareWorkflowServiceTest {
     @Mock
     private TripoPendingTaskPort tripoPendingTaskPort;
     @Mock
-    private WorkflowPollQueuePort pollQueuePort;
+    private ApplicationEventPublisher eventPublisher;
 
     private PrepareWorkflowService service;
 
     @BeforeEach
     void setUp() {
-        @SuppressWarnings("unchecked")
-        ObjectProvider<WorkflowPollQueuePort> provider = mock(ObjectProvider.class);
-        given(provider.getIfAvailable()).willReturn(pollQueuePort);
-        TripoPollingProperties properties = new TripoPollingProperties(
-                3_000L, 20, 15, 30, 2_000L);
         service = new PrepareWorkflowService(
                 workflowPort, modelSourceImagePort, imageStoragePort,
                 workflowLockPort, modelGenerationClient, tripoPendingTaskPort,
-                provider, properties);
+                eventPublisher);
         // 기본: 락 획득 성공 → action 즉시 실행
         doAnswer(invocation -> {
             WorkflowLockPort.LockedAction action = invocation.getArgument(1);
@@ -225,7 +217,8 @@ class PrepareWorkflowServiceTest {
             verify(workflowPort, times(1)).markGenerating(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(tripoPendingTaskPort, times(1)).deleteByWorkflowId(WORKFLOW_ID);
             verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
-            verify(pollQueuePort, times(1)).offer(WORKFLOW_ID, Duration.ofSeconds(30));
+            verify(eventPublisher, times(1))
+                    .publishEvent(new WorkflowGeneratingConfirmedEvent(WORKFLOW_ID));
         }
 
         @Test
@@ -303,11 +296,11 @@ class PrepareWorkflowServiceTest {
 
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(tripoPendingTaskPort, never()).deleteByWorkflowId(anyLong());
-            verify(pollQueuePort, never()).offer(anyLong(), any());
+            verify(eventPublisher, never()).publishEvent(any());
         }
 
         @Test
-        @DisplayName("TX2 DB 실패: pending 유지, 예외 삼킴, Poller offer 도 호출 안 함")
+        @DisplayName("TX2 DB 실패: pending 유지, 예외 삼킴, WorkflowGeneratingConfirmedEvent 도 발행 안 함")
         void tx2DbFail_swallowsException() {
             stubThroughImagesValid();
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
@@ -319,7 +312,7 @@ class PrepareWorkflowServiceTest {
 
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(tripoPendingTaskPort, never()).deleteByWorkflowId(anyLong());
-            verify(pollQueuePort, never()).offer(anyLong(), any());
+            verify(eventPublisher, never()).publishEvent(any());
         }
     }
 }
