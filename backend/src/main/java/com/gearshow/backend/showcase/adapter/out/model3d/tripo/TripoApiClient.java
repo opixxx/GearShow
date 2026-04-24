@@ -28,7 +28,7 @@ import java.util.Set;
  *
  * <p><b>에러 분류 (설계 결정 #4)</b>: Tripo 의 HTTP 4xx/5xx 응답을 가로채어
  * 내부 에러 코드 기반으로 Retryable / Non-retryable 로 분류한다.
- * 분류된 예외는 Application 계층({@code PrepareModelGenerationService})이
+ * 분류된 예외는 Application 계층 Worker / Reconcile 가
  * catch 하여 각각 다른 복구 전략을 적용한다.</p>
  *
  * <p><b>Circuit Breaker</b>: 모든 Tripo HTTP 호출은 {@code @CircuitBreaker(name = "tripo")}

@@ -124,7 +124,7 @@ class CreateShowcaseFacadeCircuitGuardTest {
         // requestModelGenerationUseCase 는 modelSourceImageKeys 가 있으므로 호출됨 — 스텁하되 무시.
         given(requestModelGenerationUseCase.requestOnCreate(anyLong(), any(), any()))
                 .willReturn(new com.gearshow.backend.showcase.application.dto.ModelGenerationResult(
-                        1L, com.gearshow.backend.showcase.domain.vo.ModelStatus.REQUESTED));
+                        1L, com.gearshow.backend.showcase.application.dto.ShowcaseModelStatus.GENERATING));
 
         facade.create(commandWithModelSource(true), IMAGE_KEYS, MODEL_SOURCE_KEYS);
 

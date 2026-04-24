@@ -9,44 +9,39 @@ import java.time.Instant;
 /**
  * 3D 모델 소스 이미지 도메인 엔티티.
  *
- * <p>SHOWCASE Aggregate에 종속되며, 3D 모델 생성에 필요한 원본 이미지이다.
- * 최소 4장(앞/뒤/좌/우)이 필요하다.</p>
+ * <p>SHOWCASE Aggregate 에 종속되며, 3D 모델 생성에 필요한 원본 이미지이다. 최소 4장
+ * (앞/뒤/좌/우) 이 필요하다.</p>
+ *
+ * <p><b>ADR-010 변경</b>: 원래는 {@code showcase_3d_model_id} FK 로 연결됐으나 Showcase3dModel
+ * 이 "완성품" 전용으로 축소되면서 요청 시점에 존재하지 않는다. 본 엔티티는 쇼케이스 단위로
+ * 귀속되므로 {@code showcase_id} 를 직접 참조한다.</p>
  */
 @Getter
 public class ModelSourceImage {
 
     private final Long id;
-    private final Long showcase3dModelId;
+    private final Long showcaseId;
     private final String imageUrl;
     private final AngleType angleType;
     private final int sortOrder;
     private final Instant createdAt;
 
     @Builder
-    private ModelSourceImage(Long id, Long showcase3dModelId, String imageUrl,
+    private ModelSourceImage(Long id, Long showcaseId, String imageUrl,
                              AngleType angleType, int sortOrder,
                              Instant createdAt) {
         this.id = id;
-        this.showcase3dModelId = showcase3dModelId;
+        this.showcaseId = showcaseId;
         this.imageUrl = imageUrl;
         this.angleType = angleType;
         this.sortOrder = sortOrder;
         this.createdAt = createdAt;
     }
 
-    /**
-     * 새로운 소스 이미지를 생성한다.
-     *
-     * @param showcase3dModelId 3D 모델 ID
-     * @param imageUrl          이미지 URL
-     * @param angleType         촬영 각도
-     * @param sortOrder         정렬 순서
-     * @return 생성된 소스 이미지
-     */
-    public static ModelSourceImage create(Long showcase3dModelId, String imageUrl,
+    public static ModelSourceImage create(Long showcaseId, String imageUrl,
                                           AngleType angleType, int sortOrder) {
         return ModelSourceImage.builder()
-                .showcase3dModelId(showcase3dModelId)
+                .showcaseId(showcaseId)
                 .imageUrl(imageUrl)
                 .angleType(angleType)
                 .sortOrder(sortOrder)

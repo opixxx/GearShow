@@ -8,7 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * 3D 모델 소스 이미지 Persistence Adapter.
+ * 3D 모델 소스 이미지 Persistence Adapter (ADR-010 showcase_id 직접 참조).
  */
 @Repository
 @RequiredArgsConstructor
@@ -28,26 +28,19 @@ public class ModelSourceImagePersistenceAdapter implements ModelSourceImagePort 
     }
 
     @Override
-    public List<ModelSourceImage> findByShowcase3dModelId(Long showcase3dModelId) {
-        return modelSourceImageJpaRepository.findByShowcase3dModelId(showcase3dModelId).stream()
+    public List<ModelSourceImage> findByShowcaseId(Long showcaseId) {
+        return modelSourceImageJpaRepository.findByShowcaseIdOrderBySortOrderAsc(showcaseId).stream()
                 .map(modelSourceImageMapper::toDomain)
                 .toList();
     }
 
     @Override
-    public int countByShowcase3dModelId(Long showcase3dModelId) {
-        return modelSourceImageJpaRepository.countByShowcase3dModelId(showcase3dModelId);
+    public int countByShowcaseId(Long showcaseId) {
+        return modelSourceImageJpaRepository.countByShowcaseId(showcaseId);
     }
 
     @Override
     public List<String> findImageUrlsByShowcaseId(Long showcaseId) {
         return modelSourceImageJpaRepository.findImageUrlsByShowcaseId(showcaseId);
-    }
-
-    @Override
-    public List<ModelSourceImage> findByShowcaseId(Long showcaseId) {
-        return modelSourceImageJpaRepository.findByShowcaseIdSorted(showcaseId).stream()
-                .map(modelSourceImageMapper::toDomain)
-                .toList();
     }
 }

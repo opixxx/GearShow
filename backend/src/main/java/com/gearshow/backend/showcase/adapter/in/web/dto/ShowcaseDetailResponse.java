@@ -2,8 +2,8 @@ package com.gearshow.backend.showcase.adapter.in.web.dto;
 
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
-import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import com.gearshow.backend.showcase.domain.vo.SpecType;
 
@@ -45,18 +45,14 @@ public record ShowcaseDetailResponse(
             Long showcase3dModelId,
             String modelFileUrl,
             String previewImageUrl,
-            ModelStatus modelStatus
+            ShowcaseModelStatus modelStatus
     ) {}
 
-    /** 스펙 응답 (specType으로 타입 구분, specData에 JSON 상세 정보). */
     public record SpecResponse(
             SpecType specType,
             String specData
     ) {}
 
-    /**
-     * 결과를 응답으로 변환한다.
-     */
     public static ShowcaseDetailResponse from(ShowcaseDetailResult result) {
         List<ImageResponse> images = result.images().stream()
                 .map(i -> new ImageResponse(

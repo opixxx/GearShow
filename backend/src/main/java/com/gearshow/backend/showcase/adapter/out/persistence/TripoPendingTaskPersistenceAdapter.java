@@ -4,6 +4,8 @@ import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 /**
  * {@link TripoPendingTaskPort} 의 JPA 기반 어댑터.
  *
@@ -27,5 +29,11 @@ public class TripoPendingTaskPersistenceAdapter implements TripoPendingTaskPort 
     public void deleteByWorkflowId(Long workflowId) {
         // 단일 DELETE 쿼리로 멱등 처리 — 존재하지 않아도 affected=0 을 반환할 뿐 예외 없음.
         jpaRepository.deleteByWorkflowIdIfExists(workflowId);
+    }
+
+    @Override
+    public Optional<String> findTaskIdByWorkflowId(Long workflowId) {
+        return jpaRepository.findById(workflowId)
+                .map(TripoPendingTaskJpaEntity::getTaskId);
     }
 }

@@ -62,19 +62,21 @@ app:
     cleanup-batch-size: 1000
     cleanup-batch-sleep-ms: 50
 
-  # Tripo 폴링 스케줄러 설정
+  # Tripo 폴링 (DelayedQueue 기반 경로 전용 — P1-E/P1-G)
   tripo-polling:
-    interval-ms: 3000              # 3초 주기로 GENERATING 모델 상태 확인
-    batch-size: 20                 # 한 주기당 최대 20건 폴링
-    task-timeout-minutes: 15       # 15분 초과 시 자동 FAILED
+    delay-seconds: 30               # 재대기 지연
+    semaphore-acquire-timeout-ms: 2000
+    scheduler-enabled: true
 
-  # 좀비 모델 복구 스케줄러 설정
-  stuck-recovery:
-    interval-ms: 60000                                # 1분 주기로 stuck 검사
+  # Reconcile 배치 (설계 §8.4 — P1-G)
+  reconcile:
+    enabled: true
+    fixed-delay-ms: 60000
     batch-size: 50
-    requested-stuck-minutes: 5                        # REQUESTED 5분 초과 시 Outbox 재등록
-    preparing-stuck-minutes: 2                        # PREPARING 2분 초과 시 자동 재시도 (retryCount 적용)
-    generating-without-task-id-stuck-minutes: 5       # GENERATING + task_id 없음 5분 초과 시 FAILED
+    preparing-stuck-seconds: 60
+    generating-tripo-stuck-minutes: 8
+    generating-s3-stuck-minutes: 5
+    requested-stuck-seconds: 30
 
 # ===========================================
 # Resilience4j Circuit Breaker (Tripo API 보호)

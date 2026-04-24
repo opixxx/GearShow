@@ -1,12 +1,14 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface ModelGenerationWorkflowJpaRepository
@@ -136,4 +138,62 @@ public interface ModelGenerationWorkflowJpaRepository
                AND w.tripoSucceededAt IS NOT NULL
             """)
     int markCompleted(@Param("id") Long id, @Param("now") Instant now);
+
+    /**
+     * Reconcile 배치 — PREPARING 상태에서 heartbeat 갱신이 끊긴 stuck 워크플로우 조회.
+     * {@code idx_mgw_step_heartbeat} 를 활용한다.
+     */
+    @Query("""
+            SELECT w
+              FROM ModelGenerationWorkflowJpaEntity w
+             WHERE w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.PREPARING
+               AND (w.heartbeatAt IS NULL OR w.heartbeatAt < :threshold)
+             ORDER BY w.heartbeatAt ASC NULLS FIRST, w.id ASC
+            """)
+    List<ModelGenerationWorkflowJpaEntity> findStuckPreparing(
+            @Param("threshold") Instant threshold, Pageable pageable);
+
+    /**
+     * Reconcile 배치 — GENERATING + Tripo 처리 중(tripo_succeeded_at IS NULL) 에서 last_polled_at 이
+     * 끊긴 stuck 워크플로우 조회. {@code idx_mgw_step_last_polled} 를 활용한다.
+     */
+    @Query("""
+            SELECT w
+              FROM ModelGenerationWorkflowJpaEntity w
+             WHERE w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING
+               AND w.tripoSucceededAt IS NULL
+               AND (w.lastPolledAt IS NULL OR w.lastPolledAt < :threshold)
+             ORDER BY w.lastPolledAt ASC NULLS FIRST, w.id ASC
+            """)
+    List<ModelGenerationWorkflowJpaEntity> findStuckGeneratingTripo(
+            @Param("threshold") Instant threshold, Pageable pageable);
+
+    /**
+     * Reconcile 배치 — GENERATING + S3 미러링 중(tripo_succeeded_at IS NOT NULL) 에서 heartbeat_at 이
+     * 끊긴 stuck 워크플로우 조회. {@code idx_mgw_step_tripo_succeeded} 를 활용한다.
+     */
+    @Query("""
+            SELECT w
+              FROM ModelGenerationWorkflowJpaEntity w
+             WHERE w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING
+               AND w.tripoSucceededAt IS NOT NULL
+               AND (w.heartbeatAt IS NULL OR w.heartbeatAt < :threshold)
+             ORDER BY w.heartbeatAt ASC NULLS FIRST, w.id ASC
+            """)
+    List<ModelGenerationWorkflowJpaEntity> findStuckGeneratingS3(
+            @Param("threshold") Instant threshold, Pageable pageable);
+
+    /**
+     * Reconcile 배치 — REQUESTED 상태에서 created_at 이 임계 이전인 워크플로우 조회 (경고 목적).
+     * Outbox Relay 점검 신호로 사용한다.
+     */
+    @Query("""
+            SELECT w
+              FROM ModelGenerationWorkflowJpaEntity w
+             WHERE w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.REQUESTED
+               AND w.createdAt < :threshold
+             ORDER BY w.createdAt ASC
+            """)
+    List<ModelGenerationWorkflowJpaEntity> findStuckRequested(
+            @Param("threshold") Instant threshold, Pageable pageable);
 }

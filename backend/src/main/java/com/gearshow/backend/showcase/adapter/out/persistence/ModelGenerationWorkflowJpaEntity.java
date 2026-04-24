@@ -20,10 +20,15 @@ import java.time.Instant;
  *
  * <p><b>인덱스</b>:</p>
  * <ul>
- *   <li>{@code idx_mgw_step_heartbeat}: Reconcile 배치가 heartbeat 기반 stuck 을 감지할 때 사용.</li>
- *   <li>{@code idx_mgw_step_tripo_succeeded}: GENERATING 내부에서 Tripo 처리 중 / S3 미러링 중 서브-단계를 구분해 각기 다른 stuck 임계값 적용.</li>
- *   <li>{@code idx_mgw_step_last_polled}: Poller 의 폴링 대상 조회 및 폴링 루프 유실 감지.</li>
- *   <li>{@code idx_mgw_showcase_attempt}: 재시도 이력 조회 (가장 최근 attempt 찾기).</li>
+ *   <li>{@code idx_mgw_step_heartbeat}: PREPARING heartbeat stuck 조회용
+ *       ({@code current_step=PREPARING AND heartbeat_at &lt; ?}).</li>
+ *   <li>{@code idx_mgw_step_tripo_polled}: GENERATING·Tripo stuck 조회용 (3컬럼 복합).
+ *       {@code current_step=GENERATING AND tripo_succeeded_at IS NULL AND last_polled_at &lt; ?} 를
+ *       filesort 없이 range scan 으로 커버. MySQL 8 은 NULL 도 인덱싱하므로 {@code IS NULL} 조건을
+ *       인덱스 내부에서 평가한다.</li>
+ *   <li>{@code idx_mgw_step_tripo_heartbeat}: GENERATING·S3 stuck 조회용 (3컬럼 복합).
+ *       {@code current_step=GENERATING AND tripo_succeeded_at IS NOT NULL AND heartbeat_at &lt; ?}.</li>
+ *   <li>{@code uk_mgw_showcase_attempt}: 재시도 이력 조회 (가장 최근 attempt) + 동시 재시도 race 차단 겸용.</li>
  * </ul>
  */
 @Entity
@@ -45,12 +50,20 @@ import java.time.Instant;
         indexes = {
                 @Index(name = "idx_mgw_step_heartbeat",
                         columnList = "current_step, heartbeat_at"),
-                @Index(name = "idx_mgw_step_tripo_succeeded",
-                        columnList = "current_step, tripo_succeeded_at"),
-                @Index(name = "idx_mgw_step_last_polled",
-                        columnList = "current_step, last_polled_at")
+                // P1-G: Reconcile.findStuckGeneratingTripo 전용 3컬럼 복합 인덱스 —
+                //   WHERE current_step=GENERATING AND tripo_succeeded_at IS NULL AND last_polled_at < ?
+                // 를 filter 없이 range scan 한 결과로 ORDER BY last_polled_at ASC 까지 커버.
+                @Index(name = "idx_mgw_step_tripo_polled",
+                        columnList = "current_step, tripo_succeeded_at, last_polled_at"),
+                // P1-G: Reconcile.findStuckGeneratingS3 전용 3컬럼 복합 인덱스 —
+                //   WHERE current_step=GENERATING AND tripo_succeeded_at IS NOT NULL AND heartbeat_at < ?
+                @Index(name = "idx_mgw_step_tripo_heartbeat",
+                        columnList = "current_step, tripo_succeeded_at, heartbeat_at")
                 // 기존 idx_mgw_showcase_attempt 는 uk_mgw_showcase_attempt UNIQUE 가 동일 prefix 를
                 // 커버하므로 삭제했다 — UNIQUE 인덱스가 조회 인덱스 역할을 겸한다.
+                //
+                // 기존 idx_mgw_step_tripo_succeeded / idx_mgw_step_last_polled 2컬럼 인덱스는 위
+                // 3컬럼 복합의 leftmost prefix 로 이미 커버되므로 유지하지 않는다 (중복 인덱스 제거).
         }
 )
 @Getter

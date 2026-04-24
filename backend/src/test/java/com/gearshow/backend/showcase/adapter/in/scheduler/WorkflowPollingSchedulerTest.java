@@ -53,8 +53,7 @@ class WorkflowPollingSchedulerTest {
     @BeforeEach
     void setUp() {
         // delaySeconds=30 으로 고정 — 프로덕션 기본값과 동일
-        TripoPollingProperties properties = new TripoPollingProperties(
-                3_000L, 20, 15, 30, 2_000L);
+        TripoPollingProperties properties = new TripoPollingProperties(30, 2_000L, true);
         scheduler = new WorkflowPollingScheduler(pollQueue, pollUseCase, properties);
     }
 

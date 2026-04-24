@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.StuckWorkflow;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
@@ -7,10 +8,12 @@ import com.gearshow.backend.showcase.application.exception.ConcurrentModelRetryE
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -93,6 +96,62 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
     @Override
     public int markCompleted(Long workflowId) {
         return workflowJpaRepository.markCompleted(workflowId, Instant.now());
+    }
+
+    @Override
+    public Optional<WorkflowSnapshot> findLatestSnapshotByShowcaseId(Long showcaseId) {
+        return workflowJpaRepository
+                .findTopByShowcaseIdOrderByAttemptNoDesc(showcaseId)
+                .map(this::toSnapshot);
+    }
+
+    @Override
+    public List<StuckWorkflow> findStuckPreparing(Instant heartbeatBefore, int limit) {
+        return workflowJpaRepository
+                .findStuckPreparing(heartbeatBefore, PageRequest.of(0, limit))
+                .stream()
+                .map(this::toStuckWorkflow)
+                .toList();
+    }
+
+    @Override
+    public List<StuckWorkflow> findStuckGeneratingTripo(Instant lastPolledBefore, int limit) {
+        return workflowJpaRepository
+                .findStuckGeneratingTripo(lastPolledBefore, PageRequest.of(0, limit))
+                .stream()
+                .map(this::toStuckWorkflow)
+                .toList();
+    }
+
+    @Override
+    public List<StuckWorkflow> findStuckGeneratingS3(Instant heartbeatBefore, int limit) {
+        return workflowJpaRepository
+                .findStuckGeneratingS3(heartbeatBefore, PageRequest.of(0, limit))
+                .stream()
+                .map(this::toStuckWorkflow)
+                .toList();
+    }
+
+    @Override
+    public List<StuckWorkflow> findStuckRequested(Instant createdBefore, int limit) {
+        return workflowJpaRepository
+                .findStuckRequested(createdBefore, PageRequest.of(0, limit))
+                .stream()
+                .map(this::toStuckWorkflow)
+                .toList();
+    }
+
+    private StuckWorkflow toStuckWorkflow(ModelGenerationWorkflowJpaEntity entity) {
+        return new StuckWorkflow(
+                entity.getId(),
+                entity.getShowcaseId(),
+                entity.getCurrentStep(),
+                entity.getTripoTaskId(),
+                entity.getTripoSucceededAt(),
+                entity.getHeartbeatAt(),
+                entity.getLastPolledAt(),
+                entity.getCreatedAt()
+        );
     }
 
     private WorkflowSnapshot toSnapshot(ModelGenerationWorkflowJpaEntity entity) {
