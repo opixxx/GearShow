@@ -8,6 +8,7 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflo
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -23,9 +24,15 @@ import java.util.Optional;
  * {@link #nextAttemptNo(Long)} → {@link #saveRequested(Long, String, int)} 사이에 발생할 수 있는
  * race 를 DB 레벨에서 차단한다. 충돌은 비즈니스 예외 {@link ConcurrentModelRetryException}(409) 로
  * 전환해 호출자가 의미 있는 응답을 내려보낼 수 있게 한다.</p>
+ *
+ * <p><b>트랜잭션 전략</b>: {@code Showcase3dModelPersistenceAdapter} 와 동일하게 클래스 레벨
+ * {@code @Transactional} 을 두어 상위 TX 에 참여(REQUIRED)하거나 없을 땐 메서드당 한 번만 연다.
+ * Poller 경로처럼 상위 서비스에 TX 가 없는 경우라도 각 mark* 호출이 예측 가능한 범위에서 트랜잭션
+ * 경계를 갖게 한다.</p>
  */
 @Repository
 @RequiredArgsConstructor
+@Transactional
 public class ModelGenerationWorkflowPersistenceAdapter implements ModelGenerationWorkflowPort {
 
     private final ModelGenerationWorkflowJpaRepository workflowJpaRepository;
@@ -73,6 +80,16 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
         return workflowJpaRepository.markGenerating(workflowId, tripoTaskId, Instant.now());
     }
 
+    @Override
+    public int markPolled(Long workflowId) {
+        return workflowJpaRepository.markPolled(workflowId, Instant.now());
+    }
+
+    @Override
+    public int markTripoSucceeded(Long workflowId) {
+        return workflowJpaRepository.markTripoSucceeded(workflowId, Instant.now());
+    }
+
     private WorkflowSnapshot toSnapshot(ModelGenerationWorkflowJpaEntity entity) {
         return new WorkflowSnapshot(
                 entity.getId(),
@@ -80,6 +97,8 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 entity.getIdempotencyKey(),
                 entity.getAttemptNo(),
                 entity.getCurrentStep(),
+                entity.getTripoTaskId(),
+                entity.getTripoSucceededAt(),
                 entity.getStartedAt(),
                 entity.getHeartbeatAt()
         );

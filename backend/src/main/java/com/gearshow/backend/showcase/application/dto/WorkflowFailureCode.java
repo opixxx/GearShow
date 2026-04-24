@@ -37,5 +37,11 @@ public enum WorkflowFailureCode {
      * 조건부 UPDATE 의 affected=0 을 통해 조용히 처리되므로 이 코드는 드물다.
      * Reconcile 이 {@code tripo_pending_task} 를 활용해 복구한다.
      */
-    TX2_DB_FAILED
+    TX2_DB_FAILED,
+
+    /**
+     * 폴링 중 Tripo 측에서 task 상태를 {@code FAILED/REJECTED} 로 보고해 종결된 경우 (P1-E).
+     * Poller 가 감지하고 {@code markFailed} 로 전이한다.
+     */
+    TRIPO_TASK_FAILED
 }

@@ -172,12 +172,12 @@ CREATE TABLE processed_message (
 
 ### 3.4 Redis 키 공간
 
-| Key | 용도 | TTL |
-|---|---|---|
-| `workflow:lock:{workflowId}` | 상태 전이 TX 보호 (분산 락) | 10s (watchdog) |
-| `tripo:semaphore` | 10 슬롯 rate limit | 영구 |
-| `tripo:queue` | ZSET, score=enqueuedAt (피크 시 대기열) | 영구 |
-| `poll:delayed-queue` | Redisson DelayedQueue (적응형 폴링) | 영구 |
+| Key | 용도 | TTL | 상태 |
+|---|---|---|---|
+| `workflow:lock:{workflowId}` | 상태 전이 TX 보호 (분산 락) | 10s (watchdog) | ✅ P1-D-α+β |
+| `tripo:semaphore` | 10 슬롯 rate limit | 영구 | ✅ P1-E |
+| `tripo:queue` | ZSET, score=enqueuedAt (피크 시 대기열) | 영구 | ⏳ 보류 (DelayedQueue 로 충분 시 제거) |
+| `poll:delayed-queue:main` | Redisson DelayedQueue (적응형 폴링) | 영구 | ✅ P1-E |
 
 ### 3.5 Kafka 토픽
 
@@ -588,14 +588,13 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-B-α+β** | `Idempotency-Key` 헤더 처리 + `ContentHash` VO + 10분 창 dedup | P1-A | 중 | ✅ PR #40 |
 | **P1-B-γ** | `ModelGenerationWorkflow` INSERT 를 `CreateShowcase`/재시도 경로에 연결 · Outbox `event_id = SHA-256(idempotencyKey)` 결정적 파생 · `Idempotency-Key` 헤더 필수화 | P1-B-α+β | 중 | ✅ PR #41 |
 | **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | ✅ PR #42 |
-| **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 + **Redisson 분산 락** (workflow:lock:{workflowId}, TTL 10s watchdog) | P1-C | 중 | 🚧 본 PR |
-| **P1-D-γ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) | P1-D-α+β | 높음 | ⏳ |
-| **P1-D-δ** | `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 재정의 | P1-D-γ | 중 | ⏳ |
-| **P1-E** | Poller + DelayedQueue + rate limit 세마포어 (락 無) | P1-D-δ | 중 |
-| **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 |
-| **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 |
-| **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 |
-| **P1-I** | E2E 테스트 (크래시 시뮬레이션, 중복 요청, 재시도) | P1-H | 중 |
+| **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 + **Redisson 분산 락** (workflow:lock:{workflowId}, TTL 10s watchdog) | P1-C | 중 | ✅ PR #43 |
+| **P1-D-γ+δ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) + `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 + Circuit Breaker 차단 | P1-D-α+β | 높음 | ✅ PR #44 |
+| **P1-E** | Poller + Redisson DelayedQueue (`poll:delayed-queue:main`) + `tripo:semaphore` 10 permits + `TripoSuccessEvent` ApplicationEvent (락 無) | P1-D-γ+δ | 중 | 🚧 본 PR |
+| **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 | ⏳ |
+| **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 | ⏳ |
+| **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 | ⏳ |
+| **P1-I** | E2E 테스트 (크래시 시뮬레이션, 중복 요청, 재시도) | P1-H | 중 | ⏳ |
 
 ---
 

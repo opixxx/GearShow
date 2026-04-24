@@ -85,4 +85,37 @@ public interface ModelGenerationWorkflowJpaRepository
     int markGenerating(@Param("id") Long id,
                        @Param("taskId") String taskId,
                        @Param("now") Instant now);
+
+    /**
+     * Poller 가 Tripo 를 조회했음을 기록한다. GENERATING + 아직 SUCCESS 인지 안 된 워크플로우만 대상.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.lastPolledAt = :now,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING
+               AND w.tripoSucceededAt IS NULL
+            """)
+    int markPolled(@Param("id") Long id, @Param("now") Instant now);
+
+    /**
+     * GENERATING 내부에서 Tripo SUCCESS 인지 시점을 기록한다. {@code tripo_succeeded_at} 만
+     * 채우고 {@code current_step} 은 GENERATING 유지 (S3 미러링 서브-단계로 진입).
+     * WHERE 에 {@code tripo_succeeded_at IS NULL} 을 포함해 중복 이벤트 발행을 구조적으로 차단.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.tripoSucceededAt = :now,
+                   w.lastPolledAt = :now,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING
+               AND w.tripoSucceededAt IS NULL
+            """)
+    int markTripoSucceeded(@Param("id") Long id, @Param("now") Instant now);
 }

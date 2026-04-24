@@ -84,4 +84,24 @@ public interface ModelGenerationWorkflowPort {
      * @return 1=전이 성공, 0=이미 다른 상태로 이동했거나 존재하지 않음
      */
     int markGenerating(Long workflowId, String tripoTaskId);
+
+    /**
+     * Poller 가 Tripo 를 조회했음을 기록한다 (last_polled_at, heartbeat_at, updated_at 갱신).
+     * WHERE {@code current_step = GENERATING AND tripo_succeeded_at IS NULL} 을 강제해
+     * 이미 완료됐거나 종결된 워크플로우를 덮지 않는다.
+     *
+     * @return 1=성공, 0=skip 대상 (다른 주체가 전이)
+     */
+    int markPolled(Long workflowId);
+
+    /**
+     * Tripo SUCCESS 인지 시각을 기록한다. {@code current_step} 은 GENERATING 을 유지하고
+     * {@code tripo_succeeded_at} 만 NOW() 로 채워 GENERATING 내부 서브-단계를 전환한다
+     * (Tripo 처리 중 → S3 미러링 중, 설계 §5).
+     *
+     * <p>WHERE {@code current_step = GENERATING AND tripo_succeeded_at IS NULL} — 중복 이벤트 방지.</p>
+     *
+     * @return 1=성공 (이 시점에만 TripoSuccessEvent 발행), 0=이미 전이됨
+     */
+    int markTripoSucceeded(Long workflowId);
 }
