@@ -5,11 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gearshow.backend.platform.outbox.application.exception.OutboxEventSerializationException;
 import com.gearshow.backend.platform.outbox.application.port.out.OutboxMessagePort;
 import com.gearshow.backend.platform.outbox.domain.OutboxMessage;
+import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationCompletedMessage;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.infrastructure.config.ShowcaseKafkaTopicConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.time.Instant;
 
 /**
  * {@link ModelGenerationEventPublisher} 의 Outbox 기반 구현체.
@@ -35,6 +38,7 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
 
     private static final String AGGREGATE_TYPE = "SHOWCASE_3D_MODEL";
     private static final String EVENT_TYPE = "MODEL_GENERATION_REQUESTED";
+    private static final String EVENT_TYPE_COMPLETED = "MODEL_GENERATION_COMPLETED";
 
     private final OutboxMessagePort outboxMessagePort;
     private final ObjectMapper objectMapper;
@@ -61,7 +65,38 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
         outboxMessagePort.save(outboxMessage);
     }
 
+    @Override
+    public void publishCompleted(Long workflowId, Long showcaseId,
+                                 String modelFileUrl, String previewImageUrl) {
+        // COMPLETED 는 API 단계의 Idempotency-Key 와 다른 경계의 event_id — workflowId 기반
+        // 결정적 파생. TX_final 재진입 시에도 같은 messageId 가 나와 Consumer processed_message 가
+        // 중복 차단. 공식 캡슐화는 ShowcaseWorkflowEventIds.forCompletionEvent.
+        String messageId = ShowcaseWorkflowEventIds.forCompletionEvent(workflowId);
+        ModelGenerationCompletedMessage message = new ModelGenerationCompletedMessage(
+                messageId, workflowId, showcaseId, modelFileUrl, previewImageUrl, Instant.now());
+        String payload = serializeCompleted(message);
+
+        OutboxMessage outboxMessage = OutboxMessage.create(
+                AGGREGATE_TYPE,
+                showcaseId,
+                EVENT_TYPE_COMPLETED,
+                ShowcaseKafkaTopicConfig.MODEL_GENERATION_COMPLETED_TOPIC,
+                String.valueOf(showcaseId),
+                messageId,
+                payload
+        );
+        outboxMessagePort.save(outboxMessage);
+    }
+
     private String serialize(ModelGenerationRequestMessage message) {
+        try {
+            return objectMapper.writeValueAsString(message);
+        } catch (JsonProcessingException e) {
+            throw new OutboxEventSerializationException(e);
+        }
+    }
+
+    private String serializeCompleted(ModelGenerationCompletedMessage message) {
         try {
             return objectMapper.writeValueAsString(message);
         } catch (JsonProcessingException e) {

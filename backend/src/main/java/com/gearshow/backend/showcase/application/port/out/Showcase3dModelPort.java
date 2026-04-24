@@ -76,4 +76,17 @@ public interface Showcase3dModelPort {
      * @param limit       최대 반환 수
      */
     List<Showcase3dModel> findStaleGeneratingWithoutTaskId(Instant referenceAt, int limit);
+
+    /**
+     * Downloader TX_final — showcaseId 에 해당하는 3D 모델 엔티티의 완성 URL 3종과
+     * {@code modelStatus = COMPLETED} 를 한 번에 UPDATE 한다. 상태 머신 검증은
+     * {@link ModelGenerationWorkflowPort#markCompleted(Long)} 가 이미 수행하므로 본 메서드는
+     * 단순 부가 UPDATE.
+     *
+     * @return 영향 받은 행 수 (1=성공, 0=행 없음 — Reconcile 이 복구 대상으로 감지)
+     */
+    int markCompletedByShowcaseId(Long showcaseId,
+                                  String modelFileUrl,
+                                  String previewImageUrl,
+                                  Instant generatedAt);
 }

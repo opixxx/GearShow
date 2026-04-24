@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.application.service;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
 import com.gearshow.backend.showcase.application.port.in.PrepareWorkflowUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
@@ -12,15 +13,12 @@ import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
-import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,9 +65,12 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     private final WorkflowLockPort workflowLockPort;
     private final ModelGenerationClient modelGenerationClient;
     private final TripoPendingTaskPort tripoPendingTaskPort;
-    /** Redis disabled 환경에서는 Bean 이 없으므로 {@link ObjectProvider} 로 선택적 주입. */
-    private final ObjectProvider<WorkflowPollQueuePort> pollQueueProvider;
-    private final TripoPollingProperties pollingProperties;
+    /**
+     * TX2 성공 후 {@link WorkflowGeneratingConfirmedEvent} 를 발행한다. 실제 Redis DelayedQueue
+     * offer 는 {@code WorkflowGeneratingConfirmedEventListener} 가 {@code AFTER_COMMIT} 경계에서
+     * 수행 — Redis disabled 환경은 Bean 자체가 없어 no-op.
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public void prepare(Long workflowId) {
@@ -104,26 +105,15 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     }
 
     /**
-     * TX2 성공 후 Poller 의 DelayedQueue 에 workflowId 를 등록한다.
+     * TX2 성공 후 {@link WorkflowGeneratingConfirmedEvent} 를 발행한다.
      *
-     * <p>Redis 비활성 환경에서는 Bean 이 없어 no-op (단일 인스턴스 전제의 로컬/테스트).
-     * offer 자체가 실패해도 Reconcile 이 stuck 을 감지해 복구하므로 예외는 로그만.</p>
+     * <p>실제 Redis DelayedQueue offer 는
+     * {@code WorkflowGeneratingConfirmedEventListener} 가 {@code AFTER_COMMIT} 단계에서 수행한다.
+     * 이 패턴의 장점: (1) Worker 서비스가 Redis Port 를 직접 몰라도 됨 (2) 향후 상위 TX 가 추가돼도
+     * "DB 커밋 후 offer" 계약이 자동 유지됨.</p>
      */
     private void enqueueForPolling(Long workflowId) {
-        WorkflowPollQueuePort pollQueue = pollQueueProvider.getIfAvailable();
-        if (pollQueue == null) {
-            log.debug("WorkflowPollQueuePort 미등록 — Poller 비활성 환경 (Redis disabled). "
-                    + "skip offer. workflowId: {}", workflowId);
-            return;
-        }
-        Duration delay = Duration.ofSeconds(pollingProperties.delaySeconds());
-        try {
-            pollQueue.offer(workflowId, delay);
-            log.info("Poller DelayedQueue 등록 — workflowId: {}, delay: {}", workflowId, delay);
-        } catch (Exception e) {
-            log.error("Poller DelayedQueue 등록 실패 — Reconcile 이 복구 예정. workflowId: {}",
-                    workflowId, e);
-        }
+        eventPublisher.publishEvent(new WorkflowGeneratingConfirmedEvent(workflowId));
     }
 
     /**

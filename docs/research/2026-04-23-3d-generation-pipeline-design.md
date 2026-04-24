@@ -343,7 +343,8 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
     (주기적 heartbeat UPDATE)
     Tripo `POST /upload` × 4 (multipart) → file_token × 4
        # STS 방식(`POST /upload/sts/token`) 은 Phase 2 최적화로 보류
-    tripo:queue ZSET 대기 (피크 시) + tripo:semaphore 획득
+    tripo:semaphore 획득 (10 permits, Redisson RSemaphore)
+       # tripo:queue ZSET 대기 (트래픽 피크 전용) — ⏳ Phase 2 도입 예정 (현재는 미구현)
     POST /task
        Body: {
          type: 'multiview_to_model',
@@ -365,7 +366,10 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
     COMMIT
     unlock
     ack Kafka
-    DelayedQueue.offer(workflowId, delay=30s)
+    # 락 밖, AFTER_COMMIT 이벤트 리스너가 offer
+    eventPublisher.publish(WorkflowGeneratingConfirmedEvent(workflowId))
+    → listener (@TransactionalEventListener AFTER_COMMIT, @Async tripoPollingExecutor):
+       DelayedQueue.offer(workflowId, delay=30s)
 
 [7] Poller (DelayedQueue consumer, 락 없음):
     workflow = SELECT ...
@@ -384,7 +388,9 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
         UPDATE tripo_succeeded_at=NOW(), last_polled_at=NOW()
           WHERE id=? AND current_step='GENERATING'
                     AND tripo_succeeded_at IS NULL
-        if affected > 0 → downloadExecutor.submit(() -> download(workflowId))
+        if affected > 0 → eventPublisher.publish(TripoSuccessEvent(workflowId, taskId))
+           → listener (@TransactionalEventListener AFTER_COMMIT, @Async downloadExecutor)
+             → DownloadAndMirrorUseCase.download(workflowId, taskId)
 
     case FAILED/REJECTED/INSUFFICIENT_CREDIT:
         UPDATE current_step='FAILED',
@@ -393,23 +399,25 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
           WHERE id=? AND current_step='GENERATING'
         ApplicationEvent: ModelGenerationFailed
 
-[8] Downloader (별도 thread pool):
+[8] Downloader (downloadExecutor core=2/max=4, caller-runs):
     [락 밖]
     - Tripo GET task/{taskId} → 새 download_url (60s TTL)
-    - 스트림 다운로드 → S3 PUT "gearshow-models/{workflowId}.glb" (결정적 key)
-    - 주기적 heartbeat UPDATE
+    - 스트림 다운로드 → S3 PUT "models/{showcaseId}/model.glb" + "preview.png" (결정적 key)
+       # 결정적 key 덕분에 재실행 시 덮어쓰기 멱등 — 재진입 시 HEAD 검증 불필요
 
     redisson.lock("workflow:lock:" + workflowId) [10s]
     BEGIN TX_final
-      SELECT FOR UPDATE workflow WHERE id=?
       UPDATE current_step='COMPLETED', finished_at=NOW()
         WHERE id=? AND current_step='GENERATING'
                   AND tripo_succeeded_at IS NOT NULL
-      affected_rows == 0 → 재진입, s3.headObject 로 검증
-      UPDATE sc_3d_model SET model_url, format, file_size
+      affected_rows == 0 → skip (다른 Downloader 가 이미 처리, 재진입 차단)
+      UPDATE showcase_3d_model SET model_file_url, preview_image_url, generated_at,
+                                   model_status='COMPLETED'
+        WHERE showcase_id = ?
+      Outbox INSERT (MODEL_GENERATION_COMPLETED, topic=showcase.model-generation.completed)
     COMMIT
     unlock
-    ApplicationEvent: ModelGenerationCompleted(showcaseId)
+    # Outbox Relay 가 Kafka 로 발행 → Notification Consumer 가 FCM 푸시 (P1-H)
 
 [9] Notification Consumer → FCM 푸시
 ```
@@ -590,8 +598,8 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-C** | retry 토픽 추가 등록 + Testcontainers 기반 Relay→Kafka 통합 테스트 + 설계 §3.5 토픽 이름 정정 | P1-B-γ | 낮음 | ✅ PR #42 |
 | **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 + **Redisson 분산 락** (workflow:lock:{workflowId}, TTL 10s watchdog) | P1-C | 중 | ✅ PR #43 |
 | **P1-D-γ+δ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) + `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 + Circuit Breaker 차단 | P1-D-α+β | 높음 | ✅ PR #44 |
-| **P1-E** | Poller + Redisson DelayedQueue (`poll:delayed-queue:main`) + `tripo:semaphore` 10 permits + `TripoSuccessEvent` ApplicationEvent (락 無) | P1-D-γ+δ | 중 | 🚧 본 PR |
-| **P1-F** | Downloader + S3 mirror + TX_final + 도메인 UPDATE | P1-E | 중 | ⏳ |
+| **P1-E** | Poller + Redisson DelayedQueue (`poll:delayed-queue:main`) + `tripo:semaphore` 10 permits + `TripoSuccessEvent` ApplicationEvent (락 無) | P1-D-γ+δ | 중 | ✅ PR #45 |
+| **P1-F** | Downloader + S3 mirror + TX_final (GENERATING→COMPLETED) + `MODEL_GENERATION_COMPLETED` Outbox + `WorkflowGeneratingConfirmedEvent` AFTER_COMMIT 리팩토링 | P1-E | 중 | 🚧 본 PR |
 | **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 | ⏳ |
 | **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 | ⏳ |
 | **P1-I** | E2E 테스트 (크래시 시뮬레이션, 중복 요청, 재시도) | P1-H | 중 | ⏳ |

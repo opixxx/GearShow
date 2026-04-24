@@ -32,6 +32,16 @@ public class ShowcaseKafkaTopicConfig {
     /** 3D 모델 생성 요청 DLT (재시도 소진된 메시지 격리) */
     public static final String MODEL_GENERATION_REQUEST_DLT = MODEL_GENERATION_REQUEST_TOPIC + ".DLT";
 
+    /**
+     * 3D 모델 생성 완료 이벤트 토픽.
+     *
+     * <p>Downloader 의 TX_final 이 Outbox 에 이 토픽 이름으로 이벤트를 적재한다 (P1-F). 현재는
+     * Consumer 가 없으며 후속 P1-H 알림 단계에서 FCM 푸시 Consumer 가 붙을 예정이다.
+     * 파티션/복제본은 request 토픽과 동일 (3/1) — 쇼케이스 단위 순서 보장.</p>
+     */
+    public static final String MODEL_GENERATION_COMPLETED_TOPIC =
+            "showcase.model-generation.completed";
+
     @Bean
     @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
     public NewTopic modelGenerationRequestTopic() {
@@ -62,6 +72,15 @@ public class ShowcaseKafkaTopicConfig {
     @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
     public NewTopic modelGenerationRequestDlt() {
         return TopicBuilder.name(MODEL_GENERATION_REQUEST_DLT)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
+    public NewTopic modelGenerationCompletedTopic() {
+        return TopicBuilder.name(MODEL_GENERATION_COMPLETED_TOPIC)
                 .partitions(3)
                 .replicas(1)
                 .build();

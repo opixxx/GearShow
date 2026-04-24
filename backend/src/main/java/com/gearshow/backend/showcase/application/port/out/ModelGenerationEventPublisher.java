@@ -27,4 +27,20 @@ public interface ModelGenerationEventPublisher {
                           Long showcase3dModelId,
                           Long showcaseId,
                           String idempotencyKey);
+
+    /**
+     * 3D 모델 생성이 최종 완료(COMPLETED) 되었음을 알리는 이벤트를 발행한다 (P1-F, 설계 §7 [8]).
+     *
+     * <p>TX_final 안에서 호출되어 "DB 커밋 = Kafka 발행 보장" 을 만족한다. 후속 Consumer
+     * (FCM 푸시 등) 는 {@code workflowId} 기준으로 idempotent 처리.</p>
+     *
+     * @param workflowId        완료된 워크플로우 ID
+     * @param showcaseId        대상 쇼케이스 ID (파티션 키)
+     * @param modelFileUrl      S3 미러링된 GLB 파일 URL
+     * @param previewImageUrl   S3 미러링된 프리뷰 이미지 URL (없으면 null)
+     */
+    void publishCompleted(Long workflowId,
+                          Long showcaseId,
+                          String modelFileUrl,
+                          String previewImageUrl);
 }
