@@ -4,7 +4,7 @@ import com.gearshow.backend.platform.idempotency.application.port.in.AcquireIdem
 import com.gearshow.backend.platform.idempotency.domain.IdempotencyDomain;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.port.in.PrepareModelGenerationUseCase;
-import com.gearshow.backend.showcase.infrastructure.config.KafkaConfig;
+import com.gearshow.backend.showcase.infrastructure.config.ShowcaseKafkaTopicConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,7 +38,7 @@ public class ModelGenerationWorker {
     private final AcquireIdempotencyUseCase acquireIdempotencyUseCase;
 
     @KafkaListener(
-            topics = KafkaConfig.MODEL_GENERATION_REQUEST_TOPIC,
+            topics = ShowcaseKafkaTopicConfig.MODEL_GENERATION_REQUEST_TOPIC,
             groupId = "model-generation-worker",
             containerFactory = "modelGenerationRequestListenerFactory"
     )

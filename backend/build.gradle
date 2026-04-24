@@ -143,6 +143,7 @@ ext.jacocoExcludes = [
 	'**/DevLoginService.*',
 	// Kafka 인프라 (테스트에서 Mock 사용, 실제 브로커 필요)
 	'**/infrastructure/config/Kafka*.*',
+	'**/infrastructure/config/ShowcaseKafkaTopicConfig.*',
 	'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.*',
 	'**/messaging/kafka/**',
 	'**/messaging/dto/**',
@@ -222,6 +223,7 @@ sonar {
 			'**/DevAuthController.java',
 			'**/DevLoginService.java',
 			'**/infrastructure/config/Kafka*.java',
+			'**/infrastructure/config/ShowcaseKafkaTopicConfig.java',
 			'**/platform/outbox/infrastructure/config/OutboxKafkaConfig.java',
 			'**/messaging/kafka/**',
 			'**/messaging/dto/**',
