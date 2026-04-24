@@ -12,11 +12,15 @@ import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
+import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
+import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,6 +67,9 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     private final WorkflowLockPort workflowLockPort;
     private final ModelGenerationClient modelGenerationClient;
     private final TripoPendingTaskPort tripoPendingTaskPort;
+    /** Redis disabled 환경에서는 Bean 이 없으므로 {@link ObjectProvider} 로 선택적 주입. */
+    private final ObjectProvider<WorkflowPollQueuePort> pollQueueProvider;
+    private final TripoPollingProperties pollingProperties;
 
     @Override
     public void prepare(Long workflowId) {
@@ -91,7 +98,32 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
             return;
         }
 
-        transitionToGeneratingUnderLock(workflowId, tripoTaskId);
+        if (transitionToGeneratingUnderLock(workflowId, tripoTaskId)) {
+            enqueueForPolling(workflowId);
+        }
+    }
+
+    /**
+     * TX2 성공 후 Poller 의 DelayedQueue 에 workflowId 를 등록한다.
+     *
+     * <p>Redis 비활성 환경에서는 Bean 이 없어 no-op (단일 인스턴스 전제의 로컬/테스트).
+     * offer 자체가 실패해도 Reconcile 이 stuck 을 감지해 복구하므로 예외는 로그만.</p>
+     */
+    private void enqueueForPolling(Long workflowId) {
+        WorkflowPollQueuePort pollQueue = pollQueueProvider.getIfAvailable();
+        if (pollQueue == null) {
+            log.debug("WorkflowPollQueuePort 미등록 — Poller 비활성 환경 (Redis disabled). "
+                    + "skip offer. workflowId: {}", workflowId);
+            return;
+        }
+        Duration delay = Duration.ofSeconds(pollingProperties.delaySeconds());
+        try {
+            pollQueue.offer(workflowId, delay);
+            log.info("Poller DelayedQueue 등록 — workflowId: {}, delay: {}", workflowId, delay);
+        } catch (Exception e) {
+            log.error("Poller DelayedQueue 등록 실패 — Reconcile 이 복구 예정. workflowId: {}",
+                    workflowId, e);
+        }
     }
 
     /**
@@ -199,8 +231,12 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
      * pending 삭제 없이 종료 (Reconcile 이 정리). {@link DataAccessException} 발생 시엔
      * pending 레코드를 그대로 두어 Reconcile 이 복구하도록 하고 예외를 삼킨다
      * (설계 결정 #5 — Tripo 호출 후 실패는 Worker release 금지).
+     *
+     * @return TX2 조건부 UPDATE 가 affected=1 로 성공했으면 {@code true} — 호출자는
+     *         이 때만 Poller DelayedQueue 에 offer 해야 한다 (Redis 호출은 락 밖).
      */
-    private void transitionToGeneratingUnderLock(Long workflowId, String tripoTaskId) {
+    private boolean transitionToGeneratingUnderLock(Long workflowId, String tripoTaskId) {
+        AtomicBoolean transitioned = new AtomicBoolean(false);
         try {
             workflowLockPort.withLock(workflowId, () -> {
                 int affected = workflowPort.markGenerating(workflowId, tripoTaskId);
@@ -218,6 +254,7 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
                                     + "(pending 행은 다음 Reconcile 에서 정리됨). workflowId: {}",
                             workflowId, deleteEx);
                 }
+                transitioned.set(true);
                 log.info("TX2 완료 — workflowId: {}, taskId: {}", workflowId, tripoTaskId);
             });
         } catch (WorkflowLockBusyException e) {
@@ -229,6 +266,7 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
                     + "workflowId: {}, taskId: {}", workflowId, tripoTaskId, e);
             // 설계 결정 #5 — Tripo 호출 후 실패는 Worker release 금지. 예외 삼킴.
         }
+        return transitioned.get();
     }
 
     /**

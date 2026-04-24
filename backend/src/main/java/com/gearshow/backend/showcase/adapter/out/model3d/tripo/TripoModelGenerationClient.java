@@ -7,8 +7,10 @@ import com.gearshow.backend.showcase.adapter.out.model3d.tripo.exception.TripoAp
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
+import com.gearshow.backend.showcase.application.port.out.TripoSemaphorePort;
 import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
 import com.gearshow.backend.showcase.infrastructure.config.TripoConfig;
+import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -46,6 +48,8 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
     private final TripoConfig tripoConfig;
     private final ModelSourceImagePort modelSourceImagePort;
     private final ImageStoragePort imageStoragePort;
+    private final TripoSemaphorePort tripoSemaphorePort;
+    private final TripoPollingProperties pollingProperties;
 
     /**
      * Tripo 결과 파일(GLB, 프리뷰) 다운로드 전용 RestClient.
@@ -68,22 +72,27 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
         log.info("Tripo startGeneration - workflowId: {}, showcaseId: {}",
                 workflowId, showcaseId);
 
-        // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서) — showcaseId 로 직접 조회해 showcase3dModel 역조회 제거
-        List<ModelSourceImage> sourceImages = modelSourceImagePort
-                .findByShowcaseId(showcaseId)
-                .stream()
-                .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
-                .toList();
+        // 이미지 업로드 + task 생성 전체를 Tripo 세마포어 안에서 수행한다 (설계 §3.4, §7 [5]).
+        // Worker 와 Poller 가 동일 세마포어(10 permits)를 공유해 Tripo rate limit 을 넘지 않게 한다.
+        Duration acquireTimeout = Duration.ofMillis(pollingProperties.semaphoreAcquireTimeoutMs());
+        return tripoSemaphorePort.runWithPermit(acquireTimeout, () -> {
+            // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서)
+            List<ModelSourceImage> sourceImages = modelSourceImagePort
+                    .findByShowcaseId(showcaseId)
+                    .stream()
+                    .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
+                    .toList();
 
-        // 2. S3 다운로드 → Tripo 업로드 → image_token 획득
-        List<String> imageTokens = uploadImagesToTripo(sourceImages);
+            // 2. S3 다운로드 → Tripo 업로드 → image_token 획득
+            List<String> imageTokens = uploadImagesToTripo(sourceImages);
 
-        // 3. Multiview Task 생성 (여기서 과금 발생 — 정확히 1회만 호출)
-        TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
-                tripoConfig.getModelVersion(), imageTokens);
-        String taskId = tripoApiClient.createTask(taskRequest);
-        log.info("Tripo task 생성 성공 - workflowId: {}, taskId: {}", workflowId, taskId);
-        return taskId;
+            // 3. Multiview Task 생성 (여기서 과금 발생 — 정확히 1회만 호출)
+            TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
+                    tripoConfig.getModelVersion(), imageTokens);
+            String taskId = tripoApiClient.createTask(taskRequest);
+            log.info("Tripo task 생성 성공 - workflowId: {}, taskId: {}", workflowId, taskId);
+            return taskId;
+        });
     }
 
     @Override

@@ -68,7 +68,8 @@ class PollGenerationStatusServiceTest {
     @BeforeEach
     void setUp() {
         // record 는 mock 할 필요 없이 직접 생성
-        TripoPollingProperties properties = new TripoPollingProperties(3_000L, BATCH_SIZE, TIMEOUT_MINUTES);
+        TripoPollingProperties properties = new TripoPollingProperties(
+                3_000L, BATCH_SIZE, TIMEOUT_MINUTES, 30, 2_000L);
         service = new PollGenerationStatusService(
                 showcase3dModelPort, modelGenerationClient, stateWriter, properties);
     }
