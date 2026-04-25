@@ -112,13 +112,11 @@ class ModelGenerationOutboxRelayIntegrationTest {
         // Given — 명시적 새 트랜잭션에서 Outbox INSERT 커밋
         String idempotencyKey = "it-happy-" + UUID.randomUUID();
         Long expectedWorkflowId = 11L;
-        Long expectedShowcase3dModelId = 22L;
         Long expectedShowcaseId = 33L;
 
         transactionTemplate.executeWithoutResult(status ->
                 modelGenerationEventPublisher.publishRequested(
                         expectedWorkflowId,
-                        expectedShowcase3dModelId,
                         expectedShowcaseId,
                         idempotencyKey));
 
@@ -136,7 +134,6 @@ class ModelGenerationOutboxRelayIntegrationTest {
                 .hasSize(64)
                 .matches("[0-9a-f]{64}");
         assertThat(payload.workflowId()).isEqualTo(expectedWorkflowId);
-        assertThat(payload.showcase3dModelId()).isEqualTo(expectedShowcase3dModelId);
         assertThat(payload.showcaseId()).isEqualTo(expectedShowcaseId);
     }
 

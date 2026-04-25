@@ -54,7 +54,7 @@ public class GetModel3dService implements GetModel3dUseCase {
                 sourceImageCount,
                 latestWorkflow.map(WorkflowSnapshot::startedAt).orElse(null),
                 completedModel.map(Showcase3dModel::getGeneratedAt).orElse(null),
-                null
+                latestWorkflow.map(WorkflowSnapshot::failureMessage).orElse(null)
         );
     }
 }

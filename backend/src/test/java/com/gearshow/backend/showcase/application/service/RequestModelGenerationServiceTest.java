@@ -80,7 +80,7 @@ class RequestModelGenerationServiceTest {
         verify(modelGenerationWorkflowPort, times(1))
                 .saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 1);
         verify(modelGenerationEventPublisher, times(1)).publishRequested(
-                eq(777L), eq(SHOWCASE_ID), eq(SHOWCASE_ID), eq(IDEMPOTENCY_KEY));
+                eq(777L), eq(SHOWCASE_ID), eq(IDEMPOTENCY_KEY));
     }
 
     @Test
@@ -99,6 +99,6 @@ class RequestModelGenerationServiceTest {
         verify(modelGenerationWorkflowPort, times(1))
                 .saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 3);
         verify(modelGenerationEventPublisher, times(1)).publishRequested(
-                eq(888L), anyLong(), anyLong(), eq(IDEMPOTENCY_KEY));
+                eq(888L), anyLong(), eq(IDEMPOTENCY_KEY));
     }
 }

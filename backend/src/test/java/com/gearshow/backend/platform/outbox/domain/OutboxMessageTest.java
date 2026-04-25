@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class OutboxMessageTest {
 
-    private static final String AGGREGATE_TYPE = "SHOWCASE_3D_MODEL";
+    private static final String AGGREGATE_TYPE = "TEST_AGGREGATE";
     private static final Long AGGREGATE_ID = 1L;
     private static final String EVENT_TYPE = "MODEL_GENERATION_REQUESTED";
     private static final String TOPIC = "showcase.model.generation.request";

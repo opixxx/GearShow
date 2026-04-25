@@ -36,7 +36,9 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class ModelGenerationOutboxPublisher implements ModelGenerationEventPublisher {
 
-    private static final String AGGREGATE_TYPE = "SHOWCASE_3D_MODEL";
+    // ADR-010 이후 Showcase3dModel 은 완성품 전용이라 요청 시점에 존재하지 않는다.
+    // Outbox aggregate 는 워크플로우의 주체인 쇼케이스 단위로 표기한다.
+    private static final String AGGREGATE_TYPE = "SHOWCASE";
     private static final String EVENT_TYPE = "MODEL_GENERATION_REQUESTED";
     private static final String EVENT_TYPE_COMPLETED = "MODEL_GENERATION_COMPLETED";
 
@@ -44,18 +46,15 @@ public class ModelGenerationOutboxPublisher implements ModelGenerationEventPubli
     private final ObjectMapper objectMapper;
 
     @Override
-    public void publishRequested(Long workflowId,
-                                 Long showcase3dModelId,
-                                 Long showcaseId,
-                                 String idempotencyKey) {
+    public void publishRequested(Long workflowId, Long showcaseId, String idempotencyKey) {
         String messageId = ShowcaseWorkflowEventIds.deriveMessageId(idempotencyKey);
         ModelGenerationRequestMessage message = ModelGenerationRequestMessage.of(
-                messageId, workflowId, showcase3dModelId, showcaseId);
+                messageId, workflowId, showcaseId);
         String payload = serialize(message);
 
         OutboxMessage outboxMessage = OutboxMessage.create(
                 AGGREGATE_TYPE,
-                showcase3dModelId,
+                showcaseId,
                 EVENT_TYPE,
                 ShowcaseKafkaTopicConfig.MODEL_GENERATION_REQUEST_TOPIC,
                 String.valueOf(showcaseId),

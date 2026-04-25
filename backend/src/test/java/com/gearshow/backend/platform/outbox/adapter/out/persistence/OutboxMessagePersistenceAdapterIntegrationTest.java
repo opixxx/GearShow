@@ -49,7 +49,7 @@ class OutboxMessagePersistenceAdapterIntegrationTest {
 
     private OutboxMessage pendingMessage(Long aggregateId, String topic) {
         return OutboxMessage.create(
-                "SHOWCASE_3D_MODEL",
+                "TEST_AGGREGATE",
                 aggregateId,
                 "MODEL_GENERATION_REQUESTED",
                 topic,

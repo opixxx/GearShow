@@ -2,7 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.event;
 
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.WorkflowPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -34,7 +34,7 @@ import java.time.Duration;
 public class WorkflowGeneratingConfirmedEventListener {
 
     private final ObjectProvider<WorkflowPollQueuePort> pollQueueProvider;
-    private final TripoPollingProperties pollingProperties;
+    private final WorkflowPollingProperties pollingProperties;
 
     @Async("tripoPollingExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)

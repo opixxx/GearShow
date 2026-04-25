@@ -62,11 +62,14 @@ app:
     cleanup-batch-size: 1000
     cleanup-batch-sleep-ms: 50
 
-  # Tripo 폴링 (DelayedQueue 기반 경로 전용 — P1-E/P1-G)
-  tripo-polling:
+  # 워크플로우 폴링 인프라 (DelayedQueue 기반 경로 전용 — P1-E)
+  workflow-polling:
     delay-seconds: 30               # 재대기 지연
-    semaphore-acquire-timeout-ms: 2000
     scheduler-enabled: true
+
+  # Tripo HTTP API 호출 설정
+  tripo-api:
+    semaphore-acquire-timeout-ms: 2000
 
   # Reconcile 배치 (설계 §8.4 — P1-G)
   reconcile:

@@ -103,7 +103,7 @@ class ReconcileStuckWorkflowsServiceTest {
     private WorkflowSnapshot preparingSnapshot(Instant heartbeat) {
         return new WorkflowSnapshot(
                 WORKFLOW_ID, SHOWCASE_ID, "k", 1,
-                WorkflowStep.PREPARING, null, null, Instant.now(), heartbeat);
+                WorkflowStep.PREPARING, null, null, Instant.now(), heartbeat, null, null);
     }
 
     @Nested
@@ -264,7 +264,7 @@ class ReconcileStuckWorkflowsServiceTest {
             return new WorkflowSnapshot(
                     WORKFLOW_ID, SHOWCASE_ID, "k", 1,
                     step, TASK_ID, tripoSucceededAt,
-                    Instant.now(), heartbeat);
+                    Instant.now(), heartbeat, null, null);
         }
 
         @Test

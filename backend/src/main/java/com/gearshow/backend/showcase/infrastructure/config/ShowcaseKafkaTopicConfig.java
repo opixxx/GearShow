@@ -27,10 +27,11 @@ public class ShowcaseKafkaTopicConfig {
      * 파티션/복제본은 메인 토픽과 동일(3/1) — key(쇼케이스 기준) 파티셔닝이 메인·retry·DLT 간
      * 일관되어야 재시도 후에도 동일 쇼케이스 메시지의 순서가 보존된다.</p>
      */
-    public static final String MODEL_GENERATION_REQUEST_RETRY =
+    public static final String MODEL_GENERATION_REQUEST_RETRY_TOPIC =
             MODEL_GENERATION_REQUEST_TOPIC + "-retry";
     /** 3D 모델 생성 요청 DLT (재시도 소진된 메시지 격리) */
-    public static final String MODEL_GENERATION_REQUEST_DLT = MODEL_GENERATION_REQUEST_TOPIC + ".DLT";
+    public static final String MODEL_GENERATION_REQUEST_DLT_TOPIC =
+            MODEL_GENERATION_REQUEST_TOPIC + ".DLT";
 
     /**
      * 3D 모델 생성 완료 이벤트 토픽.
@@ -58,7 +59,7 @@ public class ShowcaseKafkaTopicConfig {
     @Bean
     @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
     public NewTopic modelGenerationRequestRetry() {
-        return TopicBuilder.name(MODEL_GENERATION_REQUEST_RETRY)
+        return TopicBuilder.name(MODEL_GENERATION_REQUEST_RETRY_TOPIC)
                 .partitions(3)
                 .replicas(1)
                 .build();
@@ -71,7 +72,7 @@ public class ShowcaseKafkaTopicConfig {
     @Bean
     @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
     public NewTopic modelGenerationRequestDlt() {
-        return TopicBuilder.name(MODEL_GENERATION_REQUEST_DLT)
+        return TopicBuilder.name(MODEL_GENERATION_REQUEST_DLT_TOPIC)
                 .partitions(3)
                 .replicas(1)
                 .build();

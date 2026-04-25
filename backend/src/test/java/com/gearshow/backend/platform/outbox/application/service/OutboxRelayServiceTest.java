@@ -62,7 +62,7 @@ class OutboxRelayServiceTest {
     private static OutboxMessage pendingMessage(long id, String topic) {
         return OutboxMessage.builder()
                 .id(id)
-                .aggregateType("SHOWCASE_3D_MODEL")
+                .aggregateType("TEST_AGGREGATE")
                 .aggregateId(id)
                 .eventType("MODEL_GENERATION_REQUESTED")
                 .topic(topic)

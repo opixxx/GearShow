@@ -21,6 +21,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * <p><b>@Async("downloadExecutor")</b>: Tripo GET + S3 PUT 은 수 초~수십 초 블로킹 I/O 이므로
  * Poller 스레드와 분리된 전용 실행기에서 돌린다. caller-runs 정책으로 큐 오버플로 시 Poller 가
  * 자연스럽게 느려진다 (설계 §6.2 백프레셔).</p>
+ *
+ * <p><b>@Async 제거 시 회귀 경고</b>: {@code fallbackExecution=true} 와 {@code @Async} 조합은
+ * Poller 의 짧은 TX 경계 밖에서 Downloader 가 실행됨을 보장한다. 만약 향후 누군가 {@code @Async} 를
+ * 제거하면 Tripo GET + S3 PUT 이 Poller 스레드에서 동기 실행되어 Poller 단일 스레드가 수십 초씩
+ * 블로킹된다. {@code @EnableAsync} 활성, executor Bean 등록, 어노테이션 유지 — 이 세 가지를 동시에
+ * 점검하지 않으면 침묵 회귀가 발생한다.</p>
  */
 @Slf4j
 @Component

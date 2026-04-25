@@ -4,7 +4,7 @@ import com.gearshow.backend.showcase.application.exception.SemaphoreInterruptedE
 import com.gearshow.backend.showcase.application.exception.TripoSemaphoreTimeoutException;
 import com.gearshow.backend.showcase.application.port.in.PollWorkflowUseCase;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.WorkflowPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -34,7 +34,7 @@ import java.time.Duration;
  * <ul>
  *   <li>{@code gearshow.redis.enabled=true} — Redis 인프라가 붙어 있어야 한다. disabled 환경에서는
  *       {@code WorkflowPollQueuePort} Bean 도 없어 전체 Poller 계층이 꺼진다.</li>
- *   <li>{@code app.tripo-polling.scheduler-enabled=true} (기본값) — 어댑터/큐만 띄우고 루프 자체는
+ *   <li>{@code app.workflow-polling.scheduler-enabled=true} (기본값) — 어댑터/큐만 띄우고 루프 자체는
  *       끄고 싶은 통합 테스트에서 {@code false} 로 오버라이드한다. 끄면 Redis 어댑터·세마포어는
  *       그대로 살아 있지만 자동 소비자가 없어 테스트가 큐를 단독 사용한다.</li>
  * </ul>
@@ -42,7 +42,7 @@ import java.time.Duration;
 @Slf4j
 @Component
 @ConditionalOnExpression(
-        "${gearshow.redis.enabled:false} and ${app.tripo-polling.scheduler-enabled:true}")
+        "${gearshow.redis.enabled:false} and ${app.workflow-polling.scheduler-enabled:true}")
 @RequiredArgsConstructor
 public class WorkflowPollingScheduler {
 
@@ -51,7 +51,7 @@ public class WorkflowPollingScheduler {
 
     private final WorkflowPollQueuePort pollQueue;
     private final PollWorkflowUseCase pollUseCase;
-    private final TripoPollingProperties properties;
+    private final WorkflowPollingProperties properties;
 
     @Async("tripoPollingExecutor")
     @EventListener(ApplicationReadyEvent.class)
