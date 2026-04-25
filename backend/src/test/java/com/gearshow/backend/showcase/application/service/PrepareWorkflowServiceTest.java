@@ -100,7 +100,7 @@ class PrepareWorkflowServiceTest {
     private WorkflowSnapshot requestedSnapshot() {
         return new WorkflowSnapshot(
                 WORKFLOW_ID, SHOWCASE_ID, "it-key", 1,
-                WorkflowStep.REQUESTED, null, null, null, null);
+                WorkflowStep.REQUESTED, null, null, null, null, null, null);
     }
 
     private void stubThroughImagesValid() {

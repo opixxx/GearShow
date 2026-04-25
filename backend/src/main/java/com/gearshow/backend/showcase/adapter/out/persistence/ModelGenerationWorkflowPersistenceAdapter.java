@@ -164,7 +164,9 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 entity.getTripoTaskId(),
                 entity.getTripoSucceededAt(),
                 entity.getStartedAt(),
-                entity.getHeartbeatAt()
+                entity.getHeartbeatAt(),
+                entity.getFailureCode(),
+                entity.getFailureMessage()
         );
     }
 }

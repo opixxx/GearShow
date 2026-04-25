@@ -64,23 +64,4 @@ public class Showcase3dModel {
                 .build();
     }
 
-    /**
-     * 이미 존재하는 쇼케이스 3D 모델을 최신 산출물로 덮어쓴다 (UPSERT 의 UPDATE 경로).
-     *
-     * <p>재생성/재다운로드 시 기존 행의 {@code id} 와 {@code createdAt} 은 유지하고
-     * {@code modelFileUrl}, {@code previewImageUrl}, {@code generatedAt}, {@code updatedAt}
-     * 만 새로 반영한다.</p>
-     */
-    public Showcase3dModel replaceArtifact(String modelFileUrl, String previewImageUrl) {
-        Instant now = Instant.now();
-        return Showcase3dModel.builder()
-                .id(this.id)
-                .showcaseId(this.showcaseId)
-                .modelFileUrl(modelFileUrl)
-                .previewImageUrl(previewImageUrl)
-                .generatedAt(now)
-                .createdAt(this.createdAt)
-                .updatedAt(now)
-                .build();
-    }
 }

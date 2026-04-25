@@ -9,7 +9,7 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationStatus;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.TripoSemaphorePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.TripoApiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,7 +43,7 @@ public class PollWorkflowService implements PollWorkflowUseCase {
     private final ModelGenerationClient modelGenerationClient;
     private final TripoSemaphorePort tripoSemaphorePort;
     private final ApplicationEventPublisher eventPublisher;
-    private final TripoPollingProperties properties;
+    private final TripoApiProperties properties;
 
     @Override
     public PollOutcome poll(Long workflowId) {

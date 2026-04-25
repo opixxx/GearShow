@@ -5,7 +5,7 @@ import com.gearshow.backend.showcase.application.exception.TripoSemaphoreTimeout
 import com.gearshow.backend.showcase.application.port.in.PollWorkflowUseCase;
 import com.gearshow.backend.showcase.application.port.in.PollWorkflowUseCase.PollOutcome;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.WorkflowPollingProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -53,7 +53,7 @@ class WorkflowPollingSchedulerTest {
     @BeforeEach
     void setUp() {
         // delaySeconds=30 으로 고정 — 프로덕션 기본값과 동일
-        TripoPollingProperties properties = new TripoPollingProperties(30, 2_000L, true);
+        WorkflowPollingProperties properties = new WorkflowPollingProperties(30, true);
         scheduler = new WorkflowPollingScheduler(pollQueue, pollUseCase, properties);
     }
 

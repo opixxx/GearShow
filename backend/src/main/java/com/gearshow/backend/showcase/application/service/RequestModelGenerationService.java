@@ -40,8 +40,7 @@ public class RequestModelGenerationService {
                                                             List<String> imageUrls) {
         saveSourceImages(showcaseId, imageUrls);
         long workflowId = modelGenerationWorkflowPort.saveRequested(showcaseId, idempotencyKey, 1);
-        modelGenerationEventPublisher.publishRequested(
-                workflowId, showcaseId, showcaseId, idempotencyKey);
+        modelGenerationEventPublisher.publishRequested(workflowId, showcaseId, idempotencyKey);
         return new ModelGenerationResult(workflowId, ShowcaseModelStatus.GENERATING);
     }
 
@@ -57,8 +56,7 @@ public class RequestModelGenerationService {
         int attemptNo = modelGenerationWorkflowPort.nextAttemptNo(showcaseId);
         long workflowId = modelGenerationWorkflowPort.saveRequested(
                 showcaseId, idempotencyKey, attemptNo);
-        modelGenerationEventPublisher.publishRequested(
-                workflowId, showcaseId, showcaseId, idempotencyKey);
+        modelGenerationEventPublisher.publishRequested(workflowId, showcaseId, idempotencyKey);
         return new ModelGenerationResult(workflowId, ShowcaseModelStatus.GENERATING);
     }
 

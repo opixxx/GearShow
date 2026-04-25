@@ -53,7 +53,7 @@ class RedissonWorkflowPollQueueAdapterIntegrationTest {
         registry.add("gearshow.redis.host", REDIS::getHost);
         registry.add("gearshow.redis.port", () -> REDIS.getMappedPort(REDIS_PORT));
         // 실제 Poller 루프가 큐 메시지를 가로채지 않도록 통합 테스트에서는 자동 소비자를 끈다.
-        registry.add("app.tripo-polling.scheduler-enabled", () -> "false");
+        registry.add("app.workflow-polling.scheduler-enabled", () -> "false");
     }
 
     @Autowired

@@ -10,7 +10,7 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationStatus;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.TripoSemaphorePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.TripoApiProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -75,7 +75,7 @@ class PollWorkflowServiceTest {
 
     @BeforeEach
     void setUp() {
-        TripoPollingProperties properties = new TripoPollingProperties(30, 2_000L, true);
+        TripoApiProperties properties = new TripoApiProperties(2_000L);
         service = new PollWorkflowService(
                 workflowPort, modelGenerationClient,
                 tripoSemaphorePort, eventPublisher, properties);
@@ -91,7 +91,7 @@ class PollWorkflowServiceTest {
         return new WorkflowSnapshot(
                 WORKFLOW_ID, SHOWCASE_ID, "it-key", 1,
                 WorkflowStep.GENERATING, taskId, tripoSucceededAt,
-                Instant.now(), Instant.now());
+                Instant.now(), Instant.now(), null, null);
     }
 
     @Nested
@@ -114,7 +114,7 @@ class PollWorkflowServiceTest {
         void notGenerating_skips() {
             WorkflowSnapshot snap = new WorkflowSnapshot(
                     WORKFLOW_ID, SHOWCASE_ID, "k", 1,
-                    WorkflowStep.PREPARING, null, null, Instant.now(), Instant.now());
+                    WorkflowStep.PREPARING, null, null, Instant.now(), Instant.now(), null, null);
             given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(snap));
 
             assertThat(service.poll(WORKFLOW_ID)).isEqualTo(PollOutcome.SKIPPED);

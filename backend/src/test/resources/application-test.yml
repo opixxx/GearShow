@@ -58,3 +58,10 @@ cloud:
 gearshow:
   websocket:
     allowed-origins: http://localhost:*
+
+# 통합 테스트에서 redis 활성화 시 WorkflowPollingScheduler 가 ApplicationReadyEvent 로
+# 무한 take() 루프를 시작해 Spring Context 종료 시점에 hang 되는 문제 회피.
+# 테스트는 Bean 자체 검증이 아니라 Adapter 단위 검증이므로 스케줄러는 항상 OFF.
+app:
+  workflow-polling:
+    scheduler-enabled: false

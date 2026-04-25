@@ -9,9 +9,9 @@ import java.time.Duration;
  * Poller 단일 스레드가 {@link #take()} 로 블로킹 대기한다. {@code IN_PROGRESS} 응답 시 다시 30초
  * delay 로 re-queue 해 자동 적응형 폴링을 구성한다.</p>
  *
- * <p>구현체는 Redisson {@code RDelayedQueue<Long>} 를 사용하며,
- * {@code gearshow.redis.enabled=false} 환경에서는 Bean 이 없어 Poller 전체가 비활성화된다
- * (단일 인스턴스 전제의 로컬/테스트 환경).</p>
+ * <p>구현체가 없는 환경 (예: 단일 인스턴스 로컬/테스트) 에서는 Bean 이 등록되지 않아 Poller 전체가
+ * 비활성화된다. 호출자는 {@link org.springframework.beans.factory.ObjectProvider} 등으로 안전 조회
+ * 패턴을 사용해야 한다.</p>
  */
 public interface WorkflowPollQueuePort {
 

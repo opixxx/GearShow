@@ -83,7 +83,7 @@ class DownloadAndMirrorServiceTest {
         return new WorkflowSnapshot(
                 WORKFLOW_ID, SHOWCASE_ID, "it-key", 1,
                 WorkflowStep.GENERATING, TASK_ID, tripoSucceededAt,
-                Instant.now(), Instant.now());
+                Instant.now(), Instant.now(), null, null);
     }
 
     @Nested
@@ -107,7 +107,7 @@ class DownloadAndMirrorServiceTest {
             WorkflowSnapshot snap = new WorkflowSnapshot(
                     WORKFLOW_ID, SHOWCASE_ID, "k", 1,
                     WorkflowStep.COMPLETED, TASK_ID, Instant.now(),
-                    Instant.now(), Instant.now());
+                    Instant.now(), Instant.now(), null, null);
             given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(snap));
 
             service.download(WORKFLOW_ID, TASK_ID);

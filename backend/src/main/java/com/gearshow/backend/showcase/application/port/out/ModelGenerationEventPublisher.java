@@ -18,15 +18,11 @@ public interface ModelGenerationEventPublisher {
      * 결정적 파생(ADR-011 ③) 된다 — 서버 UUID 금지. 재시도 호출은 같은 {@code idempotencyKey}
      * 를 그대로 사용해, Consumer 의 {@code processed_message} 중복 차단이 작동한다.</p>
      *
-     * @param workflowId        {@code model_generation_workflow} 행 ID (ADR-010 프로세스 테이블)
-     * @param showcase3dModelId 3D 모델 ID (aggregate 식별자)
-     * @param showcaseId        쇼케이스 ID (파티션 키)
-     * @param idempotencyKey    API 멱등성 키. 해시 입력으로 사용
+     * @param workflowId     {@code model_generation_workflow} 행 ID (ADR-010 프로세스 테이블)
+     * @param showcaseId     쇼케이스 ID (파티션 키 + Outbox aggregate ID)
+     * @param idempotencyKey API 멱등성 키. 해시 입력으로 사용
      */
-    void publishRequested(Long workflowId,
-                          Long showcase3dModelId,
-                          Long showcaseId,
-                          String idempotencyKey);
+    void publishRequested(Long workflowId, Long showcaseId, String idempotencyKey);
 
     /**
      * 3D 모델 생성이 최종 완료(COMPLETED) 되었음을 알리는 이벤트를 발행한다 (P1-F, 설계 §7 [8]).

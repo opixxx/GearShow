@@ -58,7 +58,12 @@ import java.time.Instant;
                 // P1-G: Reconcile.findStuckGeneratingS3 전용 3컬럼 복합 인덱스 —
                 //   WHERE current_step=GENERATING AND tripo_succeeded_at IS NOT NULL AND heartbeat_at < ?
                 @Index(name = "idx_mgw_step_tripo_heartbeat",
-                        columnList = "current_step, tripo_succeeded_at, heartbeat_at")
+                        columnList = "current_step, tripo_succeeded_at, heartbeat_at"),
+                // P1-G aftermath: findStuckRequested 가 인덱스를 타도록.
+                //   WHERE current_step=REQUESTED AND created_at < ?
+                // REQUESTED 행은 짧은 생명이라 selectivity 낮으나 Outbox Relay 장애 누적 시 수만 행 가능.
+                @Index(name = "idx_mgw_step_created",
+                        columnList = "current_step, created_at")
                 // 기존 idx_mgw_showcase_attempt 는 uk_mgw_showcase_attempt UNIQUE 가 동일 prefix 를
                 // 커버하므로 삭제했다 — UNIQUE 인덱스가 조회 인덱스 역할을 겸한다.
                 //

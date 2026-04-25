@@ -57,7 +57,7 @@ class RedissonTripoSemaphoreAdapterIntegrationTest {
         registry.add("gearshow.redis.host", REDIS::getHost);
         registry.add("gearshow.redis.port", () -> REDIS.getMappedPort(REDIS_PORT));
         // 테스트가 세마포어 어댑터만 단독 사용하도록 Poller 루프는 끈다.
-        registry.add("app.tripo-polling.scheduler-enabled", () -> "false");
+        registry.add("app.workflow-polling.scheduler-enabled", () -> "false");
     }
 
     @Autowired

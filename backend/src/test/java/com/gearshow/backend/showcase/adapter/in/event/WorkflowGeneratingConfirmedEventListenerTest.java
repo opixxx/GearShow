@@ -2,7 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.event;
 
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
-import com.gearshow.backend.showcase.infrastructure.config.TripoPollingProperties;
+import com.gearshow.backend.showcase.infrastructure.config.WorkflowPollingProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,11 +39,11 @@ class WorkflowGeneratingConfirmedEventListenerTest {
     @Mock
     private WorkflowPollQueuePort pollQueue;
 
-    private TripoPollingProperties properties;
+    private WorkflowPollingProperties properties;
 
     @BeforeEach
     void setUp() {
-        properties = new TripoPollingProperties(30, 2_000L, true);
+        properties = new WorkflowPollingProperties(30, true);
     }
 
     @Test
