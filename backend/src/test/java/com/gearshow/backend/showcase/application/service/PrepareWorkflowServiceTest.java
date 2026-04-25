@@ -128,22 +128,27 @@ class PrepareWorkflowServiceTest {
         }
 
         @Test
-        @DisplayName("REQUESTED→PREPARING 전환이 affected=0 이면 검증 없이 skip 한다")
-        void alreadyTransitioned_skipsValidation() {
+        @DisplayName("REQUESTED→PREPARING 전환이 affected=0 이면 Tripo 호출 없이 skip 한다")
+        void alreadyTransitioned_skipsTripo() {
             given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            // 검증은 락 잡기 전 호출되므로 통과시킨다
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
             given(workflowPort.updateStepIfCurrent(WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING))
                     .willReturn(0);
 
             service.prepare(WORKFLOW_ID);
 
-            verify(modelSourceImagePort, never()).findImageUrlsByShowcaseId(anyLong());
             verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
         }
 
         @Test
-        @DisplayName("TX1 분산 락 busy → 조건부 UPDATE 도 호출 안 함")
-        void lockBusy_skipsWithoutAnyWrite() {
+        @DisplayName("TX1 분산 락 busy → Tripo 호출 안 함")
+        void lockBusy_skipsTripo() {
             given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            // 검증은 락 잡기 전 호출되므로 통과시킨다
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
             doThrow(new WorkflowLockBusyException(WORKFLOW_ID))
                     .when(workflowLockPort).withLock(eq(WORKFLOW_ID), any());
 
@@ -151,6 +156,28 @@ class PrepareWorkflowServiceTest {
 
             verify(workflowPort, never()).updateStepIfCurrent(anyLong(), any(), any());
             verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
+        }
+
+        @Test
+        @DisplayName("검증 실패 시 락을 획득하지 않고 markFailed 후 종료한다")
+        void invalidSourceImages_neverAcquiresLock() {
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            // 이미지 4장 미달 — 검증 실패 분기
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID))
+                    .willReturn(List.of("only-one.jpg"));
+            given(workflowPort.markFailed(
+                    eq(WORKFLOW_ID), eq(WorkflowFailureCode.SOURCE_IMAGES_MISSING),
+                    anyString(), anyString())).willReturn(1);
+
+            service.prepare(WORKFLOW_ID);
+
+            // 락 진입 없음 — 영구 실패 검증은 락 밖에서 끝나야 한다
+            verify(workflowLockPort, never()).withLock(anyLong(), any());
+            verify(workflowPort, never()).updateStepIfCurrent(anyLong(), any(), any());
+            verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
+            verify(workflowPort, times(1)).markFailed(
+                    eq(WORKFLOW_ID), eq(WorkflowFailureCode.SOURCE_IMAGES_MISSING),
+                    anyString(), anyString());
         }
     }
 

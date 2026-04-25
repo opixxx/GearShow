@@ -49,9 +49,11 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
         // Tripo 중복 호출을 방지한다.
         ShowcaseModelStatus modelStatus = switch (outcome) {
             case CreateShowcaseOutcome.Created created ->
-                    requestModelIfNeeded(created.showcase().getId(),
-                            command.idempotencyKey(),
-                            modelSourceImageKeys);
+                    requestModelIfNeeded(
+                        created.showcase().getId(),
+                        command.idempotencyKey(),
+                        modelSourceImageKeys
+                    );
             case CreateShowcaseOutcome.Deduped deduped ->
                     deduped.showcase().isHas3dModel()
                             ? ShowcaseModelStatus.COMPLETED
