@@ -12,14 +12,14 @@ Feature: 쇼케이스
     When 일반 이미지만으로 쇼케이스를 등록한다
     Then 응답 상태 코드는 201이다
     And 응답의 data에 "showcaseId" 필드가 존재한다
-    And 응답의 data의 "model3dStatus" 필드는 "null"이다
+    And 응답의 data의 "model3dStatus" 필드는 "NONE"이다
 
   @smoke @showcase @model3d
   Scenario: 3D 모델 소스 이미지와 함께 쇼케이스를 등록한다
     When 3D 모델 소스 이미지 4장과 함께 쇼케이스를 등록한다
     Then 응답 상태 코드는 201이다
     And 응답의 data에 "showcaseId" 필드가 존재한다
-    And 응답의 data의 "model3dStatus" 필드는 "REQUESTED"이다
+    And 응답의 data의 "model3dStatus" 필드는 "GENERATING"이다
 
   @edge-case @showcase @model3d
   Scenario: 3D 모델 소스 이미지가 4장 미만이면 400 에러가 발생한다

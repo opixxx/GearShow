@@ -6,7 +6,6 @@ import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import com.gearshow.backend.showcase.domain.model.ShowcaseImage;
 import com.gearshow.backend.showcase.domain.model.ShowcaseSpec;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
-import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import com.gearshow.backend.showcase.domain.vo.SpecType;
 
@@ -15,6 +14,10 @@ import java.util.List;
 
 /**
  * 쇼케이스 상세 조회 결과.
+ *
+ * <p><b>ADR-010 Q4-(1)</b>: {@code model3d.modelStatus} 는 {@code showcase_3d_model} 의 프로세스
+ * 컬럼이 아니라, {@code model_generation_workflow.current_step} + 완성품 존재 여부로부터
+ * 유도된다. application 계층 조립자 ({@code GetShowcaseService}) 가 이 파생을 책임진다.</p>
  */
 public record ShowcaseDetailResult(
         Long showcaseId,
@@ -37,7 +40,6 @@ public record ShowcaseDetailResult(
         Instant updatedAt
 ) {
 
-    /** 이미지 결과. */
     public record ImageResult(
             Long showcaseImageId,
             String imageUrl,
@@ -51,21 +53,14 @@ public record ShowcaseDetailResult(
         }
     }
 
-    /** 3D 모델 결과. */
     public record Model3dResult(
             Long showcase3dModelId,
             String modelFileUrl,
             String previewImageUrl,
-            ModelStatus modelStatus
+            ShowcaseModelStatus modelStatus
     ) {
-        public static Model3dResult from(Showcase3dModel model) {
-            return new Model3dResult(
-                    model.getId(), model.getModelFileUrl(),
-                    model.getPreviewImageUrl(), model.getModelStatus());
-        }
     }
 
-    /** 스펙 결과 (카테고리별 JSON 데이터 포함). */
     public record SpecResult(
             SpecType specType,
             String specData
@@ -75,13 +70,12 @@ public record ShowcaseDetailResult(
         }
     }
 
-    /**
-     * 쇼케이스 상세 결과를 생성한다.
-     */
     public static ShowcaseDetailResult of(Showcase showcase,
-                                           List<ShowcaseImage> images,
-                                           Showcase3dModel model3d,
-                                           ShowcaseSpec spec) {
+                                          List<ShowcaseImage> images,
+                                          Showcase3dModel model3d,
+                                          ShowcaseModelStatus model3dStatus,
+                                          ShowcaseSpec spec) {
+        Model3dResult model3dResult = resolveModel3dResult(model3d, model3dStatus);
         return new ShowcaseDetailResult(
                 showcase.getId(),
                 showcase.getOwnerId(),
@@ -97,9 +91,20 @@ public record ShowcaseDetailResult(
                 showcase.isForSale(),
                 showcase.getStatus(),
                 images.stream().map(ImageResult::from).toList(),
-                model3d != null ? Model3dResult.from(model3d) : null,
+                model3dResult,
                 spec != null ? SpecResult.from(spec) : null,
                 showcase.getCreatedAt(),
                 showcase.getUpdatedAt());
+    }
+
+    private static Model3dResult resolveModel3dResult(Showcase3dModel model3d,
+                                                      ShowcaseModelStatus status) {
+        if (model3d == null && status == ShowcaseModelStatus.NONE) {
+            return null;
+        }
+        Long id = model3d != null ? model3d.getId() : null;
+        String modelFileUrl = model3d != null ? model3d.getModelFileUrl() : null;
+        String previewImageUrl = model3d != null ? model3d.getPreviewImageUrl() : null;
+        return new Model3dResult(id, modelFileUrl, previewImageUrl, status);
     }
 }

@@ -599,9 +599,10 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-D-α+β** | Worker 골격 재설계 (workflowId 기반) + TX1 (REQUESTED→PREPARING + S3 HEAD 검증) + `WorkflowStep` VO 승격 + **Redisson 분산 락** (workflow:lock:{workflowId}, TTL 10s watchdog) | P1-C | 중 | ✅ PR #43 |
 | **P1-D-γ+δ** | Tripo upload + POST /task + `tripo_pending_task` 선저장 + TX2 (PREPARING→GENERATING) + `@RetryableTopic` backoff + DLT 라우팅 + 에러 분류 + Circuit Breaker 차단 | P1-D-α+β | 높음 | ✅ PR #44 |
 | **P1-E** | Poller + Redisson DelayedQueue (`poll:delayed-queue:main`) + `tripo:semaphore` 10 permits + `TripoSuccessEvent` ApplicationEvent (락 無) | P1-D-γ+δ | 중 | ✅ PR #45 |
-| **P1-F** | Downloader + S3 mirror + TX_final (GENERATING→COMPLETED) + `MODEL_GENERATION_COMPLETED` Outbox + `WorkflowGeneratingConfirmedEvent` AFTER_COMMIT 리팩토링 | P1-E | 중 | 🚧 본 PR |
-| **P1-G** | Reconcile 배치 + Retry Topic + DLQ | P1-F | 중 | ⏳ |
-| **P1-H** | 관찰 지표 + 대시보드 + 알람 | P1-G | 낮음 | ⏳ |
+| **P1-F** | Downloader + S3 mirror + TX_final (GENERATING→COMPLETED) + `MODEL_GENERATION_COMPLETED` Outbox + `WorkflowGeneratingConfirmedEvent` AFTER_COMMIT 리팩토링 | P1-E | 중 | ✅ PR #46 |
+| **P1-G** | Reconcile 배치 (Redrive 전략: PREPARING stuck → markGenerating 재개, GENERATING·Tripo stuck → DelayedQueue 재등록, GENERATING·S3 stuck → TripoSuccessEvent 재발행) + `showcase_3d_model` 프로세스 컬럼 제거 (ADR-010 양보 불가 규칙 코드 반영) + 레거시 서비스 (`RecoverStuckModelsService`, `PollGenerationStatusService`, `PrepareModelGenerationService`, `TripoPollingScheduler`) 제거 + `model_source_image.showcase_3d_model_id → showcase_id` FK 리네임 + Q4-(1) `GetShowcaseService`/`GetModel3dService` 가 workflow 테이블에서 상태 유도 | P1-F | 높음 | 🚧 본 PR |
+| **P1-G-γ (보류)** | Tripo 중복 task cancel 배치 (설계 §8.4 하단, §12 #2 실측 후 확정) — Tripo list API 미정 상태로 P1-G 에서 분리 | P1-G | 중 | ⏳ |
+| **P1-H** | 관찰 지표 + 대시보드 + 알람 (FCM Notification Consumer 포함) | P1-G | 낮음 | ⏳ |
 | **P1-I** | E2E 테스트 (크래시 시뮬레이션, 중복 요청, 재시도) | P1-H | 중 | ⏳ |
 
 ---

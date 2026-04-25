@@ -1,9 +1,12 @@
 package com.gearshow.backend.showcase.application.port.out;
 
+import com.gearshow.backend.showcase.application.dto.StuckWorkflow;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -113,4 +116,35 @@ public interface ModelGenerationWorkflowPort {
      * @return 1=전이 성공 (도메인 UPDATE + Outbox 발행 진행), 0=다른 Downloader 가 이미 처리
      */
     int markCompleted(Long workflowId);
+
+    /**
+     * 쇼케이스 ID 기준 가장 최근 {@code attempt_no} 워크플로우 스냅샷을 조회한다.
+     * ADR-010 Q4-(1) — 쇼케이스 상세 응답의 3D 상태 유도에 사용. {@code uk_mgw_showcase_attempt}
+     * UNIQUE 인덱스를 타도록 쿼리를 구성해야 한다.
+     */
+    Optional<WorkflowSnapshot> findLatestSnapshotByShowcaseId(Long showcaseId);
+
+    /**
+     * PREPARING 상태에서 {@code heartbeat_at} 이 임계 이전인 stuck 워크플로우를 조회한다.
+     * Reconcile 배치 (설계 §8.4) 의 PREPARING 복구 대상.
+     */
+    List<StuckWorkflow> findStuckPreparing(Instant heartbeatBefore, int limit);
+
+    /**
+     * GENERATING 상태 + {@code tripo_succeeded_at IS NULL} + {@code last_polled_at} 임계 이전
+     * stuck 을 조회한다 (Tripo 처리 중 폴링 유실).
+     */
+    List<StuckWorkflow> findStuckGeneratingTripo(Instant lastPolledBefore, int limit);
+
+    /**
+     * GENERATING 상태 + {@code tripo_succeeded_at IS NOT NULL} + {@code heartbeat_at} 임계 이전
+     * stuck 을 조회한다 (S3 미러링 중 워커 사망).
+     */
+    List<StuckWorkflow> findStuckGeneratingS3(Instant heartbeatBefore, int limit);
+
+    /**
+     * REQUESTED 상태에서 {@code created_at} 이 임계 이전인 워크플로우를 경고 목적으로 조회한다.
+     * Outbox Relay 점검 트리거.
+     */
+    List<StuckWorkflow> findStuckRequested(Instant createdBefore, int limit);
 }

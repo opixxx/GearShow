@@ -4,23 +4,21 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
+import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -29,12 +27,8 @@ import static org.mockito.Mockito.verify;
 /**
  * {@link DownloadFinalizer} 단위 테스트.
  *
- * <p>검증 매트릭스:</p>
- * <ul>
- *   <li>Happy: markCompleted affected=1 + Showcase3dModel affected=1 → publishCompleted 호출 + true 반환</li>
- *   <li>workflow 재진입: markCompleted affected=0 → false 반환, 이후 호출 없음</li>
- *   <li>Showcase3dModel 누락: affected=0 → IllegalStateException 으로 TX 롤백, publishCompleted 미호출</li>
- * </ul>
+ * <p><b>ADR-010 P1-G</b>: {@code markCompletedByShowcaseId} 분기가 제거되고 Showcase3dModel 은
+ * UPSERT({@link Showcase3dModelPort#save}) 로 항상 기록된다. 검증 매트릭스도 이를 반영.</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -61,16 +55,20 @@ class DownloadFinalizerTest {
     }
 
     @Test
-    @DisplayName("Happy: markCompleted=1 + Showcase3dModel=1 → publishCompleted 호출, true 반환")
+    @DisplayName("Happy: markCompleted=1 → Showcase3dModel UPSERT + publishCompleted 호출, true 반환")
     void happy_publishesAndReturnsTrue() {
         given(workflowPort.markCompleted(WORKFLOW_ID)).willReturn(1);
-        given(showcase3dModelPort.markCompletedByShowcaseId(
-                eq(SHOWCASE_ID), eq(MODEL_URL), eq(PREVIEW_URL), any(Instant.class)))
-                .willReturn(1);
+        given(showcase3dModelPort.save(any(Showcase3dModel.class)))
+                .willAnswer(inv -> inv.getArgument(0));
 
         boolean completed = finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult());
 
         assertThat(completed).isTrue();
+        ArgumentCaptor<Showcase3dModel> captor = ArgumentCaptor.forClass(Showcase3dModel.class);
+        verify(showcase3dModelPort, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getShowcaseId()).isEqualTo(SHOWCASE_ID);
+        assertThat(captor.getValue().getModelFileUrl()).isEqualTo(MODEL_URL);
+        assertThat(captor.getValue().getPreviewImageUrl()).isEqualTo(PREVIEW_URL);
         verify(eventPublisher, times(1)).publishCompleted(
                 WORKFLOW_ID, SHOWCASE_ID, MODEL_URL, PREVIEW_URL);
     }
@@ -83,22 +81,7 @@ class DownloadFinalizerTest {
         boolean completed = finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult());
 
         assertThat(completed).isFalse();
-        verify(showcase3dModelPort, never()).markCompletedByShowcaseId(
-                anyLong(), anyString(), anyString(), any());
-        verify(eventPublisher, never()).publishCompleted(
-                anyLong(), anyLong(), anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("Showcase3dModel 누락: affected=0 → IllegalStateException, publishCompleted 미호출")
-    void showcaseModelMissing_throwsToRollback() {
-        given(workflowPort.markCompleted(WORKFLOW_ID)).willReturn(1);
-        given(showcase3dModelPort.markCompletedByShowcaseId(
-                eq(SHOWCASE_ID), anyString(), anyString(), any(Instant.class)))
-                .willReturn(0);
-
-        assertThatThrownBy(() -> finalizer.finalizeDownload(WORKFLOW_ID, SHOWCASE_ID, anyResult()))
-                .isInstanceOf(IllegalStateException.class);
+        verify(showcase3dModelPort, never()).save(any(Showcase3dModel.class));
         verify(eventPublisher, never()).publishCompleted(
                 anyLong(), anyLong(), anyString(), anyString());
     }

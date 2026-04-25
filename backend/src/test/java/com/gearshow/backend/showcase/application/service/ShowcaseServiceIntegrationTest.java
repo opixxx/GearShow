@@ -21,8 +21,8 @@ import com.gearshow.backend.showcase.application.exception.MinImageRequiredExcep
 import com.gearshow.backend.showcase.application.exception.PrimaryImageRequiredException;
 import com.gearshow.backend.showcase.domain.exception.InvalidShowcaseException;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
+import com.gearshow.backend.showcase.application.dto.ShowcaseModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ConditionGrade;
-import com.gearshow.backend.showcase.domain.vo.ModelStatus;
 import com.gearshow.backend.showcase.domain.vo.ShowcaseStatus;
 import com.gearshow.backend.support.TestInfraConfig;
 import com.gearshow.backend.support.TestOAuthConfig;
@@ -111,7 +111,7 @@ class ShowcaseServiceIntegrationTest {
 
             // Then
             assertThat(result.showcaseId()).isNotNull();
-            assertThat(result.model3dStatus()).isNull();
+            assertThat(result.model3dStatus()).isEqualTo(ShowcaseModelStatus.NONE);
         }
 
         @Test
@@ -541,15 +541,14 @@ class ShowcaseServiceIntegrationTest {
                     showcaseId, UUID.randomUUID().toString(), createFakeImageKeys(4));
 
             // Then
-            assertThat(genResult.showcase3dModelId()).isNotNull();
-            assertThat(genResult.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
+            assertThat(genResult.workflowId()).isNotNull();
+            assertThat(genResult.modelStatus()).isEqualTo(ShowcaseModelStatus.GENERATING);
 
             // When - 상태 조회
             Model3dDetailResult detailResult = getModel3dUseCase.getModel3d(showcaseId);
 
             // Then
-            assertThat(detailResult.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
-            assertThat(detailResult.generationProvider()).isEqualTo("fake-tripo");
+            assertThat(detailResult.modelStatus()).isEqualTo(ShowcaseModelStatus.GENERATING);
             assertThat(detailResult.sourceImageCount()).isEqualTo(4);
         }
 
@@ -575,7 +574,7 @@ class ShowcaseServiceIntegrationTest {
             // When - REQUESTED 상태에서는 재요청 불가 (FAILED에서만 가능)
             // 따라서 먼저 상태를 확인
             Model3dDetailResult detail = getModel3dUseCase.getModel3d(showcaseId);
-            assertThat(detail.modelStatus()).isEqualTo(ModelStatus.REQUESTED);
+            assertThat(detail.modelStatus()).isEqualTo(ShowcaseModelStatus.GENERATING);
         }
 
         @Test

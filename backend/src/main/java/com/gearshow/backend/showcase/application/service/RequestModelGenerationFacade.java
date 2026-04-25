@@ -1,28 +1,32 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
+import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
+import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.exception.InsufficientModelSourceImagesException;
 import com.gearshow.backend.showcase.application.exception.ModelAlreadyGeneratingException;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
-import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.Showcase;
-import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
- * 3D 모델 생성 요청 Facade.
+ * 3D 모델 생성 요청 Facade (ADR-010 프로세스 분리 반영).
  *
- * <p>S3 키 URL 변환 등 순수 계산을 트랜잭션 밖에서 수행하고,
- * DB 저장 + Outbox 이벤트 기록은 {@link RequestModelGenerationService}의 단일 트랜잭션에 위임한다.
- * 실제 Kafka 발행은 Outbox Relay 스케줄러가 별도 스레드에서 수행하므로
- * 이 Facade 는 Kafka 에 대한 의존을 갖지 않는다.</p>
+ * <p>외부 I/O(S3 키 URL 변환 등)는 트랜잭션 밖에서 수행하고, DB 저장 + Outbox 이벤트 기록은
+ * {@link RequestModelGenerationService} 의 단일 트랜잭션에 위임한다.</p>
+ *
+ * <p><b>"이미 생성 중" 판정</b>: Showcase3dModel 이 완성품 전용이라 이 체크 역시 workflow 테이블로
+ * 이동한다. 최신 attempt 의 {@code current_step} 이 {@code COMPLETED}/{@code FAILED} 가 아니면
+ * 재시도를 차단해 이중 호출을 방지한다.</p>
  */
 @Service
 @Primary
@@ -33,7 +37,7 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
 
     private final RequestModelGenerationService requestModelGenerationService;
     private final ShowcasePort showcasePort;
-    private final Showcase3dModelPort showcase3dModelPort;
+    private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;
     private final ImageStoragePort imageStoragePort;
     private final TripoCircuitGuard tripoCircuitGuard;
 
@@ -41,20 +45,14 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     public ModelGenerationResult requestOnCreate(Long showcaseId,
                                                   String idempotencyKey,
                                                   List<String> modelSourceImageKeys) {
-        // 1. 검증 (트랜잭션 밖)
         validateSourceImageCount(modelSourceImageKeys);
 
-        // 2. S3 키 → URL 변환 (트랜잭션 밖)
         List<String> imageUrls = modelSourceImageKeys.stream()
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        // 3. DB 저장 + Outbox 이벤트 기록 (단일 트랜잭션)
-        //    커밋 성공 = Outbox Relay 가 반드시 Kafka 발행을 시도함
-        Showcase3dModel model = requestModelGenerationService.saveModelAndSourceImages(
+        return requestModelGenerationService.saveSourceImagesAndRequest(
                 showcaseId, idempotencyKey, imageUrls);
-
-        return new ModelGenerationResult(model.getId(), model.getModelStatus());
     }
 
     @Override
@@ -62,24 +60,18 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
                                                Long ownerId,
                                                String idempotencyKey,
                                                List<String> modelSourceImageKeys) {
-        // 1. 검증 (트랜잭션 밖)
         validateOwner(showcaseId, ownerId);
         validateSourceImageCount(modelSourceImageKeys);
         validateNotAlreadyGenerating(showcaseId);
 
-        // Tripo Circuit OPEN 이면 재시도 요청도 즉시 거부 (CreateShowcaseFacade 와 UX 일관).
         tripoCircuitGuard.rejectIfOpen();
 
-        // 2. S3 키 → URL 변환 (트랜잭션 밖)
         List<String> imageUrls = modelSourceImageKeys.stream()
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        // 3. DB 저장 + Outbox 이벤트 기록 (단일 트랜잭션)
-        Showcase3dModel model = requestModelGenerationService
-                .resetOrCreateModelAndSaveSourceImages(showcaseId, idempotencyKey, imageUrls);
-
-        return new ModelGenerationResult(model.getId(), model.getModelStatus());
+        return requestModelGenerationService.resetSourceImagesAndRequestRetry(
+                showcaseId, idempotencyKey, imageUrls);
     }
 
     private void validateSourceImageCount(List<String> keys) {
@@ -95,11 +87,14 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     }
 
     private void validateNotAlreadyGenerating(Long showcaseId) {
-        showcase3dModelPort.findByShowcaseId(showcaseId)
-                .ifPresent(model -> {
-                    if (model.isGenerating()) {
-                        throw new ModelAlreadyGeneratingException();
-                    }
-                });
+        Optional<WorkflowSnapshot> latest =
+                modelGenerationWorkflowPort.findLatestSnapshotByShowcaseId(showcaseId);
+        if (latest.isEmpty()) {
+            return;
+        }
+        WorkflowStep step = latest.get().currentStep();
+        if (step != WorkflowStep.COMPLETED && step != WorkflowStep.FAILED) {
+            throw new ModelAlreadyGeneratingException();
+        }
     }
 }

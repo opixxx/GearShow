@@ -75,8 +75,7 @@ class PollWorkflowServiceTest {
 
     @BeforeEach
     void setUp() {
-        TripoPollingProperties properties = new TripoPollingProperties(
-                3_000L, 20, 15, 30, 2_000L);
+        TripoPollingProperties properties = new TripoPollingProperties(30, 2_000L, true);
         service = new PollWorkflowService(
                 workflowPort, modelGenerationClient,
                 tripoSemaphorePort, eventPublisher, properties);

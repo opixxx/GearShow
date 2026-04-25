@@ -4,7 +4,7 @@ import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
 import org.springframework.stereotype.Component;
 
 /**
- * ModelSourceImage 도메인 모델과 JPA 엔티티 간 변환을 담당하는 매퍼.
+ * ModelSourceImage 도메인 ↔ JPA 엔티티 매퍼 (ADR-010 showcase_id 직접 참조).
  */
 @Component
 public class ModelSourceImageMapper {
@@ -12,7 +12,7 @@ public class ModelSourceImageMapper {
     public ModelSourceImageJpaEntity toJpaEntity(ModelSourceImage image) {
         return ModelSourceImageJpaEntity.builder()
                 .id(image.getId())
-                .showcase3dModelId(image.getShowcase3dModelId())
+                .showcaseId(image.getShowcaseId())
                 .imageUrl(image.getImageUrl())
                 .angleType(image.getAngleType())
                 .sortOrder(image.getSortOrder())
@@ -23,7 +23,7 @@ public class ModelSourceImageMapper {
     public ModelSourceImage toDomain(ModelSourceImageJpaEntity entity) {
         return ModelSourceImage.builder()
                 .id(entity.getId())
-                .showcase3dModelId(entity.getShowcase3dModelId())
+                .showcaseId(entity.getShowcaseId())
                 .imageUrl(entity.getImageUrl())
                 .angleType(entity.getAngleType())
                 .sortOrder(entity.getSortOrder())

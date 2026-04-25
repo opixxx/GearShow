@@ -47,7 +47,7 @@ public class ShowcaseModel3dController {
                 showcaseId, ownerId, idempotencyKey, request.modelSourceImageKeys());
 
         return ApiResponse.of(202, "3D 모델 생성 요청 완료",
-                Map.of("showcase3dModelId", result.showcase3dModelId(),
+                Map.of("workflowId", result.workflowId(),
                         "modelStatus", result.modelStatus().name()));
     }
 

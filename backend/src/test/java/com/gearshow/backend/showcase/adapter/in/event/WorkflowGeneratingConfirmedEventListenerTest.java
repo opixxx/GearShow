@@ -43,7 +43,7 @@ class WorkflowGeneratingConfirmedEventListenerTest {
 
     @BeforeEach
     void setUp() {
-        properties = new TripoPollingProperties(3_000L, 20, 15, 30, 2_000L);
+        properties = new TripoPollingProperties(30, 2_000L, true);
     }
 
     @Test

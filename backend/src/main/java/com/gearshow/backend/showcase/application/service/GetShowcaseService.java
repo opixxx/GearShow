@@ -1,7 +1,10 @@
 package com.gearshow.backend.showcase.application.service;
 
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
+import com.gearshow.backend.showcase.application.dto.ShowcaseModelStatus;
+import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.port.in.GetShowcaseUseCase;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
@@ -17,16 +20,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
- * 쇼케이스 상세 조회 유스케이스 구현체.
+ * 쇼케이스 상세 조회 유스케이스 (ADR-010 Q4-(1) 반영).
+ *
+ * <p>3D 모델 상태는 완성품 존재 여부 + {@code model_generation_workflow} 최신 attempt 의
+ * {@code current_step} 으로부터 {@link ShowcaseModelStatusResolver} 를 통해 유도한다.</p>
  */
 @Service
 @RequiredArgsConstructor
 public class GetShowcaseService implements GetShowcaseUseCase {
 
-    /** 공개 상세 조회에서 허용되는 상태 (ACTIVE, SOLD만 노출) */
     private static final Set<ShowcaseStatus> PUBLIC_VISIBLE_STATUSES =
             Set.of(ShowcaseStatus.ACTIVE, ShowcaseStatus.SOLD);
 
@@ -34,6 +40,7 @@ public class GetShowcaseService implements GetShowcaseUseCase {
     private final ShowcaseImagePort showcaseImagePort;
     private final Showcase3dModelPort showcase3dModelPort;
     private final ShowcaseSpecPort showcaseSpecPort;
+    private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,13 +52,15 @@ public class GetShowcaseService implements GetShowcaseUseCase {
         ShowcaseSpec spec = showcaseSpecPort.findByShowcaseId(showcaseId)
                 .orElse(null);
 
-        return ShowcaseDetailResult.of(showcase, images, model3d, spec);
+        Optional<WorkflowSnapshot> latestWorkflow =
+                modelGenerationWorkflowPort.findLatestSnapshotByShowcaseId(showcaseId);
+        ShowcaseModelStatus modelStatus = ShowcaseModelStatusResolver.resolve(
+                model3d != null,
+                latestWorkflow.map(WorkflowSnapshot::currentStep).orElse(null));
+
+        return ShowcaseDetailResult.of(showcase, images, model3d, modelStatus, spec);
     }
 
-    /**
-     * 공개 조회 가능한 쇼케이스를 조회한다.
-     * HIDDEN, DELETED 상태는 조회할 수 없다.
-     */
     private Showcase findPublicShowcase(Long showcaseId) {
         Showcase showcase = showcasePort.findById(showcaseId)
                 .orElseThrow(NotFoundShowcaseException::new);

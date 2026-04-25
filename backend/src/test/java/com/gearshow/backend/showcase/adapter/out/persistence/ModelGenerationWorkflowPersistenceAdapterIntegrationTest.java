@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.persistence;
 
+import com.gearshow.backend.showcase.application.dto.StuckWorkflow;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
@@ -7,6 +8,8 @@ import com.gearshow.backend.showcase.application.exception.ConcurrentModelRetryE
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.support.TestInfraConfig;
 import com.gearshow.backend.support.TestOAuthConfig;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,7 +18,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,6 +50,12 @@ class ModelGenerationWorkflowPersistenceAdapterIntegrationTest {
 
     @Autowired
     private ModelGenerationWorkflowJpaRepository repository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     /**
      * 테스트 간 deleteAll 타이밍/캐시 이슈로 UNIQUE 충돌이 간헐적으로 발생할 수 있어,
@@ -353,6 +365,167 @@ class ModelGenerationWorkflowPersistenceAdapterIntegrationTest {
             int affected = workflowPort.markCompleted(id);
 
             assertThat(affected).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("findLatestSnapshotByShowcaseId — ADR-010 Q4-(1)")
+    class FindLatestSnapshot {
+
+        @Test
+        @DisplayName("이력 없는 showcaseId → Optional.empty")
+        void noHistory_empty() {
+            assertThat(workflowPort.findLatestSnapshotByShowcaseId(nextShowcaseId())).isEmpty();
+        }
+
+        @Test
+        @DisplayName("여러 attempt 누적 시 가장 큰 attempt_no 의 snapshot 반환")
+        void multipleAttempts_returnsLatest() {
+            long showcaseId = nextShowcaseId();
+            workflowPort.saveRequested(showcaseId, "lk-1", 1);
+            workflowPort.saveRequested(showcaseId, "lk-2", 2);
+            long latestId = workflowPort.saveRequested(showcaseId, "lk-3", 3);
+
+            Optional<WorkflowSnapshot> snap = workflowPort.findLatestSnapshotByShowcaseId(showcaseId);
+
+            assertThat(snap).isPresent();
+            assertThat(snap.orElseThrow().id()).isEqualTo(latestId);
+            assertThat(snap.orElseThrow().attemptNo()).isEqualTo(3);
+        }
+    }
+
+    @Nested
+    @DisplayName("findStuck* — Reconcile 배치 (설계 §8.4)")
+    class FindStuck {
+
+        @Test
+        @DisplayName("findStuckPreparing: PREPARING + heartbeat_at < threshold 만 반환")
+        void preparing_filtersByHeartbeat() {
+            long oldShowcase = nextShowcaseId();
+            long oldId = saveRequested(oldShowcase);
+            workflowPort.updateStepIfCurrent(oldId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            // heartbeat_at 을 임계 이전으로 강제 갱신
+            backdateHeartbeat(oldId, Instant.now().minusSeconds(600));
+
+            // 살아있는 PREPARING (heartbeat 최신)
+            long freshShowcase = nextShowcaseId();
+            long freshId = saveRequested(freshShowcase);
+            workflowPort.updateStepIfCurrent(freshId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+
+            // REQUESTED 상태인데 heartbeat 가 NULL 인 행 — currentStep 필터로 제외돼야
+            saveRequested(nextShowcaseId());
+
+            Instant threshold = Instant.now().minusSeconds(60);
+            List<StuckWorkflow> stuck = workflowPort.findStuckPreparing(threshold, 50);
+
+            assertThat(stuck).extracting(StuckWorkflow::id).contains(oldId).doesNotContain(freshId);
+            assertThat(stuck)
+                    .allMatch(s -> s.currentStep() == WorkflowStep.PREPARING);
+        }
+
+        @Test
+        @DisplayName("findStuckGeneratingTripo: GENERATING + tripo_succeeded_at IS NULL + last_polled_at < threshold")
+        void generatingTripo_filtersBySubState() {
+            long oldShowcase = nextShowcaseId();
+            long stuckId = saveRequested(oldShowcase);
+            workflowPort.updateStepIfCurrent(stuckId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(stuckId, "task-stuck");
+            backdateLastPolled(stuckId, Instant.now().minusSeconds(60 * 30));
+
+            // GENERATING 인데 tripo_succeeded_at 이 채워진 행 — 이번 카테고리에서 제외돼야
+            long succeededId = saveRequested(nextShowcaseId());
+            workflowPort.updateStepIfCurrent(succeededId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(succeededId, "task-succ");
+            workflowPort.markTripoSucceeded(succeededId);
+
+            Instant threshold = Instant.now().minusSeconds(60 * 8);
+            List<StuckWorkflow> stuck = workflowPort.findStuckGeneratingTripo(threshold, 50);
+
+            assertThat(stuck).extracting(StuckWorkflow::id)
+                    .contains(stuckId)
+                    .doesNotContain(succeededId);
+            assertThat(stuck)
+                    .allMatch(s -> s.currentStep() == WorkflowStep.GENERATING)
+                    .allMatch(s -> s.tripoSucceededAt() == null);
+        }
+
+        @Test
+        @DisplayName("findStuckGeneratingS3: GENERATING + tripo_succeeded_at IS NOT NULL + heartbeat_at < threshold")
+        void generatingS3_filtersBySubState() {
+            long stuckId = saveRequested(nextShowcaseId());
+            workflowPort.updateStepIfCurrent(stuckId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(stuckId, "task-s3");
+            workflowPort.markTripoSucceeded(stuckId);
+            backdateHeartbeat(stuckId, Instant.now().minusSeconds(60 * 20));
+
+            // tripo_succeeded_at 미설정 행 → 이 카테고리에서 제외
+            long polledId = saveRequested(nextShowcaseId());
+            workflowPort.updateStepIfCurrent(polledId, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            workflowPort.markGenerating(polledId, "task-running");
+
+            Instant threshold = Instant.now().minusSeconds(60 * 5);
+            List<StuckWorkflow> stuck = workflowPort.findStuckGeneratingS3(threshold, 50);
+
+            assertThat(stuck).extracting(StuckWorkflow::id)
+                    .contains(stuckId)
+                    .doesNotContain(polledId);
+            assertThat(stuck).allMatch(s -> s.tripoSucceededAt() != null);
+        }
+
+        @Test
+        @DisplayName("findStuckRequested: REQUESTED + created_at < threshold (경고용)")
+        void requested_filtersByCreatedAt() {
+            long oldId = saveRequested(nextShowcaseId());
+            backdateCreatedAt(oldId, Instant.now().minusSeconds(120));
+
+            long freshId = saveRequested(nextShowcaseId());
+
+            Instant threshold = Instant.now().minusSeconds(30);
+            List<StuckWorkflow> stuck = workflowPort.findStuckRequested(threshold, 50);
+
+            assertThat(stuck).extracting(StuckWorkflow::id)
+                    .contains(oldId)
+                    .doesNotContain(freshId);
+        }
+
+        @Test
+        @DisplayName("limit 파라미터가 페이징을 적용한다")
+        void limitApplies() {
+            for (int i = 0; i < 5; i++) {
+                long id = saveRequested(nextShowcaseId());
+                workflowPort.updateStepIfCurrent(id, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+                backdateHeartbeat(id, Instant.now().minusSeconds(600));
+            }
+
+            List<StuckWorkflow> stuck = workflowPort.findStuckPreparing(
+                    Instant.now().minusSeconds(60), 3);
+
+            assertThat(stuck).hasSize(3);
+        }
+
+        private void backdateHeartbeat(long id, Instant heartbeat) {
+            updateColumn(id, "heartbeat_at", heartbeat);
+        }
+
+        private void backdateLastPolled(long id, Instant lastPolled) {
+            updateColumn(id, "last_polled_at", lastPolled);
+        }
+
+        private void backdateCreatedAt(long id, Instant createdAt) {
+            updateColumn(id, "created_at", createdAt);
+        }
+
+        private void updateColumn(long id, String column, Instant value) {
+            // ReflectionTestUtils + saveAndFlush 는 JPA dirty-checking 의 원본 snapshot 과 비교가
+            // 어긋나 UPDATE 가 누락되는 경우가 있어, native SQL 로 컬럼만 직접 갱신한다.
+            // DML 은 트랜잭션이 필수 — TransactionTemplate 으로 명시적 트랜잭션 경계를 만든다.
+            transactionTemplate.executeWithoutResult(status ->
+                    entityManager.createNativeQuery(
+                                    "UPDATE model_generation_workflow SET " + column + " = :v WHERE id = :id")
+                            .setParameter("v", value)
+                            .setParameter("id", id)
+                            .executeUpdate());
+            entityManager.clear();
         }
     }
 }
