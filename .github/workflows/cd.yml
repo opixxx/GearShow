@@ -160,8 +160,9 @@ jobs:
             docker compose -f docker-compose.prod.yml pull backend
             docker compose -f docker-compose.prod.yml up -d backend
 
-            # 헬스체크 (최대 60초 대기)
-            for i in $(seq 1 12); do
+            # 헬스체크 (최대 90초 대기 — Redisson 추가 로딩 + 첫 부팅 OOM 시 컨테이너
+            # 재시작 1회까지 감안. 60s 였을 때 PR #50 머지 후 부팅 완료 직전 timeout 발생).
+            for i in $(seq 1 18); do
               if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
                 echo "✅ 헬스체크 성공 (image: $IMAGE_TAG)"
 
@@ -173,7 +174,7 @@ jobs:
                 df -h / | tail -1
                 exit 0
               fi
-              echo "헬스체크 대기중... ($i/12)"
+              echo "헬스체크 대기중... ($i/18)"
               sleep 5
             done
 
