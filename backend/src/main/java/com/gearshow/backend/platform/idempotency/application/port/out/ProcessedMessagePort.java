@@ -23,16 +23,13 @@ public interface ProcessedMessagePort {
     boolean saveIfAbsent(String messageId, String domain);
 
     /**
-     * 처리 이력을 보상 삭제한다.
-     *
-     * <p>비즈니스 로직 처리 실패 시 멱등성 선점 기록을 되돌려
-     * 다음 메시지 재전달 시 다시 처리할 수 있도록 한다.
-     * 이미 삭제되었거나 존재하지 않으면 아무 동작도 하지 않는다.</p>
+     * 처리 이력 존재 여부를 조회한다.
      *
      * @param messageId 메시지 고유 식별자
      * @param domain    도메인 이름
+     * @return 이력이 존재하면 {@code true}, 없으면 {@code false}
      */
-    void release(String messageId, String domain);
+    boolean existsByKey(String messageId, String domain);
 
     /**
      * 지정 시각보다 이전에 처리된 이력을 배치 단위로 삭제한다.

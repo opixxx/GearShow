@@ -1,6 +1,6 @@
 package com.gearshow.backend.showcase.adapter.out.messaging.kafka;
 
-import com.gearshow.backend.platform.idempotency.application.port.in.AcquireIdempotencyUseCase;
+import com.gearshow.backend.platform.idempotency.application.port.in.MessageIdempotencyUseCase;
 import com.gearshow.backend.platform.idempotency.domain.IdempotencyDomain;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
@@ -29,19 +29,18 @@ import org.springframework.stereotype.Component;
  * <p><b>재시도 전략 ({@link RetryableTopic})</b>: Retryable/CircuitOpen 예외는 retry 토픽
  * ({@code showcase.model-generation.request-retry}) 으로 이동해 exp backoff 후 재처리된다.
  * attempts=5, 30s → 60s → 120s → 240s → 480s → DLT. 총 ~15분 재시도 윈도우가 Circuit Breaker
- * 의 복구 대기로도 동작한다.</p>
+ * 의 복구 대기로도 동작한다. {@code include} 에 명시되지 않은 RuntimeException 은 재시도 없이
+ * 즉시 DLT 로 라우팅 — 프로그래밍 버그/스키마 오류는 빠르게 알람으로 전환한다.</p>
  *
  * <p><b>DLT 핸들러 ({@link DltHandler})</b>: 재시도 소진 후 DLT 도달 시 workflow 를 FAILED 로
  * 마킹하고 ALERT 로그를 남긴다. {@code tripo_pending_task} 정리 · Tripo cancel 은 Reconcile(P1-G)
  * 범위.</p>
  *
- * <p><b>설계 결정 #5 (멱등성 레코드 release 규칙)</b>:</p>
- * <ul>
- *   <li>UseCase 가 예외를 던지면 → Tripo 호출 <b>전</b> 실패로 간주 → release() 호출 후 rethrow</li>
- *   <li>UseCase 가 정상 반환하면 → Tripo 호출 후 처리는 UseCase 내부에서 완료 (release 없음)</li>
- * </ul>
- * 이유: Tripo 호출 성공 후 실패는 UseCase 가 내부에서 흡수해 정상 반환하므로 예외가 Worker 까지
- * 올라오지 않는다 (PrepareWorkflowService.transitionToGeneratingUnderLock 의 catch 블록 참조).
+ * <p><b>멱등성 INSERT 시점 (ADR-011 §2.③ 양보 불가 규칙)</b>: {@code processed_message} 는
+ * 메시지 처리 *정상 종료 후* INSERT 한다 (완료 시점 INSERT). UseCase 가 예외를 던지면
+ * markProcessed 를 호출하지 않은 상태로 RetryableTopic 재시도가 진행되어 다음 시도에서 자연스럽게
+ * 재진입한다. 동시성 1회 보장은 워크플로우 단계의 조건부 UPDATE (ADR-012) 가 책임지므로,
+ * 메시지 멱등성 테이블은 브로커 재전송 시 빠른 컷 역할만 수행한다.</p>
  */
 @Slf4j
 @Component
@@ -50,7 +49,7 @@ import org.springframework.stereotype.Component;
 public class ModelGenerationWorker {
 
     private final PrepareWorkflowUseCase prepareWorkflowUseCase;
-    private final AcquireIdempotencyUseCase acquireIdempotencyUseCase;
+    private final MessageIdempotencyUseCase messageIdempotencyUseCase;
     private final ModelGenerationWorkflowPort workflowPort;
 
     @RetryableTopic(
@@ -79,33 +78,25 @@ public class ModelGenerationWorker {
             return;
         }
 
-        // 멱등성 체크: 이미 처리된 메시지면 즉시 무시 (ADR-011 ③).
-        if (!acquireIdempotencyUseCase.tryAcquire(
+        // 재전송된 이미 처리 완료 메시지면 즉시 무시 (ADR-011 §2.③ 빠른 컷).
+        if (messageIdempotencyUseCase.isProcessed(
                 message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION)) {
+            log.debug("이미 처리 완료된 메시지 — skip. messageId: {}, workflowId: {}",
+                    message.messageId(), message.workflowId());
             return;
         }
 
         log.info("3D 모델 생성 요청 수신 - messageId: {}, workflowId: {}, showcaseId: {}",
                 message.messageId(), message.workflowId(), message.showcaseId());
 
-        try {
-            prepareWorkflowUseCase.prepare(message.workflowId());
-        } catch (Exception e) {
-            // [설계 결정 #5] 예외 전파 = Tripo 호출 전 실패 (UseCase 가 Tripo 호출 후 실패는 내부 흡수).
-            // release() 로 멱등성 레코드를 해제하여 Spring Kafka retry 토픽 재시도를 허용한다.
-            log.warn("UseCase 실패 (Tripo 호출 전) - 멱등성 레코드 release - "
-                            + "messageId: {}, workflowId: {}",
-                    message.messageId(), message.workflowId());
-            try {
-                acquireIdempotencyUseCase.release(
-                        message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
-            } catch (Exception releaseEx) {
-                // release 실패해도 원본 예외를 전파한다. Reconcile(P1-G) 이 최종 안전망.
-                log.error("멱등성 레코드 release 실패 - Reconcile 이 최종 복구 예정 - messageId: {}",
-                        message.messageId(), releaseEx);
-            }
-            throw e; // @RetryableTopic 이 retry → DLT 라우팅
-        }
+        // 동시성 1회 보장은 워크플로우 단계의 조건부 UPDATE (ADR-012) 가 책임진다.
+        // 예외가 던져지면 markProcessed 미호출 → @RetryableTopic 이 retry 토픽으로 라우팅 →
+        // 다음 시도에서 isProcessed=false 로 자연스럽게 재진입한다.
+        prepareWorkflowUseCase.prepare(message.workflowId());
+
+        // 정상 종료 시점에 처리 완료 사실을 영구 기록 (ADR-011 §2 양보 불가 규칙).
+        messageIdempotencyUseCase.markProcessed(
+                message.messageId(), IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
     }
 
     /**
