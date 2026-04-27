@@ -1,7 +1,8 @@
 # EXEC_PLAN: fix-reconcile-redis-conditional
 
 - **Type**: fix
-- **Status**: completed  <!-- pending | in_progress | completed | error | blocked -->
+- **Status**: in_progress  <!-- pending | in_progress | completed | error | blocked -->
+- **Updated**: 2026-04-28 — scope 확장 (Redis 컨테이너 도입 추가)
 - **Risk**: Safe
 - **Created**: 2026-04-27 22:58
 - **Branch**: fix/fix-reconcile-redis-conditional
@@ -23,18 +24,25 @@
 - `ReconcileStuckWorkflowsService` 의 `@ConditionalOnProperty` → 동일 패턴으로 교체
 - `application-prod.yml:75-82` 의 `reconcile.enabled: true` 옆에 의도 주석 추가 (Redis 도 켜야 실효 발생)
 - 기존 ReconcileScheduler/Service 테스트가 어노테이션 변경에 깨지지 않는지 확인
+- **(2026-04-28 추가) Redis 7 컨테이너를 `docker-compose.prod.yml` 에 도입** — 3D 파이프라인 좌표화 인프라 (분산 락 / DelayedQueue / Tripo 세마포어 / 향후 ZSET 대기열)
+- **(2026-04-28 추가) backend 컨테이너 env 에 `REDIS_ENABLED=true` / `REDIS_HOST=redis` / `REDIS_PORT=6379` 주입** + `depends_on: redis: service_healthy` 체이닝
+- **(2026-04-28 추가) CD 워크플로우 (`.github/workflows/cd.yml`) 의 EC2 배포 step 에서 backend 기동 전에 redis 도 함께 `up -d`**
 
 ### Out
-- **Redis 운영 도입** — 별도 작업. 본 PR 은 부팅 정합성만 회복.
-- **`WorkflowPollQueuePort` No-op 구현체 추가** — `WorkflowPollQueuePort` JavaDoc 이 "구현체 없는 환경에서는 Bean 미등록 → Poller 비활성화" 로 명시 = 미등록이 의도된 설계.
+- **`WorkflowPollQueuePort` No-op 구현체 추가** — Redis 도입으로 자연스럽게 해소 (구현체 항상 존재).
 - **CD 헬스체크 시간/재시도 정책 변경** — 부팅이 정상화되면 자동 해결.
-- **다른 Conditional 정합성 일제 점검** — 다른 Bean 들은 이미 No-op fallback 패턴이 있어 동일 문제 없음 (이번에 발견된 것은 Reconcile 만).
+- **다른 Conditional 정합성 일제 점검** — 다른 Bean 들은 이미 No-op fallback 패턴이 있어 동일 문제 없음.
+- **AWS ElastiCache 전환** — 단일 인스턴스 prod 단계엔 docker compose 의 redis 컨테이너로 충분. 다중 Worker 도입 시점에 ElastiCache 검토.
+- **JVM-local Striped<Lock> fallback 추가** — Redis 도입 후엔 무관 (Redisson 가 항상 활성). deferred refactors #18 로 별도 트래킹.
 
 ## 3. 변경 대상 (Affected)
 
 - **domain/**: 없음
 - **application/**: `showcase/application/service/ReconcileStuckWorkflowsService.java` — 클래스 어노테이션만 변경
 - **adapter/**: `showcase/adapter/in/scheduler/ReconcileScheduler.java` — 클래스 어노테이션만 변경
+- **인프라 / 배포 (2026-04-28 추가)**:
+  - `docker-compose.prod.yml` — `redis` 서비스 추가 + `backend.environment` 에 `REDIS_*` 주입 + `backend.depends_on.redis` 체이닝 + `gearshow-redis-data` 볼륨
+  - `.github/workflows/cd.yml` — EC2 배포 step 에서 `up -d kafka redis` 로 redis 함께 기동
 - **docs/**:
   - `backend/src/main/resources/application-prod.yml` — `reconcile` 블록 위에 주석 추가
   - 새 테스트 파일이 추가되면 `backend/src/test/...` 경로 명시
@@ -181,6 +189,23 @@ cd /Users/opix/GearShow/../gearshow-fix-reconcile-redis-conditional/backend
 
 ## 8. 롤백 전략 (Rollback)
 
-해당 없음 — 어노테이션 + yml 주석 변경뿐. 문제 발생 시 `git revert <commit>` 한 번으로 복구. 데이터 변경 없음, 마이그레이션 없음, 외부 계약 변경 없음.
+### 코드 변경 (어노테이션 + yml 주석)
+`git revert <commit>` 한 번으로 복구. 데이터 변경 없음, 마이그레이션 없음, 외부 계약 변경 없음.
 
-다음 push 의 CD 가 또 실패하면 즉시 revert + 원인 재조사 (의도하지 않은 다른 Conditional 부수효과 가능성).
+### 인프라 변경 (Redis 도입 — 2026-04-28 추가)
+세 가지 단계의 롤백 옵션:
+
+1. **빠른 비활성화** (Redis 컨테이너는 살리되 backend 만 사용 안하기):
+   - EC2 의 docker-compose.prod.yml 또는 .env 에서 `REDIS_ENABLED=false` 로 backend env 강제 → backend 재기동
+   - → 단 이 경우 3D 폴링 흐름이 멎음 (research §3.4 — Redis 의존 경로 외 백업 경로 없음)
+
+2. **Redis 컨테이너 자체 제거**:
+   - `docker compose -f docker-compose.prod.yml stop redis && docker compose -f docker-compose.prod.yml rm -f redis`
+   - 이 PR revert (compose / cd.yml 변경 되돌림)
+   - 단 데이터 손실: redis 의 lock / queue 가 모두 사라짐. 진행 중 워크플로우는 Reconcile 도 같이 비활성이라 stuck 됨 (수동 정리 필요)
+
+3. **PR 전체 revert**:
+   - `git revert <merge-commit>`
+   - 다시 부팅 실패 상태로 회귀 — 권장하지 않음
+
+다음 push 의 CD 가 또 실패하면 옵션 1 (REDIS_ENABLED=false) 로 즉시 핫픽스 후 원인 조사.

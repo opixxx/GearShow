@@ -145,8 +145,11 @@ jobs:
             # compose 에서 사용하는 변수 주입
             export ECR_REGISTRY IMAGE_TAG
 
-            # Kafka 가 아직 안 떠 있으면 먼저 기동 (이미 healthy 면 no-op)
-            docker compose -f docker-compose.prod.yml up -d kafka
+            # 인프라 의존 컨테이너 먼저 기동 (이미 healthy 면 no-op)
+            # Kafka: Outbox Relay → Worker / Consumer
+            # Redis: 3D 파이프라인 분산 락 / DelayedQueue / Tripo 세마포어
+            #         (research §3.4 — 미가동 시 backend 의 3D 폴링 흐름 영구 멈춤)
+            docker compose -f docker-compose.prod.yml up -d kafka redis
 
             # Observability 스택 기동 (idempotent — 이미 떠 있으면 no-op)
             # Prometheus 설정이 바뀌면 컨테이너를 재생성해서 새 설정 반영
