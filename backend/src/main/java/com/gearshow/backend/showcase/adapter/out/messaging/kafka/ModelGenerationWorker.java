@@ -33,8 +33,9 @@ import org.springframework.stereotype.Component;
  * 즉시 DLT 로 라우팅 — 프로그래밍 버그/스키마 오류는 빠르게 알람으로 전환한다.</p>
  *
  * <p><b>DLT 핸들러 ({@link DltHandler})</b>: 재시도 소진 후 DLT 도달 시 workflow 를 FAILED 로
- * 마킹하고 ALERT 로그를 남긴다. {@code tripo_pending_task} 정리 · Tripo cancel 은 Reconcile(P1-G)
- * 범위.</p>
+ * 마킹하고 ALERT 로그를 남긴다. {@code tripo_pending_task} 정리는 Reconcile(P1-G) 의
+ * {@code recoverPreparing} 책임. Tripo cancel 은 API 미지원이라 어떤 경로에서도 호출하지 않는다
+ * (ADR-011 v1.1 §④).</p>
  *
  * <p><b>멱등성 INSERT 시점 (ADR-011 §2.③ 양보 불가 규칙)</b>: {@code processed_message} 는
  * 메시지 처리 *정상 종료 후* INSERT 한다 (완료 시점 INSERT). UseCase 가 예외를 던지면
@@ -101,8 +102,10 @@ public class ModelGenerationWorker {
 
     /**
      * 재시도가 모두 소진되어 DLT 도달한 메시지를 처리한다. workflow 를 FAILED 로 마킹하고
-     * ALERT 로그를 남긴다. {@code tripo_pending_task} 정리와 Tripo cancel 은 Reconcile(P1-G)
-     * 의 책임이므로 이 핸들러는 건드리지 않는다.
+     * ALERT 로그를 남긴다. {@code tripo_pending_task} 정리는 Reconcile(P1-G) 의 책임이므로
+     * 이 핸들러는 건드리지 않는다. Tripo cancel 은 API 미지원이라 어떤 경로에서도 호출하지 않으며,
+     * stranded task 발생 시 1회분 크레딧 손실은 운영 측 일일 balance 모니터링으로 인지한다
+     * (ADR-011 v1.1 §④).
      */
     @DltHandler
     public void handleDlt(ModelGenerationRequestMessage message) {

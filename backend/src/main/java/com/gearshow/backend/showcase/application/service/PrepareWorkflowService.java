@@ -43,7 +43,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <ul>
  *   <li>Tripo 호출 <b>전</b> 실패: 예외 throw → Worker 가 release() 후 Kafka 재시도 (무과금)</li>
  *   <li>Tripo 호출 <b>후</b> 실패 (TX2 DB 오류 등): 예외 삼키고 return → release 하지 않음
- *       → pending_task 레코드가 남아 Reconcile(P1-G) 이 Tripo cancel 로 정리</li>
+ *       → pending_task 레코드가 남아 {@code Reconcile(P1-G).recoverPreparing} 이
+ *       {@code markGenerating} 으로 복구. pending 도 없는 경우 (선저장 자체 실패)
+ *       {@code markFailed(TX2_DB_FAILED)} — Tripo cancel API 미지원으로 stranded task 의
+ *       1회분 크레딧은 영구 손실 (ADR-011 v1.1 §④)</li>
  * </ul>
  *
  * <p><b>@RetryableTopic 과의 연계 (P1-D-δ)</b>: Retryable / CircuitBreaker 예외를 throw 하면
@@ -214,7 +217,18 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     /**
      * Tripo POST 성공 직후 {@code tripo_pending_task} 레코드를 선저장한다. 실패 시
      * task_id 유실 위험이 있으므로 CRITICAL 로그 + 예외 재전파로 Kafka 재시도를 유도한다.
-     * 재시도 시 content_hash dedup 또는 Reconcile 이 중복 task 를 정리한다 (ADR-011 ④).
+     *
+     * <p><b>재시도 동작</b>: 재시도 진입 시 {@code transitionToPreparingUnderLock} 가
+     * affected=0 으로 컷되어 두 번째 Tripo POST 는 발생하지 않는다. 다만 이미 발생한 Tripo
+     * task 는 task_id 가 유실된 채 백그라운드에서 완료되며,
+     * {@code Reconcile.recoverPreparing} 이 PREPARING heartbeat 임계 (운영 기본 60s,
+     * {@code app.reconcile.preparing-stuck-seconds} 설정값) 경과 후 {@code markFailed(TX2_DB_FAILED)}
+     * + ALERT 로 종결한다.</p>
+     *
+     * <p><b>잔존 손실</b>: Tripo {@code cancel} API 미지원 (2026-04-28 재확인) 으로 stranded
+     * task 의 자동 회수 경로가 없어 1회분 크레딧이 영구 손실된다. 운영 측 일일 balance 모니터링
+     * + {@code failure_code=TX2_DB_FAILED} 카운터로 사후 인지한다 (ADR-011 v1.1 §④,
+     * 설계 v1.2 §4 ④ 참조).</p>
      *
      * @return 계속 진행 가능하면 {@code true}
      */
