@@ -200,18 +200,17 @@ CREATE TABLE processed_message (
 | **① API** | `Idempotency-Key` 헤더 | 클라 UUID, localStorage persist | 따닥 / 세션 재진입 / 새로고침 |
 | **② 비즈니스 fallback** | `UNIQUE(user_id, content_hash, 10min)` | 서버 sha256 계산 | ①이 실패한 경우 내용 기반 dedup |
 | **③ Kafka Consumer** | `processed_message.event_id = hash(idempotency_key)` | ①에서 결정적 파생 | 브로커 재전송 / rebalance |
-| **④ Tripo (사후 정리)** | `tripo_pending_task` 선저장 + Reconcile 중복 task cancel | workflow | 이중 과금 |
+| **④ Tripo (손실 수용)** | `tripo_pending_task` 선저장 + Reconcile PREPARING 복구 (cancel 불가) | workflow | stranded task 빈도 최소화 |
 
 ### ④ Tripo 계층 상세
 
-Tripo API 는 `Idempotency-Key` 헤더를 **지원하지 않음** (2026-04 기준). 대신 Tripo 의 과금 구조를 활용한 **사후 정리 전략** 을 쓴다:
+Tripo API 는 `Idempotency-Key` 헤더와 `cancel` 엔드포인트 **모두 미지원** (2026-04-28 재확인). 능동 차단 수단이 없으므로 ④ 계층은 **"발생 빈도 최소화 + 잔존 손실 수용"** 으로 정의된다.
 
 - **과금 확정 시점**: Tripo 는 task 가 `success` 로 완료된 시점에만 `consumed_credit` 를 차감한다 (문서 §3.2 참조). POST /task 자체로는 과금되지 않음.
 - **전략**:
   1. POST /task 성공 직후 `tripo_pending_task(workflow_id, task_id)` 선저장 → 워커 크래시 시에도 task_id 유실 방지
-  2. Reconcile 배치가 PREPARING stuck 감지 시 `tripo_pending_task` 에서 task_id 복구 → 중복 POST 회피
-  3. 그래도 중복 task 가 생긴 경우 (예: 선저장 전 크래시), Reconcile 이 Tripo 응답에서 **같은 workflow 의 여러 running task 감지 → 가장 최근 것만 유지, 나머지 POST /task/{taskId}/cancel** 로 `cancelled` 전이시켜 과금 0 확정.
-- **리스크 한도**: 가장 최근 task 가 이미 success 로 완료된 극단적 상황에서만 이중 과금 가능. 발생 빈도는 "크래시 발생 × task 완료 우연적 동시 발생" 확률이라 운영상 무시 가능 수준.
+  2. Reconcile 배치가 PREPARING stuck 감지 시 `tripo_pending_task` 에서 task_id 복구 → `markGenerating` 으로 정상 진행 (재 POST 회피)
+- **잔존 손실**: 선저장 자체가 실패하거나 (`tripo_pending_task` INSERT `DataAccessException`) Tripo POST 직후 워커가 죽으면 task_id 가 유실된 stranded task 가 1개 발생한다. **cancel 불가** 로 인해 Tripo 백그라운드에서 task 가 완료되며 1회분 크레딧이 영구 손실된다. 발생 빈도는 "POST 성공 × 직후 DB 단발성 장애" 라 낮음. 운영 측 일일 balance 모니터링 + `failure_code=TX2_DB_FAILED` 카운터로 사후 인지한다.
 
 ---
 
@@ -496,16 +495,9 @@ void tryLockAndRecover(w):
     finally:
         lock.unlock()
 
-# 중복 task 정리 (별도 배치, 매 5분)
-# 같은 workflow_id 에 running task 가 2개 이상이면 가장 최근 것만 남기고 cancel
-for w in workflows WHERE current_step IN ('PREPARING','GENERATING'):
-    tripoTasks = tripo.listTasksByInputSignature(w.imageS3Keys)  # Tripo list API
-    runningTasks = tripoTasks.filter(t -> t.status IN ('queued','running'))
-    if runningTasks.size() >= 2:
-        latest = runningTasks.maxBy(t -> t.create_time)
-        for t in runningTasks except latest:
-            tripo.cancel(t.task_id)   # POST /task/{taskId}/cancel
-            log.warn("duplicate task cancelled", workflow=w.id, task=t.task_id)
+# stranded task cancel 배치는 미구현 — Tripo cancel API 미지원 (2026-04-28 확정).
+# 발생한 stranded task 는 Tripo 백그라운드에서 완료되며 1회분 크레딧 영구 손실.
+# 운영 측 일일 balance 모니터링 + failure_code=TX2_DB_FAILED 카운터로 인지 (§4 ④, ADR-011 v1.1).
 ```
 
 **stuck 임계값 (초기, 운영 1주 후 튜닝)**
@@ -568,13 +560,11 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | `INSUFFICIENT_CREDIT` | 2010 | 403 | TRIPO_API | ❌ | ✅ | 운영 Alert (크레딧 충전) |
 | `TRIPO_TIMEOUT_GENERATING_15M` | — | — | SCHEDULER | ❌ | ✅ | 운영 알림, 수동 재시도 |
 | `POLLING_LOST` | — | — | SCHEDULER | ❌ | ✅ | 수동 조사 |
-| `TRIPO_TASK_CANCELLED` | — | — | SYSTEM | ❌ | ❌ | 정상 (중복 task 정리 결과) |
 | `TRIPO_TASK_BANNED` | — | — | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
 | `TRIPO_TASK_EXPIRED` | — | — | TRIPO_API | ✅ (새 workflow) | ❌ | 사용자 재시도 |
 | `S3_UPLOAD_FAILED` | — | — | S3 | ✅ | ❌ | 자동 재시도 |
-| `UNKNOWN_TRIPO_RESPONSE` | — | — | TRIPO_API | ❌ | ✅ | 수동 조사 + Trace ID 로 Tripo 문의 |
 
-**status=`cancelled` 처리**: 중복 task 정리 배치가 cancel 시킨 경우 workflow 는 실패 아님 → 남긴 task 가 정상 진행됨. cancel 당한 task 쪽은 이벤트 로그만 남기고 failure 로 카운트하지 않음.
+> Tripo `cancelled` 상태는 우리가 cancel 을 발행하지 않으므로 (cancel API 미지원) Phase 1 에서 발생하지 않는다. Tripo 측 시스템 사유로 발생할 경우 현 코드는 `TRIPO_TASK_FAILED` 로 마킹하고 `failure_message` 에 원본 상태 ("cancelled") 를 보존한다 (`PollWorkflowService.poll` 경유). terminal 5종 (FAILED/CANCELLED/BANNED/EXPIRED 등) 의 1:1 분류 정밀화는 백로그 (v1.2 정정).
 
 ---
 
@@ -584,8 +574,9 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 |---|---|---|
 | `workflow.step.duration{step}` p50/p95/p99 | started_at→finished_at | stuck 임계 튜닝 |
 | `workflow.s3_mirror.duration` p95 | tripo_succeeded_at→finished_at | S3 단계 별도 추적 |
-| `workflow.failure.count{code}` | failure_code 집계 | 분류별 추이 |
+| `workflow.failure.count{code}` | failure_code 집계 | 분류별 추이 (특히 `TX2_DB_FAILED`/`TRIPO_PENDING_SAVE_FAILED` 카운터로 stranded task 인지) |
 | `tripo.charge.count` | Tripo POST 성공 | 과금 실증 |
+| `tripo.balance.effective` | `BalanceMonitorScheduler` (§8.5) | stranded task 손실 사후 인지 (cancel API 미지원으로 자동 회수 불가) |
 | `reconcile.recovered.count{step}` | Reconcile 배치 | 장애 빈도 |
 | `dlq.size` | Kafka | 미해결 사고 |
 
@@ -605,7 +596,7 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | **P1-E** | Poller + Redisson DelayedQueue (`poll:delayed-queue:main`) + `tripo:semaphore` 10 permits + `TripoSuccessEvent` ApplicationEvent (락 無) | P1-D-γ+δ | 중 | ✅ PR #45 |
 | **P1-F** | Downloader + S3 mirror + TX_final (GENERATING→COMPLETED) + `MODEL_GENERATION_COMPLETED` Outbox + `WorkflowGeneratingConfirmedEvent` AFTER_COMMIT 리팩토링 | P1-E | 중 | ✅ PR #46 |
 | **P1-G** | Reconcile 배치 (Redrive 전략: PREPARING stuck → markGenerating 재개, GENERATING·Tripo stuck → DelayedQueue 재등록, GENERATING·S3 stuck → TripoSuccessEvent 재발행) + `showcase_3d_model` 프로세스 컬럼 제거 (ADR-010 양보 불가 규칙 코드 반영) + 레거시 서비스 (`RecoverStuckModelsService`, `PollGenerationStatusService`, `PrepareModelGenerationService`, `TripoPollingScheduler`) 제거 + `model_source_image.showcase_3d_model_id → showcase_id` FK 리네임 + Q4-(1) `GetShowcaseService`/`GetModel3dService` 가 workflow 테이블에서 상태 유도 | P1-F | 높음 | 🚧 본 PR |
-| **P1-G-γ (보류)** | Tripo 중복 task cancel 배치 (설계 §8.4 하단, §12 #2 실측 후 확정) — Tripo list API 미정 상태로 P1-G 에서 분리 | P1-G | 중 | ⏳ |
+| ~~**P1-G-γ**~~ | Tripo 중복 task cancel 배치 — **❌ 영구 폐기** (2026-04-28: Tripo cancel API 미지원 재확인. ADR-011 v1.1 참조) | — | — | ❌ |
 | **P1-H** | 관찰 지표 + 대시보드 + 알람 (FCM Notification Consumer 포함) | P1-G | 낮음 | ⏳ |
 | **P1-I** | E2E 테스트 (크래시 시뮬레이션, 중복 요청, 재시도) | P1-H | 중 | ⏳ |
 
@@ -615,8 +606,8 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 
 | # | 결정 | 상태 | 결과 / 대체 전략 |
 |---|---|---|---|
-| 1 | Tripo API `Idempotency-Key` 헤더 지원 여부 | ✅ 조사 완료 (2026-04-23) | **미지원**. 대체: `tripo_pending_task` 선저장 + 과금은 `success` 시점 확정(§3.2) 이므로 Reconcile 이 중복 running task 를 cancel 하면 과금 0. §4 ④ 참조. |
-| 2 | Tripo task list API + metadata 필터 | ✅ 조사 완료 (2026-04-23) | 명시 없음. Reconcile 중복 정리는 **입력 파일 서명(imageS3Keys) 기반 조회** 로 대체. 실측 후 구현 세부는 P1-G 에서 확정. |
+| 1 | Tripo API `Idempotency-Key` 헤더 지원 여부 | ✅ 조사 완료 (2026-04-23) / 추가 확인 (2026-04-28) | **미지원** (헤더). `cancel` 엔드포인트도 **미지원** (2026-04-28 재확인). 대체: `tripo_pending_task` 선저장 + Reconcile 의 PREPARING 복구로 발생 빈도 최소화. cancel 불가로 잔존 stranded task 는 손실 수용. §4 ④ 참조. |
+| 2 | Tripo task list API + metadata 필터 | ✅ 폐기 (2026-04-28) | Tripo `cancel` 엔드포인트 미지원으로 list-tasks 활용 시나리오 (중복 정리) 자체가 무효. 조사 종료. |
 | 3 | Tripo `GET /v2/task` 가 매번 새 download URL 발급하는지 | ✅ 해결 (2026-04-23) | **지원** (tripo-api-reference §3 "만료 시 task 재조회로 새 URL 획득"). S3 미러링 크래시 시 Tripo GET 으로 새 URL 획득 후 재다운로드. |
 | 4 | Redis 인스턴스 배치 (동일 VPC? 별도?) | 🟡 운영 인프라 미결 / ✅ 로컬·테스트 확정 (2026-04-24) | 로컬: docker-compose 로 Redis 7.4-alpine 기동 (`gearshow-redis`). 테스트: Testcontainers `redis:7.4-alpine`. 운영 Phase 1 은 자체호스팅 EC2 1대 + RDB+AOF, 동일 VPC 배치 권장 (미확정). Redisson 클라이언트 적용 완료 (P1-D-α+β). |
 | 5 | `multiview_to_model` 크레딧 단가 | 🟡 미결 | 문서 명시 없음. Phase 1 시작 전 실측 1회 (Tripo staging 과금 확인). Balance 모니터 임계값 설정 근거. |
@@ -629,7 +620,7 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | ADR | 제목 | 핵심 |
 |---|---|---|
 | **ADR-010** | 테이블 분리: sc_3d_model ⊕ model_generation_workflow | 도메인과 프로세스 분리, 재시도 이력 보존 |
-| **ADR-011** | 3계층 멱등성 전략 | API key + content_hash + processed_message + Tripo header |
+| **ADR-011** | 4계층 멱등성 전략 | API key + content_hash + processed_message + Tripo 손실 수용 (cancel/header 미지원) |
 | **ADR-012** | 선택적 분산 락 + 조건부 UPDATE 기반 동시성 제어 | 상태 전이 TX 에만 락, Poller 는 락 없음 |
 
 ---
@@ -640,3 +631,4 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 |---|---|---|
 | 2026-04-23 | v1.0 | 초안 — 4-state 머신 (`tripo_succeeded_at` 컬럼) + 폴링 락 제거 방향 확정 |
 | 2026-04-23 | v1.1 | Tripo API 조사 반영 — Idempotency-Key 미지원 확인 후 **사후 cancel 전략** 으로 ④ 계층 재설계. 사전 balance 체크 기각, 주기 모니터링(§8.5) 으로 전환. failure_code 를 Tripo 공식 에러 코드와 1:1 매핑. `tripo_trace_id` 컬럼 추가. |
+| 2026-04-28 | v1.2 | §4 ④ + §8.4 + §11 + §12 + §13 의 "사후 cancel" 가정 정정 — Tripo `cancel` 엔드포인트 미지원 재확인. ④ 계층 의미를 "stranded task 빈도 최소화 + 손실 수용" 으로 재정의. P1-G-γ 영구 폐기, §12 #2 폐기. ADR-011 v1.1 과 동기화. |

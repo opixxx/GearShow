@@ -22,7 +22,9 @@ public enum WorkflowFailureCode {
 
     /**
      * Tripo {@code POST /task} 성공 후 {@code tripo_pending_task} 선저장이 실패한 경우.
-     * task_id 가 유실될 위험이 있으며 Reconcile(P1-G) 이 중복 task 정리를 담당한다.
+     * task_id 가 유실되어 Tripo 백그라운드에서 task 가 완료될 수 있다 — Tripo cancel API
+     * 미지원으로 자동 회수 경로 없음. 운영 측 일일 balance 모니터링 + 이 코드 카운터로
+     * 사후 인지한다 (ADR-011 v1.1 §④).
      */
     TRIPO_PENDING_SAVE_FAILED,
 
