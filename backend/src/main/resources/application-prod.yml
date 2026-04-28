@@ -72,9 +72,11 @@ app:
     semaphore-acquire-timeout-ms: 2000
 
   # Reconcile 배치 (설계 §8.4 — P1-G)
-  # ⚠️ 활성화는 gearshow.redis.enabled=true 와 AND 조건이다 (코드 레벨 강제 — ReconcileScheduler /
-  # ReconcileStuckWorkflowsService 의 @ConditionalOnExpression 참조). 단일 인스턴스 prod
-  # (Redis 미사용) 에선 enabled=true 라도 자동으로 비활성화되어 부팅 정합성을 유지한다.
+  # ⚠️ 활성화는 다음 두 조건이 모두 충족되어야 한다 (코드 레벨 강제 — ReconcileBeansConfig 의
+  # @ConditionalOnProperty(app.reconcile.enabled) + @ConditionalOnBean(WorkflowPollQueuePort)):
+  #   1) app.reconcile.enabled=true
+  #   2) gearshow.redis.enabled=true (→ RedissonWorkflowPollQueueAdapter 빈 등록 → @ConditionalOnBean 통과)
+  # 단일 인스턴스 prod (Redis 미사용) 에선 enabled=true 라도 (2) 가 false 가 되어 자동 비활성화.
   # 다중 인스턴스 도입 시 REDIS_ENABLED=true 만 설정하면 자동으로 함께 활성화된다.
   reconcile:
     enabled: true

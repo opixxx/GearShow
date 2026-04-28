@@ -15,10 +15,8 @@ import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
 import com.gearshow.backend.showcase.infrastructure.config.ReconcileProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessException;
-import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,15 +49,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 를 공유한다. 락 busy 시 조용히 skip — 살아있는 주체를 덮어쓰지 않는다. 락 획득 후 heartbeat 재검증으로
  * stuck 오판을 한 번 더 방어한다.</p>
  *
- * <p><b>활성화 조건 (AND)</b>: {@code app.reconcile.enabled=true} 와 {@code gearshow.redis.enabled=true}
- * 가 모두 참일 때만 Bean 으로 등록된다. Reconcile 의 핵심 동작인 {@link WorkflowPollQueuePort#offer}
- * 재등록이 Redis(Redisson DelayedQueue) 의존이기 때문 — 둘 중 하나라도 누락되면 {@code WorkflowPollQueuePort}
- * 빈 자체가 미등록이라 DI 가 실패한다. AND 조건으로 묶어 두 플래그 모순 자체를 차단한다.</p>
+ * <p><b>등록</b>: {@link com.gearshow.backend.showcase.infrastructure.config.ReconcileBeansConfig}
+ * 가 명시 등록한다. 활성화 조건은 {@code app.reconcile.enabled=true} +
+ * {@link WorkflowPollQueuePort} 빈 존재 (= Redis 활성). application 코드는 인프라 키워드를
+ * 모르고 빈 의존성으로만 활성 여부를 표현한다 (deferred_refactor #18, PR #50 후속).</p>
  */
 @Slf4j
-@Service
 @RequiredArgsConstructor
-@ConditionalOnExpression("${app.reconcile.enabled:false} and ${gearshow.redis.enabled:false}")
 public class ReconcileStuckWorkflowsService implements ReconcileStuckWorkflowsUseCase {
 
     private static final String FAILURE_SOURCE_SCHEDULER = "SCHEDULER";
