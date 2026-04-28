@@ -7,7 +7,9 @@ import com.gearshow.backend.platform.idempotency.adapter.out.serialization.ApiRe
 import com.gearshow.backend.platform.idempotency.application.dto.ApiIdempotencyAcquireResult;
 import com.gearshow.backend.platform.idempotency.application.port.in.AcquireApiIdempotencyUseCase;
 import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.CreateShowcaseResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseDetailResponse;
+import com.gearshow.backend.showcase.adapter.in.web.dto.ShowcaseUpdateResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.UpdateShowcaseRequest;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseResult;
 import com.gearshow.backend.showcase.application.dto.ShowcaseDetailResult;
@@ -28,9 +30,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 쇼케이스 관련 API 컨트롤러.
@@ -46,7 +46,7 @@ public class ShowcaseController {
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
 
     /** 캐싱된 응답 역직렬화용 TypeReference (싱글턴 재사용). */
-    private static final TypeReference<ApiResponse<Map<String, Object>>> CACHED_RESPONSE_TYPE =
+    private static final TypeReference<ApiResponse<CreateShowcaseResponse>> CACHED_RESPONSE_TYPE =
             new TypeReference<>() {};
 
     private final CreateShowcaseUseCase createShowcaseUseCase;
@@ -96,7 +96,7 @@ public class ShowcaseController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Map<String, Object>> create(
+    public ApiResponse<CreateShowcaseResponse> create(
             Authentication authentication,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateShowcaseRequest request) {
@@ -109,20 +109,16 @@ public class ShowcaseController {
             return apiResponseCodec.decode(cached.responseBody(), CACHED_RESPONSE_TYPE);
         }
 
-        ApiResponse<Map<String, Object>> response;
+        ApiResponse<CreateShowcaseResponse> response;
         try {
             CreateShowcaseResult result = createShowcaseUseCase.create(
                     request.toCommand(ownerId, idempotencyKey),
                     request.imageKeys(),
-                    request.modelSourceImageKeys() != null ? request.modelSourceImageKeys() : List.of());
+                    request.modelSourceImageKeys() != null ? request.modelSourceImageKeys() : List.of()
+            );
 
-            // model3dStatus 는 3D 소스 이미지 없이 등록되거나 Deduped 경로에서 null 일 수 있으므로
-            // HashMap 으로 JSON null 직렬화를 보장한다 (Map.of 는 null 값을 허용하지 않음).
-            Map<String, Object> body = new HashMap<>();
-            body.put("showcaseId", result.showcaseId());
-            body.put("model3dStatus",
-                    result.model3dStatus() != null ? result.model3dStatus().name() : null);
-            response = ApiResponse.of(201, "쇼케이스 등록 성공", body);
+            response = ApiResponse.of(201, "쇼케이스 등록 성공",
+                    CreateShowcaseResponse.from(result));
         } catch (RuntimeException e) {
             // 비즈니스 실패 시 IN_PROGRESS 좀비 방지 — 보상 삭제로 동일 키 재시도 허용
             discardSilently(idempotencyKey);
@@ -137,7 +133,7 @@ public class ShowcaseController {
      * 쇼케이스를 수정한다.
      */
     @PatchMapping("/{showcaseId}")
-    public ApiResponse<Map<String, Long>> update(
+    public ApiResponse<ShowcaseUpdateResponse> update(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @Valid @RequestBody UpdateShowcaseRequest request) {
@@ -146,7 +142,7 @@ public class ShowcaseController {
         updateShowcaseUseCase.update(showcaseId, ownerId, request.toCommand());
 
         return ApiResponse.of(200, "쇼케이스 수정 성공",
-                Map.of("showcaseId", showcaseId));
+                ShowcaseUpdateResponse.of(showcaseId));
     }
 
     /**
@@ -167,7 +163,8 @@ public class ShowcaseController {
      * 응답 캐싱은 best-effort. 실패해도 비즈니스 응답은 그대로 반환한다.
      * (직렬화 or markDone 실패가 클라이언트에 500 으로 전파되지 않도록 방어)
      */
-    private void cacheResponseSilently(String idempotencyKey, ApiResponse<Map<String, Object>> response) {
+    private void cacheResponseSilently(String idempotencyKey,
+                                        ApiResponse<CreateShowcaseResponse> response) {
         try {
             String serialized = apiResponseCodec.encode(response);
             apiIdempotencyUseCase.markDone(idempotencyKey, 201, serialized);

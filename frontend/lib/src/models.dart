@@ -458,22 +458,44 @@ class ShowcaseModel3d {
   }
 }
 
-class ShowcaseCommentAuthor {
-  const ShowcaseCommentAuthor({
-    required this.userId,
-    required this.nickname,
-    required this.profileImageUrl,
+/// 쇼케이스 생성 응답.
+///
+/// 백엔드는 생성 직후 3D 모델 워크플로우를 동기 트리거하므로,
+/// 응답에 [model3dStatus] 가 함께 실린다 (소스 이미지가 없으면 `NONE`).
+class CreateShowcaseResult {
+  const CreateShowcaseResult({
+    required this.showcaseId,
+    required this.model3dStatus,
   });
 
-  final int userId;
-  final String? nickname;
-  final String? profileImageUrl;
+  final int showcaseId;
 
-  factory ShowcaseCommentAuthor.fromJson(Map<String, dynamic> json) {
-    return ShowcaseCommentAuthor(
-      userId: (json['userId'] as num?)?.toInt() ?? 0,
-      nickname: json['nickname'] as String?,
-      profileImageUrl: json['profileImageUrl'] as String?,
+  /// `NONE` | `GENERATING` | `COMPLETED` | `FAILED`.
+  /// 백엔드 ShowcaseModelStatus enum 과 동일한 문자열.
+  final String model3dStatus;
+
+  factory CreateShowcaseResult.fromJson(Map<String, dynamic> json) {
+    return CreateShowcaseResult(
+      showcaseId: (json['showcaseId'] as num?)?.toInt() ?? 0,
+      model3dStatus: json['model3dStatus'] as String? ?? 'NONE',
+    );
+  }
+}
+
+/// 3D 모델 생성 재요청 응답.
+class ModelGenerationRetryResult {
+  const ModelGenerationRetryResult({
+    required this.workflowId,
+    required this.modelStatus,
+  });
+
+  final int workflowId;
+  final String modelStatus;
+
+  factory ModelGenerationRetryResult.fromJson(Map<String, dynamic> json) {
+    return ModelGenerationRetryResult(
+      workflowId: (json['workflowId'] as num?)?.toInt() ?? 0,
+      modelStatus: json['modelStatus'] as String? ?? 'GENERATING',
     );
   }
 }

@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.in.web;
 
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.showcase.adapter.in.web.dto.RequestModelGenerationRequest;
+import com.gearshow.backend.showcase.adapter.in.web.dto.RequestModelGenerationResponse;
 import com.gearshow.backend.showcase.application.dto.Model3dDetailResult;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.port.in.GetModel3dUseCase;
@@ -11,8 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 /**
  * 쇼케이스 3D 모델 관련 API 컨트롤러.
@@ -35,7 +34,7 @@ public class ShowcaseModel3dController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public ApiResponse<Map<String, Object>> requestGeneration(
+    public ApiResponse<RequestModelGenerationResponse> requestGeneration(
             Authentication authentication,
             @PathVariable Long showcaseId,
             @RequestHeader(value = "Idempotency-Key", required = true) String idempotencyKey,
@@ -47,8 +46,7 @@ public class ShowcaseModel3dController {
                 showcaseId, ownerId, idempotencyKey, request.modelSourceImageKeys());
 
         return ApiResponse.of(202, "3D 모델 생성 요청 완료",
-                Map.of("workflowId", result.workflowId(),
-                        "modelStatus", result.modelStatus().name()));
+                RequestModelGenerationResponse.from(result));
     }
 
     /**

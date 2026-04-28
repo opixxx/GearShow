@@ -1,12 +1,17 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import 'models.dart';
 
 class GearShowApiClient {
   static const _jsonHeaders = {'Content-Type': 'application/json'};
+
+  /// 멱등성 키 발급기 (ADR-011 ①: 클라이언트가 매 시도마다 새 UUID 생성).
+  static const _uuid = Uuid();
 
   Uri _uri(
     String baseUrl,
@@ -347,7 +352,7 @@ class GearShowApiClient {
     _extractData(response);
   }
 
-  Future<int> createShowcase({
+  Future<CreateShowcaseResult> createShowcase({
     required String baseUrl,
     required String accessToken,
     required CreateShowcasePayload payload,
@@ -411,11 +416,60 @@ class GearShowApiClient {
 
     final response = await http.post(
       _uri(baseUrl, '/api/v1/showcases'),
-      headers: _headers(accessToken: accessToken),
+      headers: _headers(
+        accessToken: accessToken,
+        extra: {'Idempotency-Key': _uuid.v4()},
+      ),
       body: jsonEncode(body),
     );
     final data = _extractData(response);
-    return (data['showcaseId'] as num?)?.toInt() ?? 0;
+    return CreateShowcaseResult.fromJson(data);
+  }
+
+  /// 3D 소스 이미지 4장(앞/뒤/좌/우)을 Presigned URL 로 S3 에 업로드하고 S3 키 목록을 돌려준다.
+  /// 재시도 호출 직전에 사용한다.
+  Future<List<String>> uploadModelSourceImages({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+    required List<XFile> images,
+  }) async {
+    final entries = images.map((f) => _FileEntry(f, 'MODEL_SOURCE')).toList();
+    final presigned = await _generatePresignedUrls(
+      baseUrl: baseUrl,
+      accessToken: accessToken,
+      files: entries,
+    );
+    for (var i = 0; i < entries.length; i++) {
+      await _uploadToS3(
+        presignedUrl: presigned[i].presignedUrl,
+        file: entries[i].xFile,
+        contentType: presigned[i].contentType,
+      );
+    }
+    return presigned.map((r) => r.s3Key).toList();
+  }
+
+  /// 3D 모델 생성을 재요청한다 (`POST /api/v1/showcases/{id}/3d-model`).
+  ///
+  /// 재시도마다 새 [_uuid]를 생성해 `Idempotency-Key` 헤더에 실어 보낸다 (ADR-011 ①).
+  /// 백엔드는 202 ACCEPTED 와 함께 새 워크플로우 ID 와 `GENERATING` 상태를 돌려준다.
+  Future<ModelGenerationRetryResult> requestModel3dRetry({
+    required String baseUrl,
+    required String accessToken,
+    required int showcaseId,
+    required List<String> modelSourceImageKeys,
+  }) async {
+    final response = await http.post(
+      _uri(baseUrl, '/api/v1/showcases/$showcaseId/3d-model'),
+      headers: _headers(
+        accessToken: accessToken,
+        extra: {'Idempotency-Key': _uuid.v4()},
+      ),
+      body: jsonEncode({'modelSourceImageKeys': modelSourceImageKeys}),
+    );
+    final data = _extractData(response);
+    return ModelGenerationRetryResult.fromJson(data);
   }
 
   /// Presigned URL 목록을 발급받는다.
@@ -571,11 +625,15 @@ class GearShowApiClient {
     );
   }
 
-  Map<String, String> _headers({String? accessToken}) {
+  Map<String, String> _headers({
+    String? accessToken,
+    Map<String, String>? extra,
+  }) {
     return {
       ..._jsonHeaders,
       if (accessToken != null && accessToken.isNotEmpty)
         'Authorization': 'Bearer $accessToken',
+      if (extra != null) ...extra,
     };
   }
 
@@ -584,6 +642,11 @@ class GearShowApiClient {
         ? <String, dynamic>{}
         : jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      // 임시 디버그 로그: 어떤 엔드포인트가 실패했는지 즉시 식별하기 위함.
+      debugPrint(
+        '[GearShow:HTTP-FAIL] ${response.request?.method} ${response.request?.url} '
+        '→ ${response.statusCode} body=${response.body}',
+      );
       throw ApiException(
         decoded['message'] as String? ??
             '요청 처리 중 오류가 발생했습니다 (${response.statusCode}).',

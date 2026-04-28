@@ -41,6 +41,7 @@ dependencies:
   model_viewer_plus: ^1.10.0
   webview_flutter: ^4.13.1
   stomp_dart_client: ^2.0.0
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:

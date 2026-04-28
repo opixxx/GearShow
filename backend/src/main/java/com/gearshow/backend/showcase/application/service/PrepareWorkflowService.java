@@ -28,8 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p><b>흐름 (설계 §5, §6, §7)</b>:</p>
  * <ol>
+ *   <li>(락 밖) 소스 이미지 4장 S3 존재 검증 (HEAD) — 영구 실패성 검증을 먼저 수행해 실패 시 락 획득 비용을 절약하고
+ *       PREPARING 일시 전이 없이 바로 {@code REQUESTED → FAILED} 로 종결한다.</li>
  *   <li>TX1: 분산 락 안에서 {@code REQUESTED → PREPARING} 조건부 전이</li>
- *   <li>(락 밖) 소스 이미지 4장 S3 존재 검증 (HEAD)</li>
  *   <li>(락 밖) Tripo 이미지 업로드 + {@code POST /task} — 과금 지점</li>
  *   <li>(락 밖) {@code tripo_pending_task} 선저장 — 워커 크래시 시 task_id 유실 방지</li>
  *   <li>TX2: 분산 락 안에서 {@code PREPARING → GENERATING} + {@code tripo_task_id} 저장 + pending 삭제</li>
@@ -86,11 +87,14 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
         }
         Long showcaseId = snapshot.get().showcaseId();
 
-        if (!transitionToPreparingUnderLock(workflowId)) {
+        // 영구 실패 검증을 락 밖에서 먼저 수행한다. 실패는 재시도해도 결과가 같은 케이스
+        // (이미지 4장 미달 / S3 객체 누락) 이므로 락 진입 비용을 아끼고, PREPARING 일시 전이 없이
+        // REQUESTED → FAILED 로 직행해 Reconcile 의 PREPARING stuck 오판 가능성도 줄인다.
+        if (!validateSourceImages(workflowId, showcaseId)) {
             return;
         }
 
-        if (!validateSourceImages(workflowId, showcaseId)) {
+        if (!transitionToPreparingUnderLock(workflowId)) {
             return;
         }
 
@@ -148,6 +152,10 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
 
     /**
      * 소스 이미지 개수와 S3 객체 존재를 검증한다. 실패 시 FAILED 마킹 후 {@code false}.
+     *
+     * <p><b>락 잡기 전에 호출된다</b>: 두 실패 케이스 모두 재시도해도 결과가 같은 영구 실패라
+     * 락 안에서 검증할 의미가 없다. {@link #markFailedOrLog} 자체가 조건부 UPDATE
+     * ({@code WHERE current_step NOT IN (COMPLETED, FAILED)}) 라 락 없이도 동시 호출이 안전하다.</p>
      */
     private boolean validateSourceImages(Long workflowId, Long showcaseId) {
         List<String> imageUrls = modelSourceImagePort.findImageUrlsByShowcaseId(showcaseId);
