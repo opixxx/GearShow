@@ -13,11 +13,6 @@ import java.util.Map;
 public interface UserReadPort {
 
     /**
-     * 단건 조회. 탈퇴/삭제된 유저는 placeholder ({@code nickname}, {@code profileImageUrl} null) 로 반환.
-     */
-    UserProfile getProfile(Long userId);
-
-    /**
      * 복수 유저 공개 프로필을 한 번에 조회한다.
      *
      * <p>구현은 user BC 의 배치 유스케이스를 경유해 {@code user IN (:ids)} 단일 쿼리로 해결한다.

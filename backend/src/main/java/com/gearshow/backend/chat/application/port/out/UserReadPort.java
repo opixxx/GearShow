@@ -12,8 +12,6 @@ import java.util.Map;
  */
 public interface UserReadPort {
 
-    UserProfile getProfile(Long userId);
-
     /**
      * 복수 유저 공개 프로필을 한 번에 조회한다.
      *
