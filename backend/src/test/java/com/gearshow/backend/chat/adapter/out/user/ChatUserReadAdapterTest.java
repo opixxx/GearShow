@@ -19,10 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
-class UserReadAdapterTest {
+class ChatUserReadAdapterTest {
 
     @InjectMocks
-    private UserReadAdapter adapter;
+    private ChatUserReadAdapter adapter;
 
     @Mock private GetUserProfileUseCase getUserProfileUseCase;
     @Mock private GetUserProfilesUseCase getUserProfilesUseCase;
