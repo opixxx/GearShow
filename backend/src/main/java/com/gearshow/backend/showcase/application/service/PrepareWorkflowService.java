@@ -66,6 +66,11 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     private final ModelGenerationClient modelGenerationClient;
     private final TripoPendingTaskPort tripoPendingTaskPort;
     /**
+     * TX2 를 단일 트랜잭션으로 묶기 위한 헬퍼 빈. 같은 클래스 내부 {@code @Transactional} 메서드
+     * 호출은 Spring AOP 프록시가 우회되므로 별도 빈으로 분리한다 (설계 §7 [6], 2026-04-28 사고).
+     */
+    private final PrepareWorkflowTxHelper txHelper;
+    /**
      * TX2 성공 후 {@link WorkflowGeneratingConfirmedEvent} 를 발행한다. 실제 Redis DelayedQueue
      * offer 는 {@code WorkflowGeneratingConfirmedEventListener} 가 {@code AFTER_COMMIT} 경계에서
      * 수행 — Redis disabled 환경은 Bean 자체가 없어 no-op.
@@ -229,20 +234,14 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
         AtomicBoolean transitioned = new AtomicBoolean(false);
         try {
             workflowLockPort.withLock(workflowId, () -> {
-                int affected = workflowPort.markGenerating(workflowId, tripoTaskId);
+                // TX2: markGenerating + tripo_pending_task DELETE 를 단일 트랜잭션으로 수행 (설계 §7 [6]).
+                // helper 호출은 Spring AOP 프록시 경유 → @Transactional 적용 보장.
+                int affected = txHelper.executeTx2(workflowId, tripoTaskId);
                 if (affected == 0) {
                     log.warn("TX2 affected=0 — 다른 Worker/Reconcile 이 이미 전이한 것으로 추정. "
                                     + "pending 유지 (Reconcile 이 정리). workflowId: {}, taskId: {}",
                             workflowId, tripoTaskId);
                     return;
-                }
-                // TX2 성공 — pending 정리. DELETE 실패는 로그만.
-                try {
-                    tripoPendingTaskPort.deleteByWorkflowId(workflowId);
-                } catch (DataAccessException deleteEx) {
-                    log.warn("tripo_pending_task DELETE 실패 — 정리 유실. 영향 없음 "
-                                    + "(pending 행은 다음 Reconcile 에서 정리됨). workflowId: {}",
-                            workflowId, deleteEx);
                 }
                 transitioned.set(true);
                 log.info("TX2 완료 — workflowId: {}, taskId: {}", workflowId, tripoTaskId);

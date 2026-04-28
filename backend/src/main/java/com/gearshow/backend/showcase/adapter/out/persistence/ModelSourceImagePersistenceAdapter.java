@@ -43,4 +43,9 @@ public class ModelSourceImagePersistenceAdapter implements ModelSourceImagePort 
     public List<String> findImageUrlsByShowcaseId(Long showcaseId) {
         return modelSourceImageJpaRepository.findImageUrlsByShowcaseId(showcaseId);
     }
+
+    @Override
+    public void deleteByShowcaseId(Long showcaseId) {
+        modelSourceImageJpaRepository.deleteByShowcaseId(showcaseId);
+    }
 }

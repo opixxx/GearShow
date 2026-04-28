@@ -11,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -100,5 +103,31 @@ class RequestModelGenerationServiceTest {
                 .saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 3);
         verify(modelGenerationEventPublisher, times(1)).publishRequested(
                 eq(888L), anyLong(), eq(IDEMPOTENCY_KEY));
+    }
+
+    @Test
+    @DisplayName("resetSourceImagesAndRequestRetry: deleteByShowcaseId 가 saveAll 보다 먼저 호출")
+    void resetSourceImagesAndRequestRetry_deletesBeforeSave() {
+        given(modelGenerationWorkflowPort.nextAttemptNo(SHOWCASE_ID)).willReturn(2);
+        given(modelGenerationWorkflowPort.saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 2))
+                .willReturn(901L);
+
+        service.resetSourceImagesAndRequestRetry(SHOWCASE_ID, IDEMPOTENCY_KEY, IMAGE_URLS);
+
+        // 핵심: 옛 4행 hard delete → 새 4행 saveAll 순서. 누적 8행 방지.
+        InOrder order = inOrder(modelSourceImagePort);
+        order.verify(modelSourceImagePort).deleteByShowcaseId(SHOWCASE_ID);
+        order.verify(modelSourceImagePort).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    @DisplayName("saveSourceImagesAndRequest (신규): deleteByShowcaseId 호출 없음")
+    void saveSourceImagesAndRequest_doesNotDelete() {
+        given(modelGenerationWorkflowPort.saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 1))
+                .willReturn(777L);
+
+        service.saveSourceImagesAndRequest(SHOWCASE_ID, IDEMPOTENCY_KEY, IMAGE_URLS);
+
+        verify(modelSourceImagePort, never()).deleteByShowcaseId(anyLong());
     }
 }

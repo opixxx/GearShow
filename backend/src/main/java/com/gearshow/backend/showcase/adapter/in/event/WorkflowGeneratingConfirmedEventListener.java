@@ -21,8 +21,11 @@ import java.time.Duration;
  * 없지만 {@code fallbackExecution=true} 로 설정해 TX 없는 발행도 수신한다. 향후 Worker 에
  * {@code @Transactional} 이 추가되어도 "DB 커밋 후에만 offer" 계약이 유지된다.</p>
  *
- * <p><b>@Async("tripoPollingExecutor")</b>: Redis offer 는 블로킹 호출이지만 저비용이라 기존
- * Poller 전용 실행기를 재사용한다 (별도 풀을 늘릴 필요 없음).</p>
+ * <p><b>@Async("workflowEventExecutor")</b>: 이벤트 리스너 전용 풀 사용.
+ * {@code tripoPollingExecutor} (단일 스레드, queue=0) 를 재사용하면
+ * {@code WorkflowPollingScheduler} 가 그 스레드를 영구 점유하므로 후속 listener 호출이
+ * 즉시 reject → Kafka 리스너로 예외 propagate → DLT 라우팅 사고 발생 (2026-04-28).
+ * 풀을 분리하고 {@code CallerRunsPolicy} 로 백프레셔를 준다.</p>
  *
  * <p><b>Redis disabled 환경</b>: {@link WorkflowPollQueuePort} Bean 이 없으므로
  * {@link ObjectProvider#getIfAvailable()} 로 안전 조회 — 단일 인스턴스 로컬/테스트에서는
@@ -36,7 +39,7 @@ public class WorkflowGeneratingConfirmedEventListener {
     private final ObjectProvider<WorkflowPollQueuePort> pollQueueProvider;
     private final WorkflowPollingProperties pollingProperties;
 
-    @Async("tripoPollingExecutor")
+    @Async("workflowEventExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onConfirmed(WorkflowGeneratingConfirmedEvent event) {
         WorkflowPollQueuePort pollQueue = pollQueueProvider.getIfAvailable();
