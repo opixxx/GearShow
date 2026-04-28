@@ -30,7 +30,7 @@ class AppController extends ChangeNotifier {
   /// 인스턴스 재부팅 시 바뀔 수 있다. 장기적으로는 Elastic IP 또는 도메인 연결 필요.
   static const _defaultBaseUrls = {
     AppEnvironment.dev: 'http://localhost:8080',
-    AppEnvironment.prod: 'http://54.180.92.87:8080',
+    AppEnvironment.prod: 'http://3.34.25.114:8080',
   };
 
   late String baseUrl = _defaultBaseUrls[environment]!;
@@ -250,8 +250,8 @@ Route<dynamic> _buildRoute(RouteSettings settings, AppController controller) {
       );
     case '/showcase/viewer':
       final args = settings.arguments! as Viewer3dArgs;
-      return MaterialPageRoute<void>(
-        builder: (_) => Viewer3dScreen(args: args),
+      return MaterialPageRoute<bool>(
+        builder: (_) => Viewer3dScreen(controller: controller, args: args),
         settings: settings,
       );
     case '/create/info':

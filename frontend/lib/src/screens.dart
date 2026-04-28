@@ -30,10 +30,14 @@ class Viewer3dArgs {
   const Viewer3dArgs({
     required this.title,
     required this.model,
+    required this.showcaseId,
   });
 
   final String title;
   final ShowcaseModel3d model;
+
+  /// FAILED 상태에서 재시도 API 호출에 필요한 쇼케이스 ID.
+  final int showcaseId;
 }
 
 class CreateInfoArgs {
@@ -1129,7 +1133,17 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
           body: Column(
             children: [
               Expanded(
-                child: ListView(
+                child: RefreshIndicator(
+                  // 3D 모델 상태(GENERATING→COMPLETED/FAILED) 갱신용. FCM 푸시 도입(P1-H) 전까지
+                  // 사용자가 수동으로 당겨서 최신 상태를 받는 방식.
+                  onRefresh: () async {
+                    if (!mounted) return;
+                    setState(() {
+                      _loadFuture = _load();
+                    });
+                    await _loadFuture;
+                  },
+                  child: ListView(
                   padding: EdgeInsets.zero,
                   children: [
                     SizedBox(
@@ -1154,20 +1168,24 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                             Positioned(
                               top: 16,
                               right: 16,
-                              child: FilledButton.icon(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0EA5E9),
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: () => Navigator.of(context).pushNamed(
-                                  '/showcase/viewer',
-                                  arguments: Viewer3dArgs(
-                                    title: detail.title,
-                                    model: detail.model3d!,
-                                  ),
-                                ),
-                                icon: const Icon(Icons.auto_awesome),
-                                label: const Text('3D 보기'),
+                              child: _Model3dActionChip(
+                                model: detail.model3d!,
+                                onTap: () async {
+                                  final retried = await Navigator.of(context).pushNamed(
+                                    '/showcase/viewer',
+                                    arguments: Viewer3dArgs(
+                                      title: detail.title,
+                                      model: detail.model3d!,
+                                      showcaseId: detail.showcaseId,
+                                    ),
+                                  );
+                                  // Viewer 에서 재시도 성공 시 true 반환 → 상세 갱신.
+                                  if (retried == true && mounted) {
+                                    setState(() {
+                                      _loadFuture = _load();
+                                    });
+                                  }
+                                },
                               ),
                             ),
                           if (images.length > 1)
@@ -1270,9 +1288,12 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                           ),
                           if (detail.description?.isNotEmpty == true) ...[
                             const SizedBox(height: 10),
-                            Text(
-                              detail.description!,
-                              style: const TextStyle(color: Color(0xFFD4D4D8), height: 1.6, fontSize: 14),
+                            _SectionCard(
+                              title: '상세 설명',
+                              child: Text(
+                                detail.description!,
+                                style: const TextStyle(color: Color(0xFFD4D4D8), height: 1.6, fontSize: 14),
+                              ),
                             ),
                           ],
                           const SizedBox(height: 10),
@@ -1334,6 +1355,7 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
               if (detail.ownerId != widget.controller.currentUserId)
@@ -1628,8 +1650,13 @@ class _ShowcaseEditSheetState extends State<_ShowcaseEditSheet> {
 }
 
 class Viewer3dScreen extends StatefulWidget {
-  const Viewer3dScreen({super.key, required this.args});
+  const Viewer3dScreen({
+    super.key,
+    required this.controller,
+    required this.args,
+  });
 
+  final AppController controller;
   final Viewer3dArgs args;
 
   @override
@@ -1639,6 +1666,7 @@ class Viewer3dScreen extends StatefulWidget {
 class _Viewer3dScreenState extends State<Viewer3dScreen> {
   late final WebViewController _webViewController;
   bool _loading = true;
+  bool _retrying = false;
 
   @override
   void initState() {
@@ -1688,6 +1716,8 @@ class _Viewer3dScreenState extends State<Viewer3dScreen> {
     final hasModel = model.modelFileUrl?.isNotEmpty == true
         && model.modelStatus == 'COMPLETED';
 
+    final isFailed = model.modelStatus == 'FAILED';
+
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
@@ -1736,10 +1766,81 @@ class _Viewer3dScreenState extends State<Viewer3dScreen> {
                     _statusText(model.modelStatus),
                     style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 16),
                   ),
+                  if (isFailed) ...[
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: _retrying ? null : _openRetrySheet,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      ),
+                      icon: _retrying
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.refresh),
+                      label: Text(_retrying ? '재요청 중...' : '3D 다시 만들기'),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '앞/뒤/좌/우 4장의 사진을 다시 업로드합니다.',
+                      style: TextStyle(color: Color(0xFF71717A), fontSize: 12),
+                    ),
+                  ],
                 ],
               ),
             ),
     );
+  }
+
+  /// FAILED 상태에서 호출. 4방향 이미지 재업로드 → 재시도 API 호출.
+  /// 성공 시 화면을 [pop] 하고 호출자(상세 화면)에게 `true` 를 돌려준다.
+  Future<void> _openRetrySheet() async {
+    final picked = await showModalBottomSheet<Map<String, XFile>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF111111),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _Model3dRetrySheet(),
+    );
+    if (picked == null || picked.length < 4 || !mounted) return;
+
+    final token = widget.controller.session?.accessToken;
+    if (token == null || token.isEmpty) {
+      _showSnack(context, '로그인이 필요합니다.');
+      return;
+    }
+
+    setState(() => _retrying = true);
+    try {
+      // Presigned URL 발급 → S3 업로드 → 키 목록으로 재시도 API 호출.
+      final keys = await widget.controller.api.uploadModelSourceImages(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: widget.args.showcaseId,
+        images: ['front', 'back', 'left', 'right']
+            .map((dir) => picked[dir]!)
+            .toList(),
+      );
+      await widget.controller.api.requestModel3dRetry(
+        baseUrl: widget.controller.baseUrl,
+        accessToken: token,
+        showcaseId: widget.args.showcaseId,
+        modelSourceImageKeys: keys,
+      );
+      if (!mounted) return;
+      _showSnack(context, '3D 모델 재생성을 요청했습니다. 잠시 후 새로고침해 주세요.');
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      _showSnack(context, error.message);
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
   }
 
   String _statusText(String status) {
@@ -2656,7 +2757,7 @@ class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen>
         league: draft.league,
         kitType: draft.kitType,
       );
-      final showcaseId = await widget.controller.api.createShowcase(
+      final result = await widget.controller.api.createShowcase(
         baseUrl: widget.controller.baseUrl,
         accessToken: token,
         payload: payload,
@@ -2664,7 +2765,11 @@ class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen>
       if (!mounted) {
         return;
       }
-      _showSnack(context, '쇼케이스 #$showcaseId 등록이 완료되었습니다.');
+      // 3D 생성을 켰으면 GENERATING 안내까지 함께 보여준다.
+      final tail = result.model3dStatus == 'GENERATING'
+          ? ' 3D 모델은 생성 중이며 완료되면 화면에서 확인할 수 있습니다.'
+          : '';
+      _showSnack(context, '쇼케이스 #${result.showcaseId} 등록이 완료되었습니다.$tail');
       Navigator.of(context).pushNamedAndRemoveUntil('/shell', (route) => false);
     } on ApiException catch (error) {
       _showSnack(context, error.message);
@@ -3411,6 +3516,129 @@ class _ShowcaseCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 3D 모델 재생성용 4방향 이미지 선택 바텀시트.
+///
+/// 4장(앞/뒤/좌/우)을 모두 고르면 [Navigator.pop] 으로 `Map<String, XFile>` 을 돌려준다.
+class _Model3dRetrySheet extends StatefulWidget {
+  const _Model3dRetrySheet();
+
+  @override
+  State<_Model3dRetrySheet> createState() => _Model3dRetrySheetState();
+}
+
+class _Model3dRetrySheetState extends State<_Model3dRetrySheet> {
+  static const _directions = {
+    'front': '앞',
+    'back': '뒤',
+    'left': '좌',
+    'right': '우',
+  };
+  final Map<String, XFile> _picked = {};
+
+  Future<void> _pick(String direction) async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (file == null) return;
+    setState(() => _picked[direction] = file);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _picked.length == 4;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '3D 다시 만들기',
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '앞/뒤/좌/우 4방향 사진을 새로 골라주세요.',
+            style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ..._directions.entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 40,
+                    child: Text(entry.value, style: const TextStyle(color: Color(0xFFA1A1AA))),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => _pick(entry.key),
+                      child: Text(
+                        _picked[entry.key]?.name ?? '이미지 선택',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: ready ? () => Navigator.of(context).pop(_picked) : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: Text(ready ? '재생성 요청' : '4장 선택 필요'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 쇼케이스 상세 상단의 3D 진입 칩.
+///
+/// `model.modelStatus` 에 따라 라벨/색을 다르게 보여주고, 탭 시 [onTap] 으로
+/// Viewer3dScreen 진입을 위임한다. (Viewer3d 안에서 상태별 UI · 재시도가 처리됨.)
+class _Model3dActionChip extends StatelessWidget {
+  const _Model3dActionChip({required this.model, required this.onTap});
+
+  final ShowcaseModel3d model;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, bg, icon) = switch (model.modelStatus) {
+      'COMPLETED' => ('3D 보기', const Color(0xFF0EA5E9), Icons.auto_awesome),
+      'FAILED' => ('3D 재시도', const Color(0xFFDC2626), Icons.refresh),
+      // GENERATING / REQUESTED / PENDING 등은 모두 "생성 중" 으로 노출.
+      _ => ('3D 생성 중', const Color(0xFF6B7280), Icons.hourglass_top),
+    };
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: Colors.white,
+      ),
+      onPressed: () => onTap(),
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 }
