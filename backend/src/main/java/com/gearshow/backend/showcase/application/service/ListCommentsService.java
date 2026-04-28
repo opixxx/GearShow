@@ -3,9 +3,11 @@ package com.gearshow.backend.showcase.application.service;
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.common.util.PageTokenUtil;
 import com.gearshow.backend.showcase.application.dto.CommentResult;
+import com.gearshow.backend.showcase.application.dto.UserProfile;
 import com.gearshow.backend.showcase.application.port.in.ListCommentsUseCase;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseCommentPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
+import com.gearshow.backend.showcase.application.port.out.UserReadPort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
 import com.gearshow.backend.showcase.domain.model.Showcase;
 import com.gearshow.backend.showcase.domain.model.ShowcaseComment;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -32,6 +35,7 @@ public class ListCommentsService implements ListCommentsUseCase {
 
     private final ShowcasePort showcasePort;
     private final ShowcaseCommentPort showcaseCommentPort;
+    private final UserReadPort userReadPort;
 
     @Override
     @Transactional(readOnly = true)
@@ -47,8 +51,15 @@ public class ListCommentsService implements ListCommentsUseCase {
                     showcaseId, cursor.getLeft(), cursor.getRight(), size);
         }
 
+        // 작성자 프로필 batch 조회 (단일 IN 쿼리, N+1 회피)
+        List<Long> authorIds = comments.stream()
+                .map(ShowcaseComment::getAuthorId)
+                .distinct()
+                .toList();
+        Map<Long, UserProfile> profiles = userReadPort.getProfiles(authorIds);
+
         List<CommentResult> results = comments.stream()
-                .map(CommentResult::from)
+                .map(c -> CommentResult.from(c, profiles.get(c.getAuthorId())))
                 .toList();
 
         return PageInfo.of(results, size,

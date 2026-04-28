@@ -11,9 +11,19 @@ import java.time.Instant;
 
 /**
  * 쇼케이스 댓글 JPA 엔티티.
+ *
+ * <p>커서 페이징 조회({@code WHERE showcase_id=? AND comment_status='ACTIVE'
+ * ORDER BY created_at DESC, showcase_comment_id DESC}) 가 항상 인덱스만으로
+ * 처리되도록 복합 인덱스를 명시한다.</p>
  */
 @Entity
-@Table(name = "showcase_comment")
+@Table(
+        name = "showcase_comment",
+        indexes = @Index(
+                name = "idx_sc_show_status_created_id",
+                columnList = "showcase_id, comment_status, created_at DESC, showcase_comment_id DESC"
+        )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ShowcaseCommentJpaEntity {

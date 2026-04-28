@@ -4,9 +4,13 @@ import com.gearshow.backend.support.ScenarioContext;
 import com.gearshow.backend.support.TestApiClient;
 import com.gearshow.backend.support.TestResponse;
 import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
+import java.util.List;
 import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 쇼케이스 댓글 관련 Cucumber Step Definitions.
@@ -77,6 +81,27 @@ public class ShowcaseCommentStepDefinitions {
         context.setLastResponse(apiClient.post(
                 "/api/v1/showcases/" + showcaseId + "/comments",
                 Map.of("content", "테스트 댓글")));
+    }
+
+    // ===== Then (응답 검증) =====
+
+    @SuppressWarnings("unchecked")
+    @Then("첫 번째 댓글의 작성자 정보가 응답에 포함된다")
+    public void 첫_댓글_작성자_정보_포함() {
+        Map<String, Object> data = (Map<String, Object>) context.getLastResponse().body().get("data");
+        List<Map<String, Object>> items = (List<Map<String, Object>>) data.get("data");
+        assertThat(items).as("댓글 목록이 비어있지 않아야 한다").isNotEmpty();
+
+        Map<String, Object> first = items.get(0);
+        Map<String, Object> author = (Map<String, Object>) first.get("author");
+
+        assertThat(author).as("응답에 author 객체가 존재해야 한다").isNotNull();
+        assertThat(author).containsKey("userId");
+        assertThat(author.get("userId")).as("author.userId 는 항상 채워진다").isNotNull();
+        assertThat(author).containsKey("nickname");
+        assertThat(author.get("nickname")).as("가입자 닉네임이 채워져야 한다").isNotNull();
+        // profileImageUrl 은 가입 직후 미설정 상태일 수 있으므로 키 존재만 검증
+        assertThat(author).containsKey("profileImageUrl");
     }
 
     // ===== Helper =====

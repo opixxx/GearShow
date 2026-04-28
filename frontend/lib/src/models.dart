@@ -458,23 +458,44 @@ class ShowcaseModel3d {
   }
 }
 
+class ShowcaseCommentAuthor {
+  const ShowcaseCommentAuthor({
+    required this.userId,
+    required this.nickname,
+    required this.profileImageUrl,
+  });
+
+  final int userId;
+  final String? nickname;
+  final String? profileImageUrl;
+
+  factory ShowcaseCommentAuthor.fromJson(Map<String, dynamic> json) {
+    return ShowcaseCommentAuthor(
+      userId: (json['userId'] as num?)?.toInt() ?? 0,
+      nickname: json['nickname'] as String?,
+      profileImageUrl: json['profileImageUrl'] as String?,
+    );
+  }
+}
+
 class ShowcaseComment {
   const ShowcaseComment({
     required this.showcaseCommentId,
-    required this.authorId,
+    required this.author,
     required this.content,
     required this.createdAt,
   });
 
   final int showcaseCommentId;
-  final int authorId;
+  final ShowcaseCommentAuthor author;
   final String content;
   final String? createdAt;
 
   factory ShowcaseComment.fromJson(Map<String, dynamic> json) {
+    final authorJson = json['author'] as Map<String, dynamic>? ?? const {};
     return ShowcaseComment(
       showcaseCommentId: (json['showcaseCommentId'] as num?)?.toInt() ?? 0,
-      authorId: (json['authorId'] as num?)?.toInt() ?? 0,
+      author: ShowcaseCommentAuthor.fromJson(authorJson),
       content: json['content'] as String? ?? '',
       createdAt: json['createdAt'] as String?,
     );

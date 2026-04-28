@@ -422,6 +422,8 @@ erDiagram
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
 
+- 인덱스: `(showcaseId, commentStatus, createdAt DESC, showcaseCommentId DESC)` — 쇼케이스별 활성 댓글 키셋 페이징 커버
+
 ### CHAT_ROOM (채팅방)
 
 | 컬럼명 | 타입 | 제약조건 | 설명 |

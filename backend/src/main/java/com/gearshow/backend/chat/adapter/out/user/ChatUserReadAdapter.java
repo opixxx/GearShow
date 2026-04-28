@@ -3,9 +3,7 @@ package com.gearshow.backend.chat.adapter.out.user;
 import com.gearshow.backend.chat.application.dto.UserProfile;
 import com.gearshow.backend.chat.application.port.out.UserReadPort;
 import com.gearshow.backend.user.application.dto.UserProfileResult;
-import com.gearshow.backend.user.application.port.in.GetUserProfileUseCase;
 import com.gearshow.backend.user.application.port.in.GetUserProfilesUseCase;
-import com.gearshow.backend.user.domain.exception.NotFoundUserException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -16,28 +14,15 @@ import java.util.Map;
 /**
  * chat → user 읽기 어댑터.
  *
- * <p>user BC 의 공개 유스케이스({@link GetUserProfileUseCase}, {@link GetUserProfilesUseCase}) 를 감싼다.
- * 탈퇴/삭제된 유저는 nickname·profileImageUrl 이 {@code null} 인 placeholder {@link UserProfile} 로
- * 결과 맵에 포함된다 (호출측이 "(알 수 없음)" 으로 렌더링).</p>
- *
- * <p>배치 조회({@link #getProfiles}) 는 {@link GetUserProfilesUseCase} 를 통해
- * 단일 {@code IN} 쿼리로 해결해 N+1 을 제거한다.</p>
+ * <p>user BC 의 공개 유스케이스({@link GetUserProfilesUseCase}) 를 감싸 단일 {@code IN} 쿼리로
+ * 배치 조회한다. 탈퇴/삭제된 userId 는 nickname·profileImageUrl 이 {@code null} 인 placeholder
+ * {@link UserProfile} 로 결과 맵에 포함되며, 호출측이 "(알 수 없음)" 등으로 렌더링한다.</p>
  */
 @Component
 @RequiredArgsConstructor
-public class UserReadAdapter implements UserReadPort {
+public class ChatUserReadAdapter implements UserReadPort {
 
-    private final GetUserProfileUseCase getUserProfileUseCase;
     private final GetUserProfilesUseCase getUserProfilesUseCase;
-
-    @Override
-    public UserProfile getProfile(Long userId) {
-        try {
-            return toProfile(getUserProfileUseCase.getUserProfile(userId));
-        } catch (NotFoundUserException e) {
-            return new UserProfile(userId, null, null);
-        }
-    }
 
     @Override
     public Map<Long, UserProfile> getProfiles(List<Long> userIds) {
