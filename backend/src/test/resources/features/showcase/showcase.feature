@@ -112,6 +112,17 @@ Feature: 쇼케이스
     When 등록된 쇼케이스의 3D 모델 상태를 조회한다
     Then 응답 상태 코드는 200이다
 
+  # 회귀 방지 — 2026-04-28 운영 사고 (resetSourceImagesAndRequestRetry 가 reset 없이 누적되어
+  # 8장이 Tripo 로 전달, 400/1004 응답). retry 시 reset 동작 자체는 단위 테스트
+  # (RequestModelGenerationServiceTest.resetSourceImagesAndRequestRetry_deletesBeforeSave)
+  # 가 InOrder 로 검증한다. 인수 테스트는 단일 호출에서 정확히 4행이 저장되는지만 확인.
+  @regression @showcase @model3d
+  Scenario: 3D 모델 생성 요청 시 model_source_image 가 정확히 4행으로 저장된다
+    Given 이미지 1개로 쇼케이스가 등록되어 있다
+    When 등록된 쇼케이스에 3D 모델 생성을 요청한다
+    Then 응답 상태 코드는 202이다
+    And 쇼케이스의 model_source_image 가 정확히 4행이다
+
   # ── Presigned URL 발급 ──
 
   @smoke @showcase @presigned-url

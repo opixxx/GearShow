@@ -503,20 +503,21 @@ class ModelGenerationRetryResult {
 class ShowcaseComment {
   const ShowcaseComment({
     required this.showcaseCommentId,
-    required this.authorId,
+    required this.author,
     required this.content,
     required this.createdAt,
   });
 
   final int showcaseCommentId;
-  final int authorId;
+  final ShowcaseCommentAuthor author;
   final String content;
   final String? createdAt;
 
   factory ShowcaseComment.fromJson(Map<String, dynamic> json) {
+    final authorJson = json['author'] as Map<String, dynamic>? ?? const {};
     return ShowcaseComment(
       showcaseCommentId: (json['showcaseCommentId'] as num?)?.toInt() ?? 0,
-      authorId: (json['authorId'] as num?)?.toInt() ?? 0,
+      author: ShowcaseCommentAuthor.fromJson(authorJson),
       content: json['content'] as String? ?? '',
       createdAt: json['createdAt'] as String?,
     );

@@ -31,4 +31,12 @@ public interface ModelSourceImagePort {
      * Tripo 업로드 / Worker TX1 S3 존재 검증에서 사용.
      */
     List<String> findImageUrlsByShowcaseId(Long showcaseId);
+
+    /**
+     * 쇼케이스 ID 로 소스 이미지를 모두 hard delete 한다.
+     *
+     * <p>재시도 시 옛 소스 이미지를 정리하고 새 4장으로 갈아끼울 때 사용한다. attempt 별 이력은
+     * {@code model_generation_workflow} 가 보존하므로 이 테이블은 "현재 최신 4장" 만 유지한다.</p>
+     */
+    void deleteByShowcaseId(Long showcaseId);
 }

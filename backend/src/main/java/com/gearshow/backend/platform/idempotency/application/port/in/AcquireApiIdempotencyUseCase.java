@@ -8,7 +8,7 @@ import java.time.Duration;
  * API 경계 멱등성 획득/완료 유스케이스.
  *
  * <p>{@code Idempotency-Key} 헤더 기반 요청 dedup 및 응답 캐싱을 담당한다.
- * Kafka Consumer 용 {@link AcquireIdempotencyUseCase} 와는 별개의 경로이다.</p>
+ * Kafka Consumer 용 {@link MessageIdempotencyUseCase} 와는 별개의 경로이다.</p>
  */
 public interface AcquireApiIdempotencyUseCase {
 

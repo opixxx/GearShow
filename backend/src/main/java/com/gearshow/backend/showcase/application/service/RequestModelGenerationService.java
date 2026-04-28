@@ -47,11 +47,17 @@ public class RequestModelGenerationService {
     /**
      * 재시도: 기존 소스 이미지가 있다면 대체하고, workflow {@code attempt_no} 를 증가시켜 새 행 INSERT.
      * 이전 attempt 의 {@code failure_*} 는 보존된다 (ADR-010 이력 보존 원칙).
+     *
+     * <p>{@code model_source_image} 는 hard delete 후 재 INSERT 한다. 누적되면 Tripo
+     * multiview 가 4 장 초과 입력을 거부 (400 / tripoCode 1004) 하므로 정확히 "현재 attempt 의
+     * 4 장" 만 남겨야 한다. attempt 별 이력은 workflow 테이블이 보존하므로 source image
+     * 의 hard delete 는 도메인 의미를 깨지 않는다.</p>
      */
     @Transactional
     public ModelGenerationResult resetSourceImagesAndRequestRetry(Long showcaseId,
                                                                   String idempotencyKey,
                                                                   List<String> imageUrls) {
+        modelSourceImagePort.deleteByShowcaseId(showcaseId);
         saveSourceImages(showcaseId, imageUrls);
         int attemptNo = modelGenerationWorkflowPort.nextAttemptNo(showcaseId);
         long workflowId = modelGenerationWorkflowPort.saveRequested(

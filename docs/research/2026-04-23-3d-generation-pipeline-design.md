@@ -368,8 +368,12 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
     ack Kafka
     # 락 밖, AFTER_COMMIT 이벤트 리스너가 offer
     eventPublisher.publish(WorkflowGeneratingConfirmedEvent(workflowId))
-    → listener (@TransactionalEventListener AFTER_COMMIT, @Async tripoPollingExecutor):
+    → listener (@TransactionalEventListener AFTER_COMMIT, @Async workflowEventExecutor):
        DelayedQueue.offer(workflowId, delay=30s)
+       # workflowEventExecutor 는 이벤트 리스너 전용 풀 (core=2, queue=50, CallerRunsPolicy).
+       # tripoPollingExecutor 는 단일 consumer 정책으로 Polling Scheduler 가 영구 점유하므로
+       # 같은 풀을 재사용하면 listener task 가 즉시 reject 되어 DLT 라우팅되는 사고가 발생한다
+       # (2026-04-28 운영 사고 — fix-3d-pipeline-bugs).
 
 [7] Poller (DelayedQueue consumer, 락 없음):
     workflow = SELECT ...

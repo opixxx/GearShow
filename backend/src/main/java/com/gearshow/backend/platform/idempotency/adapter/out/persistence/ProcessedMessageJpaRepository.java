@@ -31,6 +31,11 @@ public interface ProcessedMessageJpaRepository extends JpaRepository<ProcessedMe
                        @Param("processedAt") Instant processedAt);
 
     /**
+     * 처리 이력 존재 여부를 조회한다. UNIQUE 인덱스 lookup 으로 비용이 작다.
+     */
+    boolean existsByMessageIdAndDomain(String messageId, String domain);
+
+    /**
      * 지정 시각 이전 이력을 PK 순서로 배치 단위 삭제한다.
      *
      * <p>한 번에 모든 행을 삭제하면 인덱스 락이 장시간 보유되어
@@ -48,19 +53,4 @@ public interface ProcessedMessageJpaRepository extends JpaRepository<ProcessedMe
             """, nativeQuery = true)
     int deleteBatchOlderThan(@Param("threshold") Instant threshold,
                              @Param("batchSize") int batchSize);
-
-    /**
-     * 처리 이력을 보상 삭제한다.
-     *
-     * <p>비즈니스 로직 처리가 실패한 경우 호출되어, 다음 메시지 재전달 시
-     * 멱등성 가드가 다시 처리할 수 있도록 선점 기록을 되돌린다.
-     * 이로써 좀비 메시지(선점만 되고 처리 안 된 상태)를 방지한다.</p>
-     *
-     * @return 삭제된 행 수 (이미 없으면 0)
-     */
-    @Modifying
-    @Query("DELETE FROM ProcessedMessageJpaEntity p" +
-            " WHERE p.messageId = :messageId AND p.domain = :domain")
-    int deleteByMessageIdAndDomain(@Param("messageId") String messageId,
-                                   @Param("domain") String domain);
 }

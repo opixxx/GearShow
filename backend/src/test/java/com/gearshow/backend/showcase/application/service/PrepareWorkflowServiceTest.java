@@ -79,6 +79,8 @@ class PrepareWorkflowServiceTest {
     @Mock
     private TripoPendingTaskPort tripoPendingTaskPort;
     @Mock
+    private PrepareWorkflowTxHelper txHelper;
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private PrepareWorkflowService service;
@@ -88,7 +90,7 @@ class PrepareWorkflowServiceTest {
         service = new PrepareWorkflowService(
                 workflowPort, modelSourceImagePort, imageStoragePort,
                 workflowLockPort, modelGenerationClient, tripoPendingTaskPort,
-                eventPublisher);
+                txHelper, eventPublisher);
         // 기본: 락 획득 성공 → action 즉시 실행
         doAnswer(invocation -> {
             WorkflowLockPort.LockedAction action = invocation.getArgument(1);
@@ -231,18 +233,17 @@ class PrepareWorkflowServiceTest {
     class TripoCall {
 
         @Test
-        @DisplayName("Happy: Tripo 성공 → pending 선저장 → TX2 성공 → pending 삭제 → Poller 재queue")
+        @DisplayName("Happy: Tripo 성공 → pending 선저장 → TX2(executeTx2) 성공 → Poller 재queue")
         void happyPath_transitionsToGenerating() {
             stubThroughImagesValid();
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
                     .willReturn(TRIPO_TASK_ID);
-            given(workflowPort.markGenerating(WORKFLOW_ID, TRIPO_TASK_ID)).willReturn(1);
+            given(txHelper.executeTx2(WORKFLOW_ID, TRIPO_TASK_ID)).willReturn(1);
 
             service.prepare(WORKFLOW_ID);
 
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
-            verify(workflowPort, times(1)).markGenerating(WORKFLOW_ID, TRIPO_TASK_ID);
-            verify(tripoPendingTaskPort, times(1)).deleteByWorkflowId(WORKFLOW_ID);
+            verify(txHelper, times(1)).executeTx2(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
             verify(eventPublisher, times(1))
                     .publishEvent(new WorkflowGeneratingConfirmedEvent(WORKFLOW_ID));
@@ -308,37 +309,37 @@ class PrepareWorkflowServiceTest {
             assertThatThrownBy(() -> service.prepare(WORKFLOW_ID))
                     .isInstanceOf(DataAccessResourceFailureException.class);
 
-            verify(workflowPort, never()).markGenerating(anyLong(), anyString());
+            verify(txHelper, never()).executeTx2(anyLong(), anyString());
         }
 
         @Test
-        @DisplayName("TX2 affected=0: pending 유지 (DELETE 호출 안 함), Poller offer 도 호출 안 함")
+        @DisplayName("TX2 affected=0: pending 유지 (helper 가 내부에서 미정리), Poller offer 도 호출 안 함")
         void tx2Zero_keepsPendingAndReturns() {
             stubThroughImagesValid();
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
                     .willReturn(TRIPO_TASK_ID);
-            given(workflowPort.markGenerating(WORKFLOW_ID, TRIPO_TASK_ID)).willReturn(0);
+            given(txHelper.executeTx2(WORKFLOW_ID, TRIPO_TASK_ID)).willReturn(0);
 
             service.prepare(WORKFLOW_ID);
 
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
-            verify(tripoPendingTaskPort, never()).deleteByWorkflowId(anyLong());
+            verify(txHelper, times(1)).executeTx2(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(eventPublisher, never()).publishEvent(any());
         }
 
         @Test
-        @DisplayName("TX2 DB 실패: pending 유지, 예외 삼킴, WorkflowGeneratingConfirmedEvent 도 발행 안 함")
+        @DisplayName("TX2 DB 실패: 예외 삼킴, WorkflowGeneratingConfirmedEvent 도 발행 안 함")
         void tx2DbFail_swallowsException() {
             stubThroughImagesValid();
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
                     .willReturn(TRIPO_TASK_ID);
-            given(workflowPort.markGenerating(WORKFLOW_ID, TRIPO_TASK_ID))
-                    .willThrow(new DataAccessResourceFailureException("markGenerating DB 실패"));
+            given(txHelper.executeTx2(WORKFLOW_ID, TRIPO_TASK_ID))
+                    .willThrow(new DataAccessResourceFailureException("TX2 DB 실패"));
 
             service.prepare(WORKFLOW_ID);  // throw 금지
 
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
-            verify(tripoPendingTaskPort, never()).deleteByWorkflowId(anyLong());
+            verify(txHelper, times(1)).executeTx2(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(eventPublisher, never()).publishEvent(any());
         }
     }

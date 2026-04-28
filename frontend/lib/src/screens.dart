@@ -1307,18 +1307,14 @@ class _ShowcaseDetailScreenState extends State<ShowcaseDetailScreen> {
                                     child: Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: const Color(0xFF27272A),
-                                          child: Text(_ownerEmoji(comment.authorId)),
-                                        ),
+                                        _CommentAuthorAvatar(author: comment.author),
                                         const SizedBox(width: 10),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                '사용자 #${comment.authorId}',
+                                                comment.author.nickname ?? '(알 수 없음)',
                                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                                               ),
                                               const SizedBox(height: 4),
@@ -3721,6 +3717,36 @@ class _ImageFrame extends StatelessWidget {
   }
 }
 
+class _CommentAuthorAvatar extends StatelessWidget {
+  const _CommentAuthorAvatar({required this.author});
+
+  final ShowcaseCommentAuthor author;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = author.profileImageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return CircleAvatar(
+        radius: 16,
+        backgroundColor: const Color(0xFF27272A),
+        backgroundImage: NetworkImage(imageUrl),
+      );
+    }
+    final nickname = author.nickname;
+    final initial = (nickname != null && nickname.isNotEmpty)
+        ? String.fromCharCode(nickname.runes.first)
+        : '?';
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: const Color(0xFF27272A),
+      child: Text(
+        initial,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.title,
@@ -4121,11 +4147,6 @@ String _gradeDescription(String grade) {
 
 String _categoryLabel(String category) {
   return category == 'UNIFORM' ? '유니폼' : '축구화';
-}
-
-String _ownerEmoji(int id) {
-  const avatars = ['😊', '😎', '🥳', '⚽', '🏆', '⭐'];
-  return avatars[id % avatars.length];
 }
 
 String _profileAvatar(UserProfile? profile) {
