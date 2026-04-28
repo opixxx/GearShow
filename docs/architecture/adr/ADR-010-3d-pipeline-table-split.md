@@ -54,6 +54,7 @@ model_generation_workflow (프로세스 — 생명주기)
 - 재시도는 **항상 새 workflow 행** (UPDATE 로 기존 행 재사용 금지). 이유: 이력 보존.
 - `sc_3d_model.showcase_id` UNIQUE — 쇼케이스당 3D 모델 하나.
 - `model_generation_workflow` 의 상태 전이는 모두 **조건부 UPDATE** (ADR-012 참조).
+- `model_source_image` 는 **현재 attempt 의 4장만** 보유한다 (재시도 시 hard delete + insert). 이력은 `model_generation_workflow.attempt_no` 가 보존하므로 source image 자체는 재시도마다 갈아끼운다. 이 규칙이 깨지면 Tripo multiview 가 4장 초과 입력을 거부 (HTTP 400 / tripoCode 1004) 한다 — 2026-04-28 운영 사고로 명문화.
 
 ## 3. 고려한 대안 (Alternatives)
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.support.ScenarioContext;
 import com.gearshow.backend.support.TestApiClient;
 import com.gearshow.backend.support.TestResponse;
@@ -26,10 +27,14 @@ public class ShowcaseStepDefinitions {
 
     private final TestApiClient apiClient;
     private final ScenarioContext context;
+    private final ModelSourceImagePort modelSourceImagePort;
 
-    public ShowcaseStepDefinitions(TestApiClient apiClient, ScenarioContext context) {
+    public ShowcaseStepDefinitions(TestApiClient apiClient,
+                                    ScenarioContext context,
+                                    ModelSourceImagePort modelSourceImagePort) {
         this.apiClient = apiClient;
         this.context = context;
+        this.modelSourceImagePort = modelSourceImagePort;
     }
 
     // ===== Given (사전 조건) =====
@@ -217,6 +222,13 @@ public class ShowcaseStepDefinitions {
         Long showcaseId = context.get("showcaseId");
         context.setLastResponse(apiClient.get(
                 "/api/v1/showcases/" + showcaseId + "/3d-model"));
+    }
+
+    @Then("쇼케이스의 model_source_image 가 정확히 {int}행이다")
+    public void model_source_image_행수_검증(int expected) {
+        Long showcaseId = context.get("showcaseId");
+        int actual = modelSourceImagePort.countByShowcaseId(showcaseId);
+        assertThat(actual).isEqualTo(expected);
     }
 
     @When("인증 없이 쇼케이스를 등록한다")
