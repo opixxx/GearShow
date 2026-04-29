@@ -558,7 +558,7 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | `TRIPO_CONTENT_POLICY_VIOLATION` | 2008 | 400 | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
 | `TRIPO_INVALID_IMAGE` | 2003 / 2004 / 2020 | 400 | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
 | `INSUFFICIENT_CREDIT` | 2010 | 403 | TRIPO_API | ❌ | ✅ | 운영 Alert (크레딧 충전) |
-| `TRIPO_TIMEOUT_GENERATING_15M` | — | — | SCHEDULER | ❌ | ✅ | 운영 알림, 수동 재시도 |
+| `TRIPO_TIMEOUT_GENERATING` | — | — | SCHEDULER | ❌ | ✅ | 운영 알림, 수동 재시도 (cap default 5분, `app.reconcile.workflow-max-lifetime-minutes` 외부화 — 정상 ~2분 × 2.5배 마진) |
 | `POLLING_LOST` | — | — | SCHEDULER | ❌ | ✅ | 수동 조사 |
 | `TRIPO_TASK_BANNED` | — | — | TRIPO_API | ❌ | ❌ | 이미지 교체 UI |
 | `TRIPO_TASK_EXPIRED` | — | — | TRIPO_API | ✅ (새 workflow) | ❌ | 사용자 재시도 |
