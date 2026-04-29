@@ -81,7 +81,7 @@ class ReconcileStuckWorkflowsServiceTest {
     @BeforeEach
     void setUp() {
         ReconcileProperties properties = new ReconcileProperties(
-                true, 60_000L, 50, 60L, 8L, 5L, 30L);
+                true, 60_000L, 50, 60L, 8L, 5L, 30L, 5L);
         service = new ReconcileStuckWorkflowsService(
                 workflowPort, tripoPendingTaskPort, workflowLockPort,
                 workflowPollQueuePort, eventPublisher, properties);
@@ -95,9 +95,11 @@ class ReconcileStuckWorkflowsServiceTest {
     }
 
     private StuckWorkflow stuckPreparing(Instant heartbeat) {
+        // PREPARING 상태에선 startedAt 이 null — REQUESTED→PREPARING 전이 시 초기화되지만
+        // PREPARING heartbeat 갭 시나리오에선 의미 있는 값이 아님.
         return new StuckWorkflow(
                 WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.PREPARING,
-                null, null, heartbeat, null, Instant.now().minusSeconds(300));
+                null, null, heartbeat, null, null, Instant.now().minusSeconds(300));
     }
 
     private WorkflowSnapshot preparingSnapshot(Instant heartbeat) {
@@ -229,12 +231,13 @@ class ReconcileStuckWorkflowsServiceTest {
     class GeneratingTripoRecovery {
 
         @Test
-        @DisplayName("DelayedQueue 에 delay=0 으로 재등록")
+        @DisplayName("DelayedQueue 에 delay=0 으로 재등록 (cap 미초과)")
         void redrivesToDelayedQueue() {
+            // startedAt = now-3min — cap (5분) 미초과 → 기존 redrive 동작 유지
             StuckWorkflow w = new StuckWorkflow(
                     WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.GENERATING,
                     TASK_ID, null, Instant.now(), Instant.now().minusSeconds(600),
-                    Instant.now().minusSeconds(900));
+                    Instant.now().minusSeconds(180), Instant.now().minusSeconds(900));
             given(workflowPort.findStuckPreparing(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingTripo(any(Instant.class), anyInt()))
                     .willReturn(List.of(w));
@@ -244,7 +247,138 @@ class ReconcileStuckWorkflowsServiceTest {
             service.reconcileOnce();
 
             verify(workflowPollQueuePort, times(1)).offer(WORKFLOW_ID, Duration.ZERO);
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
             verify(eventPublisher, never()).publishEvent(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("GENERATING·Tripo lifetime cap")
+    class LifetimeCap {
+
+        private StuckWorkflow stuckWithStartedAt(Instant startedAt) {
+            return new StuckWorkflow(
+                    WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.GENERATING,
+                    TASK_ID, null, Instant.now(), Instant.now().minusSeconds(600),
+                    startedAt, Instant.now().minusSeconds(900));
+        }
+
+        private WorkflowSnapshot tripoStuckSnapshot(Instant tripoSucceededAt, WorkflowStep step) {
+            return new WorkflowSnapshot(
+                    WORKFLOW_ID, SHOWCASE_ID, "k", 1,
+                    step, TASK_ID, tripoSucceededAt,
+                    Instant.now().minusSeconds(360), Instant.now(), null, null);
+        }
+
+        private void givenOnlyTripoStuck(StuckWorkflow w) {
+            given(workflowPort.findStuckPreparing(any(Instant.class), anyInt())).willReturn(List.of());
+            given(workflowPort.findStuckGeneratingTripo(any(Instant.class), anyInt()))
+                    .willReturn(List.of(w));
+            given(workflowPort.findStuckGeneratingS3(any(Instant.class), anyInt())).willReturn(List.of());
+            given(workflowPort.findStuckRequested(any(Instant.class), anyInt())).willReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("cap 초과 + 재검증 통과 → markFailed(TRIPO_TIMEOUT_GENERATING) + redrive 미발생")
+        void capExceeded_marksFailedAndSkipsRedrive() {
+            // startedAt = now-6min, cap=5min → 초과
+            StuckWorkflow w = stuckWithStartedAt(Instant.now().minusSeconds(360));
+            givenOnlyTripoStuck(w);
+            given(workflowPort.findSnapshot(WORKFLOW_ID))
+                    .willReturn(Optional.of(tripoStuckSnapshot(null, WorkflowStep.GENERATING)));
+            given(workflowPort.markFailed(
+                    eq(WORKFLOW_ID),
+                    eq(WorkflowFailureCode.TRIPO_TIMEOUT_GENERATING),
+                    anyString(),
+                    eq("SCHEDULER"))).willReturn(1);
+
+            service.reconcileOnce();
+
+            verify(workflowLockPort, times(1)).withLock(eq(WORKFLOW_ID), any());
+            verify(workflowPort, times(1)).markFailed(
+                    eq(WORKFLOW_ID),
+                    eq(WorkflowFailureCode.TRIPO_TIMEOUT_GENERATING),
+                    anyString(),
+                    eq("SCHEDULER"));
+            verify(workflowPollQueuePort, never()).offer(anyLong(), any(Duration.class));
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("cap 초과 + markFailed affected=0 (이미 종결) → redrive 미발생")
+        void capExceeded_alreadyTerminated_skipsRedrive() {
+            StuckWorkflow w = stuckWithStartedAt(Instant.now().minusSeconds(360));
+            givenOnlyTripoStuck(w);
+            given(workflowPort.findSnapshot(WORKFLOW_ID))
+                    .willReturn(Optional.of(tripoStuckSnapshot(null, WorkflowStep.GENERATING)));
+            given(workflowPort.markFailed(
+                    anyLong(), any(), anyString(), anyString())).willReturn(0);
+
+            service.reconcileOnce();
+
+            verify(workflowPort, times(1)).markFailed(
+                    anyLong(), any(), anyString(), anyString());
+            verify(workflowPollQueuePort, never()).offer(anyLong(), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("cap 초과 + Poller 가 직전 SUCCESS 인지 (tripoSucceededAt != null) → cap 보류, markFailed 미호출")
+        void capExceeded_pollerSucceededRace_skipsCap() {
+            StuckWorkflow w = stuckWithStartedAt(Instant.now().minusSeconds(360));
+            givenOnlyTripoStuck(w);
+            given(workflowPort.findSnapshot(WORKFLOW_ID))
+                    .willReturn(Optional.of(tripoStuckSnapshot(
+                            Instant.now().minusSeconds(5), WorkflowStep.GENERATING)));
+
+            service.reconcileOnce();
+
+            verify(workflowLockPort, times(1)).withLock(eq(WORKFLOW_ID), any());
+            // Poller SUCCESS 결과 폐기 방지 — markFailed 호출 안 함, redrive 도 안 함
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(workflowPollQueuePort, never()).offer(anyLong(), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("cap 초과 + 재검증에서 currentStep 이미 종결 → cap 보류")
+        void capExceeded_alreadyCompletedInSnapshot_skipsCap() {
+            StuckWorkflow w = stuckWithStartedAt(Instant.now().minusSeconds(360));
+            givenOnlyTripoStuck(w);
+            given(workflowPort.findSnapshot(WORKFLOW_ID))
+                    .willReturn(Optional.of(tripoStuckSnapshot(
+                            Instant.now().minusSeconds(10), WorkflowStep.COMPLETED)));
+
+            service.reconcileOnce();
+
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(workflowPollQueuePort, never()).offer(anyLong(), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("cap 초과 + 락 busy → markFailed 미호출, 다음 사이클 재시도")
+        void capExceeded_lockBusy_skipsCap() {
+            StuckWorkflow w = stuckWithStartedAt(Instant.now().minusSeconds(360));
+            givenOnlyTripoStuck(w);
+            doThrow(new WorkflowLockBusyException(WORKFLOW_ID))
+                    .when(workflowLockPort).withLock(eq(WORKFLOW_ID), any());
+
+            service.reconcileOnce();
+
+            verify(workflowPort, never()).findSnapshot(anyLong());
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(workflowPollQueuePort, never()).offer(anyLong(), any(Duration.class));
+        }
+
+        @Test
+        @DisplayName("startedAt = null → cap 미적용, 기존 redrive 동작 유지 (방어적)")
+        void startedAtNull_capSkipped() {
+            StuckWorkflow w = stuckWithStartedAt(null);
+            givenOnlyTripoStuck(w);
+
+            service.reconcileOnce();
+
+            verify(workflowLockPort, never()).withLock(eq(WORKFLOW_ID), any());
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(workflowPollQueuePort, times(1)).offer(WORKFLOW_ID, Duration.ZERO);
         }
     }
 
@@ -253,10 +387,12 @@ class ReconcileStuckWorkflowsServiceTest {
     class GeneratingS3Recovery {
 
         private StuckWorkflow s3StuckWorkflow(Instant heartbeat, String taskId) {
+            // startedAt = now-200s — S3 미러링 단계는 lifetime cap 검사 대상이 아님 (Out 항목).
             return new StuckWorkflow(
                     WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.GENERATING,
                     taskId, Instant.now().minusSeconds(400),
-                    heartbeat, null, Instant.now().minusSeconds(1800));
+                    heartbeat, null, Instant.now().minusSeconds(200),
+                    Instant.now().minusSeconds(1800));
         }
 
         private WorkflowSnapshot s3Snapshot(Instant heartbeat, Instant tripoSucceededAt,
@@ -348,9 +484,10 @@ class ReconcileStuckWorkflowsServiceTest {
         @Test
         @DisplayName("경고 로그만, 복구 카운트 0 — 다른 카테고리 tried 에만 합산")
         void logsOnly() {
+            // REQUESTED 상태에선 startedAt 이 null — PREPARING 전이 시 초기화되기 때문.
             StuckWorkflow w = new StuckWorkflow(
                     WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.REQUESTED,
-                    null, null, null, null, Instant.now().minusSeconds(120));
+                    null, null, null, null, null, Instant.now().minusSeconds(120));
             given(workflowPort.findStuckPreparing(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingTripo(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingS3(any(Instant.class), anyInt())).willReturn(List.of());

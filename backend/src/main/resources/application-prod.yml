@@ -84,6 +84,8 @@ app:
     generating-tripo-stuck-minutes: 8
     generating-s3-stuck-minutes: 5
     requested-stuck-seconds: 30
+    # GENERATING-Tripo 단계 lifetime cap (분). 정상 ~2분 × 2.5배 마진 (설계 §9 TRIPO_TIMEOUT_GENERATING).
+    workflow-max-lifetime-minutes: 5
 
 # ===========================================
 # Resilience4j Circuit Breaker (Tripo API 보호)

@@ -142,21 +142,103 @@ public class ReconcileStuckWorkflowsService implements ReconcileStuckWorkflowsUs
     }
 
     private int reconcileGeneratingTripo() {
-        Instant threshold = Instant.now()
-                .minus(Duration.ofMinutes(properties.generatingTripoStuckMinutes()));
+        Instant now = Instant.now();
+        Instant threshold = now.minus(Duration.ofMinutes(properties.generatingTripoStuckMinutes()));
+        long capMinutes = properties.workflowMaxLifetimeMinutes();
+        Instant capThreshold = now.minus(Duration.ofMinutes(capMinutes));
         List<StuckWorkflow> stuck =
                 workflowPort.findStuckGeneratingTripo(threshold, properties.batchSize());
         for (StuckWorkflow w : stuck) {
-            try {
-                // Poller 재등록. Tripo GET 과 상태 전이는 Poller 가 담당 (락 안 필요).
-                workflowPollQueuePort.offer(w.id(), Duration.ZERO);
-                log.info("Reconcile GENERATING·Tripo stuck → DelayedQueue 재등록. workflowId: {}",
-                        w.id());
-            } catch (RuntimeException e) {
-                log.error("GENERATING·Tripo stuck 재큐 실패 - workflowId: {}", w.id(), e);
-            }
+            recoverGeneratingTripo(w, capThreshold, capMinutes);
         }
         return stuck.size();
+    }
+
+    /**
+     * GENERATING-Tripo stuck 워크플로우 1건을 복구한다.
+     *
+     * <p>lifetime cap 초과 시 락 + snapshot 재검증으로 살아있는 Poller 와의 race 를 차단한 뒤
+     * {@code markFailed(TRIPO_TIMEOUT_GENERATING)} 로 강제 손절한다. cap 미초과 시 기존
+     * 폴링 재등록(redrive) 경로로 진행한다.</p>
+     */
+    private void recoverGeneratingTripo(StuckWorkflow w, Instant capThreshold, long capMinutes) {
+        if (exceedsLifetimeCap(w, capThreshold)) {
+            tryFailOnLifetimeCap(w, capMinutes);
+            return;
+        }
+        redriveToPoller(w);
+    }
+
+    /**
+     * started_at 기준 cap 초과 여부. {@code started_at IS NULL} 은 방어적으로 cap 미적용 —
+     * REQUESTED→PREPARING 전이 시 초기화되므로 정상 흐름의 GENERATING 상태에선 항상 NOT NULL.
+     * 데이터 이상 시에는 기존 redrive 동작을 유지해 안전한 fallback 을 보장한다.
+     */
+    private boolean exceedsLifetimeCap(StuckWorkflow w, Instant capThreshold) {
+        return w.startedAt() != null && w.startedAt().isBefore(capThreshold);
+    }
+
+    /**
+     * 락 획득 후 snapshot 재검증을 거쳐 {@code markFailed} 를 호출한다.
+     *
+     * <p>{@code recoverPreparing}/{@code recoverGeneratingS3} 와 동일한 락 + 재검증 패턴.
+     * 살아있는 Poller 가 직전에 {@code tripoSucceededAt} 을 갱신했거나 워크플로우가 이미
+     * 종결된 경우 cap 발동을 보류해 false-positive (정상 SUCCESS 결과 폐기) 를 방지한다.
+     * 락 busy 면 다음 사이클(60초 후) 에 재시도하므로 안전한 폴백이 된다.</p>
+     */
+    private void tryFailOnLifetimeCap(StuckWorkflow w, long capMinutes) {
+        try {
+            workflowLockPort.withLock(w.id(), () -> {
+                Optional<WorkflowSnapshot> snapshot = workflowPort.findSnapshot(w.id());
+                if (snapshot.isEmpty()) {
+                    log.debug("GENERATING·Tripo cap — snapshot 없음, skip. workflowId: {}", w.id());
+                    return;
+                }
+                WorkflowSnapshot s = snapshot.get();
+                if (s.currentStep() != WorkflowStep.GENERATING) {
+                    log.debug("GENERATING·Tripo cap — currentStep 변경됨, skip. "
+                                    + "workflowId: {}, step: {}",
+                            w.id(), s.currentStep());
+                    return;
+                }
+                if (s.tripoSucceededAt() != null) {
+                    log.info("GENERATING·Tripo cap 보류 — Poller 가 직전에 SUCCESS 인지함. "
+                            + "workflowId: {}", w.id());
+                    return;
+                }
+                String message = String.format(
+                        "lifetime cap 초과 — Tripo polling 무한 redrive 차단 (cap=%d분)",
+                        capMinutes);
+                int affected = workflowPort.markFailed(
+                        w.id(),
+                        WorkflowFailureCode.TRIPO_TIMEOUT_GENERATING,
+                        message,
+                        FAILURE_SOURCE_SCHEDULER);
+                if (affected > 0) {
+                    log.warn("ALERT: Reconcile lifetime cap 발동 → FAILED. "
+                                    + "workflowId: {}, startedAt: {}, capMinutes: {}",
+                            w.id(), w.startedAt(), capMinutes);
+                } else {
+                    log.info("Reconcile lifetime cap markFailed affected=0 — "
+                            + "이미 종결된 워크플로우. workflowId: {}", w.id());
+                }
+            });
+        } catch (WorkflowLockBusyException e) {
+            log.debug("GENERATING·Tripo cap — 락 busy, 다음 사이클에 재시도. workflowId: {}", w.id());
+        } catch (DataAccessException e) {
+            log.error("GENERATING·Tripo cap markFailed 실패 - workflowId: {}", w.id(), e);
+        }
+    }
+
+    private void redriveToPoller(StuckWorkflow w) {
+        try {
+            // Poller 재등록. Tripo GET 과 상태 전이는 Poller 가 담당 (락 안 필요).
+            workflowPollQueuePort.offer(w.id(), Duration.ZERO);
+            log.info("Reconcile GENERATING·Tripo stuck → DelayedQueue 재등록. workflowId: {}",
+                    w.id());
+        } catch (RuntimeException e) {
+            log.error("GENERATING·Tripo stuck 재큐 실패 - workflowId: {}", w.id(), e);
+        }
     }
 
     private int reconcileGeneratingS3() {
