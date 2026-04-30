@@ -16,6 +16,11 @@
 #   KAKAO_NATIVE_APP_KEY        카카오 네이티브 앱 키
 #   KAKAO_JAVASCRIPT_APP_KEY    카카오 JavaScript 앱 키
 #
+# 환경변수 자동 로드:
+#   실행 시 frontend/.env 가 존재하면, 셸에 미셋된 키만 export 한다.
+#   셸 export 가 우선 — KAKAO_NATIVE_APP_KEY=foo bash scripts/run-frontend.sh
+#   같은 ad-hoc 주입은 .env 가 덮어쓰지 않는다.
+#
 # 사용 예:
 #   bash scripts/run-frontend.sh                          # prod, iOS Simulator 자동 부팅
 #   bash scripts/run-frontend.sh --env=dev --user=1       # dev 모드 + 테스트 사용자 1번
@@ -30,6 +35,44 @@ usage() {
     awk 'NR==1 && /^#!/ { next }
          /^#/ { sub(/^# ?/, ""); print; next }
          { exit }' "$0"
+}
+
+# ─── .env fallback 로더 ──────────────────────────────────────────────────────
+# 인자로 받은 .env 파일을 읽어, 셸에 아직 셋되지 않은 키만 export 한다.
+# 셸 export 가 우선 — 이미 셋된 키는 .env 값으로 덮어쓰지 않는다.
+# 파일이 없으면 silent 리턴(기존 동작 유지). 키 값은 절대 출력하지 않는다.
+# eval/source 미사용 — 인젝션 차단 목적으로 read 만 사용한다.
+load_env_if_missing() {
+    local env_file="$1"
+    [[ ! -f "$env_file" ]] && return 0
+
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # 주석/공백 라인 스킵
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+
+        # KEY=VALUE 형태만 처리. KEY 는 영문/숫자/언더스코어, 첫 글자는 영문/언더스코어.
+        if [[ ! "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            continue
+        fi
+        key="${BASH_REMATCH[1]}"
+        value="${BASH_REMATCH[2]}"
+
+        # value 양쪽 따옴표 제거 (.env 일반 관행)
+        if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        elif [[ "$value" =~ ^\'(.*)\'$ ]]; then
+            value="${BASH_REMATCH[1]}"
+        fi
+
+        # 셸 우선 — 이미 셋되어 있으면 보존
+        [[ -n "${!key+x}" ]] && continue
+
+        export "$key=$value"
+    done < "$env_file"
+
+    echo "[run-frontend] $env_file 로드 (셸 미셋 키만 fallback)"
 }
 
 # ─── 인자 파싱 ───────────────────────────────────────────────────────────────
@@ -101,6 +144,9 @@ if [[ ! -f "$FRONTEND_DIR/pubspec.yaml" ]]; then
     echo "오류: $FRONTEND_DIR/pubspec.yaml 이 없습니다. Flutter 프로젝트 위치를 확인하세요." >&2
     exit 1
 fi
+
+# ─── frontend/.env fallback 로드 (셸 미셋 키만) ──────────────────────────────
+load_env_if_missing "$FRONTEND_DIR/.env"
 
 # ─── iOS Simulator 부팅 ──────────────────────────────────────────────────────
 if [[ "$LAUNCH_SIMULATOR" == true ]]; then
