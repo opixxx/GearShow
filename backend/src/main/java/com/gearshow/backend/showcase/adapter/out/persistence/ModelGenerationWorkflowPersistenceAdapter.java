@@ -150,6 +150,7 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 entity.getTripoSucceededAt(),
                 entity.getHeartbeatAt(),
                 entity.getLastPolledAt(),
+                entity.getStartedAt(),
                 entity.getCreatedAt()
         );
     }

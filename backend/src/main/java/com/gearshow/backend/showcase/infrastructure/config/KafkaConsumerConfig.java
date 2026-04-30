@@ -12,6 +12,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaOperations;
+import org.springframework.kafka.listener.ContainerProperties.AckMode;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -58,6 +59,11 @@ public class KafkaConsumerConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(modelGenerationRequestConsumerFactory());
         factory.setConcurrency(3);
+        // AckMode 명시화 — Spring Kafka 2.3+ default 는 BATCH 이며, batch ack 도중 일부 record 가
+        // 실패하면 batch 내 성공 record 도 재처리될 수 있다. 본 listener 는 단일 record 를 처리하므로
+        // RECORD 가 의미상 자연스럽고, Spring Boot 메이저 업그레이드 시 default 변경에 따른 회귀를
+        // 차단하기 위해 명시적으로 고정한다.
+        factory.getContainerProperties().setAckMode(AckMode.RECORD);
         factory.setCommonErrorHandler(modelGenerationRequestErrorHandler);
         return factory;
     }

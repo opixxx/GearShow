@@ -17,6 +17,7 @@ public record StuckWorkflow(
         Instant tripoSucceededAt,
         Instant heartbeatAt,
         Instant lastPolledAt,
+        Instant startedAt,
         Instant createdAt
 ) {
 }

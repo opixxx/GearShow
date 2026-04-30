@@ -45,5 +45,16 @@ public enum WorkflowFailureCode {
      * 폴링 중 Tripo 측에서 task 상태를 {@code FAILED/REJECTED} 로 보고해 종결된 경우 (P1-E).
      * Poller 가 감지하고 {@code markFailed} 로 전이한다.
      */
-    TRIPO_TASK_FAILED
+    TRIPO_TASK_FAILED,
+
+    /**
+     * GENERATING-Tripo 단계가 {@code app.reconcile.workflow-max-lifetime-minutes}
+     * (default 5분) 을 초과해도 종결되지 않은 경우. Tripo 가 영원히 {@code running} 만
+     * 응답하는 시나리오에서 Reconcile 이 무한 redrive 를 차단하기 위해 강제 손절한다.
+     *
+     * <p>발동 위치: {@code ReconcileStuckWorkflowsService.reconcileGeneratingTripo} —
+     * {@code current_step = GENERATING AND tripoSucceededAt IS NULL AND started_at < now - cap}.
+     * S3 미러링 sub-state ({@code tripoSucceededAt IS NOT NULL}) 는 별도 정책 (설계 §9 참조).</p>
+     */
+    TRIPO_TIMEOUT_GENERATING
 }

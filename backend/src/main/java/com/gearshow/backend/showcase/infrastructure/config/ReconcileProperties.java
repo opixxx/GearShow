@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.infrastructure.config;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -15,6 +16,10 @@ import org.springframework.validation.annotation.Validated;
  * @param generatingTripoStuckMinutes   GENERATING + tripo_succeeded_at IS NULL + last_polled_at 갭 임계.
  * @param generatingS3StuckMinutes      GENERATING + tripo_succeeded_at IS NOT NULL + heartbeat_at 갭 임계.
  * @param requestedStuckSeconds         REQUESTED 경고 임계 (Outbox Relay 점검 신호).
+ * @param workflowMaxLifetimeMinutes    GENERATING-Tripo 단계 lifetime cap (분). 정상 ~2분 × 2.5배 마진.
+ *                                      초과 시 {@code TRIPO_TIMEOUT_GENERATING} 으로 강제 손절해
+ *                                      Tripo 가 영원히 running 만 응답하는 시나리오에서 무한 redrive 를
+ *                                      차단한다. 운영 1개월 관측 후 재조정.
  */
 @Validated
 @ConfigurationProperties(prefix = "app.reconcile")
@@ -44,6 +49,11 @@ public record ReconcileProperties(
 
         @Min(value = 5, message = "requestedStuckSeconds 는 5 이상이어야 합니다")
         @DefaultValue("30")
-        long requestedStuckSeconds
+        long requestedStuckSeconds,
+
+        @Min(value = 2, message = "workflowMaxLifetimeMinutes 는 2 이상이어야 합니다")
+        @Max(value = 60, message = "workflowMaxLifetimeMinutes 는 60 이하여야 합니다")
+        @DefaultValue("5")
+        long workflowMaxLifetimeMinutes
 ) {
 }
