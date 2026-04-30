@@ -21,18 +21,12 @@ import org.testcontainers.utility.DockerImageName;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * {@link ReconcileBeansConfig} 의 시나리오 #4 ("두 플래그 모두 활성 → Reconcile Bean 등록") 를
- * 진짜 {@code @SpringBootApplication} 컨텍스트에서 검증하는 통합 테스트.
+ * {@link ReconcileBeansConfig} 의 빈 등록을 진짜 {@code @SpringBootApplication} 컨텍스트에서
+ * 검증하는 통합 테스트.
  *
- * <p><b>왜 별도 통합 테스트가 필요한가</b>: lightweight {@code ApplicationContextRunner} (
- * {@link ReconcileConditionalTest}) 는 prod 의 {@code @ComponentScan} → {@code @Configuration}
- * 처리 순서를 정확히 재현하지 못한다. 일반 {@code @Configuration} + {@code @ConditionalOnBean}
- * 조합은 처리 순서에 따라 결과가 달라질 수 있어 (Spring Boot 공식 입장이 "Configuration 안에서만
- * 사용 권장" 인 이유), prod 환경의 진짜 처리 순서에서도 시나리오 #4 가 통과하는지 별도 검증한다.</p>
- *
- * <p>이 테스트가 통과하면 {@link ReconcileBeansConfig} 가 일반 {@code @Configuration} 으로도
- * prod 환경에서 안정 동작함이 확인된다. 통과하지 못하면 {@code @AutoConfiguration} 으로의 전환을
- * 고려해야 한다.</p>
+ * <p>ADR-013 으로 Redis 가 필수 인프라가 되면서 활성화 조건이
+ * {@code app.reconcile.enabled=true} 단일 플래그로 단순화됐다. 본 테스트는 그 단일 조건이
+ * prod 의 {@code @ComponentScan} 처리 순서에서도 안정적으로 빈을 등록함을 확인한다.</p>
  *
  * <p>테스트 환경: Testcontainers Redis + Testcontainers MySQL (application-test.yml).</p>
  */
@@ -40,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Import({TestOAuthConfig.class, TestInfraConfig.class})
 @Testcontainers
-@DisplayName("ReconcileBeansConfig 시나리오 #4 prod 환경 통합 검증")
+@DisplayName("ReconcileBeansConfig prod 환경 통합 검증")
 class ReconcileBeansConfigIntegrationTest {
 
     private static final String REDIS_IMAGE = "redis:7.4-alpine";
@@ -52,7 +46,6 @@ class ReconcileBeansConfigIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("gearshow.redis.enabled", () -> "true");
         registry.add("gearshow.redis.host", REDIS::getHost);
         registry.add("gearshow.redis.port", () -> REDIS.getMappedPort(REDIS_PORT));
         registry.add("app.reconcile.enabled", () -> "true");
@@ -64,16 +57,13 @@ class ReconcileBeansConfigIntegrationTest {
     private ApplicationContext applicationContext;
 
     @Test
-    @DisplayName("두 플래그 모두 활성 → ReconcileBeansConfig 활성화되어 Reconcile 두 빈 등록 (prod 처리 순서 재현)")
-    void reconcileBeansPresentInProdContextWhenBothEnabled() {
-        // ReconcileBeansConfig 의 @ConditionalOnBean(WorkflowPollQueuePort.class) 가
-        // prod 의 @ComponentScan 처리 순서에서도 안정적으로 통과하는지 검증.
-        // 이 단언이 깨지면 일반 @Configuration 패턴이 prod 에서 신뢰 불가 → @AutoConfiguration 전환 검토.
+    @DisplayName("app.reconcile.enabled=true → Reconcile 두 빈 등록 (prod 처리 순서 재현)")
+    void reconcileBeansPresentInProdContextWhenEnabled() {
         assertThat(applicationContext.getBeansOfType(ReconcileStuckWorkflowsService.class))
-                .as("두 플래그 활성 시 ReconcileStuckWorkflowsService 가 등록되어야 함")
+                .as("ReconcileStuckWorkflowsService 가 등록되어야 함")
                 .hasSize(1);
         assertThat(applicationContext.getBeansOfType(ReconcileScheduler.class))
-                .as("두 플래그 활성 시 ReconcileScheduler 가 등록되어야 함")
+                .as("ReconcileScheduler 가 등록되어야 함")
                 .hasSize(1);
     }
 }

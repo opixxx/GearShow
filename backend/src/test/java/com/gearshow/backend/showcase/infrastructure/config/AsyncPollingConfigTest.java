@@ -41,12 +41,10 @@ class AsyncPollingConfigTest {
     }
 
     @Test
-    @DisplayName("tripoPollingExecutor 는 gearshow.redis.enabled=true 일 때만 등록 (단일 consumer 정책 유지)")
-    void tripoPollingExecutor_redisDisabled_notRegistered() {
-        contextRunner.run(ctx ->
-                assertThat(ctx).doesNotHaveBean("tripoPollingExecutor"));
-
-        contextRunner.withPropertyValues("gearshow.redis.enabled=true").run(ctx -> {
+    @DisplayName("tripoPollingExecutor 빈 등록 + 단일 consumer 정책 (core=max=1, queue=0)")
+    void tripoPollingExecutor_isRegisteredWithSingleConsumerPolicy() {
+        // Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 본 풀은 무조건 등록된다.
+        contextRunner.run(ctx -> {
             assertThat(ctx).hasBean("tripoPollingExecutor");
             ThreadPoolTaskExecutor executor =
                     ctx.getBean("tripoPollingExecutor", ThreadPoolTaskExecutor.class);
@@ -59,7 +57,7 @@ class AsyncPollingConfigTest {
     @Test
     @DisplayName("workflowEventExecutor 와 tripoPollingExecutor 는 서로 다른 인스턴스")
     void executors_areDifferentInstances() {
-        contextRunner.withPropertyValues("gearshow.redis.enabled=true").run(ctx -> {
+        contextRunner.run(ctx -> {
             ThreadPoolTaskExecutor eventPool =
                     ctx.getBean("workflowEventExecutor", ThreadPoolTaskExecutor.class);
             ThreadPoolTaskExecutor pollingPool =

@@ -27,8 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * {@link RedissonWorkflowLockAdapter} 실제 Redis 기반 통합 테스트.
  *
- * <p>Testcontainers 로 Redis 컨테이너를 기동하고 {@code gearshow.redis.enabled=true} 로
- * 오버라이드해 Redisson 클라이언트와 어댑터가 실제 로드되도록 한다. 검증:</p>
+ * <p>Testcontainers 로 Redis 컨테이너를 기동하고 동적 좌표를 주입해 Redisson 클라이언트와
+ * 어댑터가 실제 로드되도록 한다. 검증:</p>
  * <ul>
  *   <li>단일 호출 시 락 획득·해제 후 action 실행</li>
  *   <li>동시에 두 호출이 겹치면 두 번째는 {@link WorkflowLockBusyException}</li>
@@ -51,7 +51,6 @@ class RedissonWorkflowLockAdapterIntegrationTest {
 
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("gearshow.redis.enabled", () -> "true");
         registry.add("gearshow.redis.host", REDIS::getHost);
         registry.add("gearshow.redis.port", () -> REDIS.getMappedPort(REDIS_PORT));
     }

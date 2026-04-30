@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RSemaphore;
 import org.redisson.api.RedissonClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -25,10 +24,12 @@ import java.util.function.Supplier;
  * <p>{@code tryAcquire(timeout)} 이 false → {@link TripoSemaphoreTimeoutException} 으로 전환.
  * 이 예외는 {@code ModelGenerationRetryableException} 을 상속하므로 Worker 경로에서는
  * {@code @RetryableTopic} 이 자동 backoff 재시도를 수행한다.</p>
+ *
+ * <p>Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 본 어댑터는 무조건 빈으로 등록된다.
+ * Noop fallback ({@code NoopTripoSemaphoreAdapter}) 은 ADR-013 으로 폐기됐다.</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class RedissonTripoSemaphoreAdapter implements TripoSemaphorePort {
 

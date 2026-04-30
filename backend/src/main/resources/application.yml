@@ -121,11 +121,10 @@ gearshow:
     # 와일드카드 `*` 금지 — CSRF 유사 공격 경로 차단.
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:*}
 
-  # Redis (3D 파이프라인 분산 락 · 향후 Poller DelayedQueue · Tripo 세마포어)
-  # Kafka 와 동일 패턴: enabled=false 시 어댑터/설정이 로드되지 않아 테스트 환경에서 격리된다.
-  # host/port 는 env 로만 주입 — 운영 기동 시 누락을 fail-fast 로 감지.
+  # Redis (3D 파이프라인 분산 락 · Poller DelayedQueue · Tripo 세마포어 · daily quota)
+  # ADR-013 으로 필수 인프라로 격상. host 가 비어있거나 Redis 미연결이면 부팅 시 ApplicationContext
+  # 자체가 실패한다 (fail-fast). 통합 테스트는 Testcontainers Redis 로 처리한다.
   redis:
-    enabled: ${REDIS_ENABLED:false}
     host: ${REDIS_HOST:}
     port: ${REDIS_PORT:6379}
 

@@ -121,14 +121,12 @@ services:
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: gearshow-kafka:29092
 
-      # --- Redis 좌표화 활성화 (3D 파이프라인 필수) ---
-      # gearshow.redis.enabled=true 켜는 순간 자동으로 함께 활성화:
-      #   ✅ RedissonWorkflowLockAdapter (분산 락)
-      #   ✅ RedissonWorkflowPollQueueAdapter (DelayedQueue)
-      #   ✅ RedissonTripoSemaphoreAdapter (Tripo rate limit)
-      #   ✅ ReconcileScheduler / ReconcileStuckWorkflowsService (AND 조건)
-      # Redis 미사용 시 3D 폴링/완료 단계가 동작 안 함 (research §3.4 / ADR-010~012).
-      REDIS_ENABLED: "true"
+      # --- Redis 좌표 (ADR-013 — Redis 필수 인프라) ---
+      # 다음 빈들이 모두 Redis 의존이며, 미연결 시 ApplicationContext 부팅 실패 (fail-fast):
+      #   - RedissonWorkflowLockAdapter (분산 락)
+      #   - RedissonWorkflowPollQueueAdapter (DelayedQueue)
+      #   - RedissonTripoSemaphoreAdapter (Tripo rate limit)
+      #   - ReconcileScheduler / ReconcileStuckWorkflowsService
       REDIS_HOST: redis
       REDIS_PORT: "6379"
 
