@@ -83,10 +83,16 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     }
 
     /**
-     * 일일 quota 를 INCR 한 뒤 후속 작업을 실행한다. 후속 작업이 실패하면 quota 를 rollback
-     * 한다 (사용자 손해 방지). limit 초과 시 {@link DailyLimitExceededException}.
+     * 일일 quota 를 INCR 한 뒤 후속 작업을 실행한다. 후속 작업이 {@link RuntimeException} 으로
+     * 실패하면 quota 를 rollback 한다 (사용자 손해 방지). limit 초과 시
+     * {@link DailyLimitExceededException}.
      *
-     * <p>다른 모든 검증을 통과한 뒤에만 quota INCR — validation 실패가 quota 를 깎지 않게.</p>
+     * <p>호출 시점엔 {@code validateSourceImageCount} 등 입력 검증이 통과한 상태이고, 후속
+     * 작업의 도메인 검증/DB 충돌이 throw 되면 try/catch 가 rollback 으로 자동 보정한다. quota 가
+     * 부당하게 차감된 채 남는 경로는 없다.</p>
+     *
+     * <p>{@link Error} 는 의도적으로 catch 하지 않는다 — JVM 치명 에러는 프로세스 차원에서 처리.
+     * 이 경우 quota 는 자정 TTL 로 결국 초기화되므로 영구 손해는 없다.</p>
      */
     private ModelGenerationResult consumeQuotaAndRun(Long ownerId,
                                                      Supplier<ModelGenerationResult> action) {
@@ -97,7 +103,7 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
         try {
             return action.get();
         } catch (RuntimeException e) {
-            dailyQuotaPort.rollback(ownerId);
+            dailyQuotaPort.rollback(quota.token());
             throw e;
         }
     }

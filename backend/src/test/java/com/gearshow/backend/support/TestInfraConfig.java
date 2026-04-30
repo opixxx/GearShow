@@ -6,6 +6,8 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQu
 import com.gearshow.backend.showcase.application.port.out.PresignedUrlPort;
 import com.gearshow.backend.user.application.port.out.ProfileImageStoragePort;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -110,11 +112,13 @@ public class TestInfraConfig {
         return new ModelGenerationDailyQuotaPort() {
             @Override
             public QuotaResult tryConsume(Long userId) {
-                return new QuotaResult(true, 1L, 999L, Instant.now().plusSeconds(86_400));
+                LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+                Instant resetAt = today.plusDays(1).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant();
+                return new QuotaResult(true, 1L, 999L, resetAt, new QuotaToken(userId, today));
             }
 
             @Override
-            public void rollback(Long userId) {
+            public void rollback(QuotaToken token) {
                 // no-op
             }
         };

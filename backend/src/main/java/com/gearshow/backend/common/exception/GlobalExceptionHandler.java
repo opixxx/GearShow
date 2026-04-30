@@ -34,8 +34,8 @@ public class GlobalExceptionHandler {
     /**
      * 3D 모델 일일 quota 초과 — HTTP 429 + {@code Retry-After} 헤더 (KST 다음 자정까지 남은 초).
      *
-     * <p>Spring Security 의 {@code @ExceptionHandler} 우선순위 규칙상 더 구체적인 타입이 우선되므로
-     * {@link CustomException} 핸들러보다 본 핸들러가 먼저 매칭된다.</p>
+     * <p>Spring MVC {@code @ExceptionHandler} 매칭은 가장 구체적인 예외 타입을 우선하므로
+     * 본 핸들러가 {@link CustomException} 핸들러보다 먼저 매칭된다.</p>
      */
     @ExceptionHandler(DailyLimitExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleDailyLimitExceeded(

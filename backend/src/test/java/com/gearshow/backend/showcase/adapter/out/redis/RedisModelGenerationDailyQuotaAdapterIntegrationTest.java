@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.out.redis;
 
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort.QuotaResult;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort.QuotaToken;
 import com.gearshow.backend.support.TestOAuthConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -107,7 +108,7 @@ class RedisModelGenerationDailyQuotaAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("limit 초과 호출은 거부 + 카운트 limit 유지 (rollback 동작)")
+    @DisplayName("limit 초과 호출은 거부 + 카운트 limit 유지 (자가 보정)")
     void exceedLimit_isRejected_andCountStaysAtLimit() {
         // 3회 통과
         for (int i = 0; i < 3; i++) {
@@ -120,23 +121,37 @@ class RedisModelGenerationDailyQuotaAdapterIntegrationTest {
         assertThat(denied.currentCount()).isEqualTo(3L);
         assertThat(denied.limit()).isEqualTo(3L);
 
-        // 5회째도 거부 + 카운트 여전히 3 (DECR rollback 정상 동작)
+        // 5회째도 거부 + 카운트 여전히 3
         QuotaResult denied2 = adapter.tryConsume(userId);
         assertThat(denied2.allowed()).isFalse();
         assertThat(denied2.currentCount()).isEqualTo(3L);
     }
 
     @Test
-    @DisplayName("rollback 호출 시 카운트 1 감소")
+    @DisplayName("rollback(token) 호출 시 카운트 1 감소")
     void rollback_decrementsCount() {
-        adapter.tryConsume(userId);  // count=1
-        adapter.tryConsume(userId);  // count=2
+        QuotaResult first = adapter.tryConsume(userId);  // count=1
+        adapter.tryConsume(userId);                       // count=2
 
-        adapter.rollback(userId);
+        adapter.rollback(first.token());
 
         // 다음 INCR 결과로 카운트 확인 — 2가 되어야 (rollback 후 1 → INCR → 2)
         QuotaResult result = adapter.tryConsume(userId);
         assertThat(result.currentCount()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("rollback 후 키 TTL 이 여전히 셋됨 (self-heal)")
+    void rollback_preservesTtl() {
+        QuotaResult first = adapter.tryConsume(userId);
+        adapter.rollback(first.token());
+
+        long ttl = redissonClient.getKeys()
+                .remainTimeToLive(RedisModelGenerationDailyQuotaAdapter.KEY_PREFIX
+                        + userId + ":" + java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"))
+                                .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE));
+        // -1 = TTL 없음 (영구), -2 = 키 없음. 둘 다 아닌 양수여야.
+        assertThat(ttl).isPositive();
     }
 
     @Test
@@ -158,12 +173,20 @@ class RedisModelGenerationDailyQuotaAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("rollback 호출이 실패 (Redis 키 없음 → DECR 0 으로 떨어짐) 해도 swallow")
+    @DisplayName("rollback 호출이 실패 가능 입력 (DECR 시 키 부재) 에도 swallow")
     void rollback_neverThrows() {
-        // tryConsume 호출 없이 바로 rollback — DECR 시 키가 없으면 Redisson 이 0 → -1 로 만들거나
-        // 자체 처리. swallow 동작 확인.
+        QuotaToken phantom = new QuotaToken(userId,
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")));
         Duration timeout = Duration.ofSeconds(2);
         org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(timeout,
-                () -> adapter.rollback(userId));
+                () -> adapter.rollback(phantom));
+    }
+
+    @Test
+    @DisplayName("rollback(null token) 도 swallow — 안전성")
+    void rollback_nullToken_skipsSilently() {
+        Duration timeout = Duration.ofSeconds(2);
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(timeout,
+                () -> adapter.rollback(null));
     }
 }
