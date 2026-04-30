@@ -59,6 +59,13 @@ gearshow:
   websocket:
     allowed-origins: http://localhost:*
 
+  # Redis (ADR-013 — 필수 인프라). default 좌표는 localhost — CI 는 services.redis 가
+  # localhost:6379 에 노출, 로컬은 docker-compose.yml 의 redis 컨테이너. Testcontainers Redis
+  # 를 띄우는 IT (Redisson*AdapterIT 등) 는 @DynamicPropertySource 로 동적 좌표를 override.
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+
 # 통합 테스트에서 redis 활성화 시 WorkflowPollingScheduler 가 ApplicationReadyEvent 로
 # 무한 take() 루프를 시작해 Spring Context 종료 시점에 hang 되는 문제 회피.
 # 테스트는 Bean 자체 검증이 아니라 Adapter 단위 검증이므로 스케줄러는 항상 OFF.
