@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.showcase.application.event.Model3dCompletedEvent;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
@@ -14,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,6 +48,8 @@ class DownloadFinalizerTest {
     private Showcase3dModelPort showcase3dModelPort;
     @Mock
     private ModelGenerationEventPublisher eventPublisher;
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private DownloadFinalizer finalizer;
@@ -71,6 +75,8 @@ class DownloadFinalizerTest {
         assertThat(captor.getValue().getPreviewImageUrl()).isEqualTo(PREVIEW_URL);
         verify(eventPublisher, times(1)).publishCompleted(
                 WORKFLOW_ID, SHOWCASE_ID, MODEL_URL, PREVIEW_URL);
+        verify(applicationEventPublisher, times(1))
+                .publishEvent(new Model3dCompletedEvent(SHOWCASE_ID));
     }
 
     @Test
@@ -84,5 +90,6 @@ class DownloadFinalizerTest {
         verify(showcase3dModelPort, never()).save(any(Showcase3dModel.class));
         verify(eventPublisher, never()).publishCompleted(
                 anyLong(), anyLong(), anyString(), anyString());
+        verify(applicationEventPublisher, never()).publishEvent(any(Model3dCompletedEvent.class));
     }
 }

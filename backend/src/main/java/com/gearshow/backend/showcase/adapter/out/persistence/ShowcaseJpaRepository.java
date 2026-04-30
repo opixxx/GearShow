@@ -84,10 +84,16 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
 
     /**
      * has3dModel 플래그만 업데이트한다.
+     *
+     * <p>{@code DELETED} 상태의 쇼케이스에는 적용하지 않는다 (삭제된 쇼케이스에 read-model
+     * 갱신을 박지 않음). affected=0 은 호출자가 검증해 정합성 이상 신호로 활용한다.</p>
+     *
+     * @return 갱신된 행 수 (정상 1, 미존재/DELETED 0)
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE ShowcaseJpaEntity s SET s.has3dModel = :has3dModel WHERE s.id = :showcaseId")
-    void updateHas3dModel(@Param("showcaseId") Long showcaseId, @Param("has3dModel") boolean has3dModel);
+    @Query("UPDATE ShowcaseJpaEntity s SET s.has3dModel = :has3dModel " +
+            "WHERE s.id = :showcaseId AND s.status <> com.gearshow.backend.showcase.domain.vo.ShowcaseStatus.DELETED")
+    int updateHas3dModel(@Param("showcaseId") Long showcaseId, @Param("has3dModel") boolean has3dModel);
 
     /**
      * 같은 소유자가 {@code createdAfter} 이후에 생성한, 같은 {@code contentHash} 를 가진

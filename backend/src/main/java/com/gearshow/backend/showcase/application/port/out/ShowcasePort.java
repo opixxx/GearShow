@@ -57,8 +57,16 @@ public interface ShowcasePort {
     /**
      * 쇼케이스의 has3dModel 플래그만 업데이트한다.
      * 다른 필드를 건드리지 않아 동시 수정 시 lost update를 방지한다.
+     *
+     * <p><b>가드</b>: {@code DELETED} 상태 쇼케이스는 갱신하지 않는다. 도메인 정책상 삭제된
+     * 쇼케이스에는 어떤 read-model 변경도 박지 않아야 한다.</p>
+     *
+     * <p><b>반환값</b>: 호출자가 정합성 검증에 활용하도록 affected 행 수를 반환한다.
+     * affected=0 은 (a) 쇼케이스가 존재하지 않거나 (b) DELETED 상태임을 의미한다.</p>
+     *
+     * @return 갱신된 행 수 (정상 1, 미존재/DELETED 0)
      */
-    void updateHas3dModel(Long showcaseId, boolean has3dModel);
+    int updateHas3dModel(Long showcaseId, boolean has3dModel);
 
     /**
      * 같은 소유자가 지정 시각 이후 같은 {@code contentHash} 로 생성한 가장 최근 쇼케이스를 조회한다.
