@@ -25,7 +25,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RequestModelGenerationService {
 
-    private static final AngleType[] ANGLE_TYPES = AngleType.values();
+    /**
+     * Tripo {@code multiview_to_model} 입력 순서 [front, left, back, right] 와 일치시키기 위해
+     * {@link AngleType#values()} 의 enum 선언 순서가 아닌 명시 순서를 사용한다.
+     *
+     * <p>{@code AngleType.values()} 는 enum 선언 순서 (FRONT, BACK, LEFT, RIGHT) 를 따르므로
+     * 그대로 sortOrder 매핑에 쓰면 BACK/LEFT 위치가 뒤바뀌어 Tripo 가 잘못된 위치의 사진을
+     * 받게 된다. 본 배열을 단일 진실 공급원으로 둔다.</p>
+     */
+    static final AngleType[] ANGLE_TYPES = {
+            AngleType.FRONT,
+            AngleType.LEFT,
+            AngleType.BACK,
+            AngleType.RIGHT
+    };
 
     private final ModelSourceImagePort modelSourceImagePort;
     private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;

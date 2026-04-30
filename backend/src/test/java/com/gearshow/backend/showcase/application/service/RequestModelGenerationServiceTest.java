@@ -6,6 +6,7 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPu
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
+import com.gearshow.backend.showcase.domain.vo.AngleType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -129,5 +130,30 @@ class RequestModelGenerationServiceTest {
         service.saveSourceImagesAndRequest(SHOWCASE_ID, IDEMPOTENCY_KEY, IMAGE_URLS);
 
         verify(modelSourceImagePort, never()).deleteByShowcaseId(anyLong());
+    }
+
+    @Test
+    @DisplayName("이미지 URL 4장이 [FRONT, LEFT, BACK, RIGHT] 순서로 angleType 매핑된다 (Tripo 입력 순서 일치)")
+    void saveSourceImages_mapsAngleTypeInTripoOrder() {
+        given(modelGenerationWorkflowPort.saveRequested(SHOWCASE_ID, IDEMPOTENCY_KEY, 1))
+                .willReturn(777L);
+
+        service.saveSourceImagesAndRequest(SHOWCASE_ID, IDEMPOTENCY_KEY, IMAGE_URLS);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ModelSourceImage>> imagesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(modelSourceImagePort, times(1)).saveAll(imagesCaptor.capture());
+
+        List<ModelSourceImage> saved = imagesCaptor.getValue();
+        assertThat(saved).hasSize(4);
+        // Tripo multiview_to_model 입력 순서 [front, left, back, right] 와 정확히 일치해야 한다.
+        // enum 선언 순서 (FRONT, BACK, LEFT, RIGHT) 와 다르므로 회귀 방지 명시적 검증.
+        assertThat(saved.get(0).getAngleType()).isEqualTo(AngleType.FRONT);
+        assertThat(saved.get(1).getAngleType()).isEqualTo(AngleType.LEFT);
+        assertThat(saved.get(2).getAngleType()).isEqualTo(AngleType.BACK);
+        assertThat(saved.get(3).getAngleType()).isEqualTo(AngleType.RIGHT);
+        // sortOrder 도 1..4 로 결정적 부여
+        assertThat(saved.get(0).getSortOrder()).isEqualTo(1);
+        assertThat(saved.get(3).getSortOrder()).isEqualTo(4);
     }
 }
