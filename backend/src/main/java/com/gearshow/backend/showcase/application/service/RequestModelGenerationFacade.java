@@ -3,10 +3,13 @@ package com.gearshow.backend.showcase.application.service;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import com.gearshow.backend.showcase.application.exception.DailyLimitExceededException;
 import com.gearshow.backend.showcase.application.exception.InsufficientModelSourceImagesException;
 import com.gearshow.backend.showcase.application.exception.ModelAlreadyGeneratingException;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort.QuotaResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 3D 모델 생성 요청 Facade (ADR-010 프로세스 분리 반영).
@@ -40,9 +44,11 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;
     private final ImageStoragePort imageStoragePort;
     private final TripoCircuitGuard tripoCircuitGuard;
+    private final ModelGenerationDailyQuotaPort dailyQuotaPort;
 
     @Override
     public ModelGenerationResult requestOnCreate(Long showcaseId,
+                                                  Long ownerId,
                                                   String idempotencyKey,
                                                   List<String> modelSourceImageKeys) {
         validateSourceImageCount(modelSourceImageKeys);
@@ -51,8 +57,9 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        return requestModelGenerationService.saveSourceImagesAndRequest(
-                showcaseId, idempotencyKey, imageUrls);
+        return consumeQuotaAndRun(ownerId, () ->
+                requestModelGenerationService.saveSourceImagesAndRequest(
+                        showcaseId, idempotencyKey, imageUrls));
     }
 
     @Override
@@ -70,8 +77,29 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        return requestModelGenerationService.resetSourceImagesAndRequestRetry(
-                showcaseId, idempotencyKey, imageUrls);
+        return consumeQuotaAndRun(ownerId, () ->
+                requestModelGenerationService.resetSourceImagesAndRequestRetry(
+                        showcaseId, idempotencyKey, imageUrls));
+    }
+
+    /**
+     * 일일 quota 를 INCR 한 뒤 후속 작업을 실행한다. 후속 작업이 실패하면 quota 를 rollback
+     * 한다 (사용자 손해 방지). limit 초과 시 {@link DailyLimitExceededException}.
+     *
+     * <p>다른 모든 검증을 통과한 뒤에만 quota INCR — validation 실패가 quota 를 깎지 않게.</p>
+     */
+    private ModelGenerationResult consumeQuotaAndRun(Long ownerId,
+                                                     Supplier<ModelGenerationResult> action) {
+        QuotaResult quota = dailyQuotaPort.tryConsume(ownerId);
+        if (!quota.allowed()) {
+            throw new DailyLimitExceededException(quota.limit(), quota.resetAt());
+        }
+        try {
+            return action.get();
+        } catch (RuntimeException e) {
+            dailyQuotaPort.rollback(ownerId);
+            throw e;
+        }
     }
 
     private void validateSourceImageCount(List<String> keys) {

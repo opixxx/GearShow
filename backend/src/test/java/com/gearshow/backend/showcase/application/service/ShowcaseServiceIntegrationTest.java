@@ -538,7 +538,7 @@ class ShowcaseServiceIntegrationTest {
 
             // When
             ModelGenerationResult genResult = requestModelGenerationUseCase.requestOnCreate(
-                    showcaseId, UUID.randomUUID().toString(), createFakeImageKeys(4));
+                    showcaseId, 1L, UUID.randomUUID().toString(), createFakeImageKeys(4));
 
             // Then
             assertThat(genResult.workflowId()).isNotNull();
@@ -569,7 +569,7 @@ class ShowcaseServiceIntegrationTest {
             // Given
             Long showcaseId = createAndGetShowcaseId(1L);
             requestModelGenerationUseCase.requestOnCreate(
-                    showcaseId, UUID.randomUUID().toString(), createFakeImageKeys(4));
+                    showcaseId, 1L, UUID.randomUUID().toString(), createFakeImageKeys(4));
 
             // When - REQUESTED 상태에서는 재요청 불가 (FAILED에서만 가능)
             // 따라서 먼저 상태를 확인

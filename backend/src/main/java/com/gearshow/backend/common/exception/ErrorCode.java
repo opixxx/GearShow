@@ -50,6 +50,8 @@ public enum ErrorCode {
     SHOWCASE_MODEL_INVALID_STATUS_TRANSITION(400, "유효하지 않은 3D 모델 상태 전이입니다"),
     SHOWCASE_MODEL_INVALID_TASK_ID(400, "유효하지 않은 3D 모델 생성 task_id 입니다"),
     SHOWCASE_MODEL_GENERATION_START_FAILED(500, "3D 모델 생성을 시작하지 못했습니다"),
+    SHOWCASE_MODEL_DAILY_LIMIT_EXCEEDED(429,
+            "오늘의 3D 생성 횟수를 모두 사용했습니다. 한국 시각 자정 이후 다시 시도해 주세요"),
     SHOWCASE_MODEL_MIN_SOURCE_IMAGE_REQUIRED(400, "3D 모델 생성에는 최소 4장의 소스 이미지가 필요합니다"),
     SHOWCASE_IMAGE_NOT_BELONG(400, "해당 쇼케이스에 속하지 않는 이미지입니다"),
     SHOWCASE_IMAGE_NOT_FOUND(404, "쇼케이스 이미지를 찾을 수 없습니다"),

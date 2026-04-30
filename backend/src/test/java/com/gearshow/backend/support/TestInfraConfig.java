@@ -2,8 +2,10 @@ package com.gearshow.backend.support;
 
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort;
 import com.gearshow.backend.showcase.application.port.out.PresignedUrlPort;
 import com.gearshow.backend.user.application.port.out.ProfileImageStoragePort;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -95,6 +97,27 @@ public class TestInfraConfig {
     @Primary
     public ModelGenerationClient testModelGenerationClient() {
         return mock(ModelGenerationClient.class);
+    }
+
+    /**
+     * 테스트용 일일 quota Stub — 항상 통과 (allowed=true). 실제 Redis quota 동작은
+     * {@code RedisModelGenerationDailyQuotaAdapterIntegrationTest} 가 별도 검증한다.
+     * 다른 SpringBootTest 가 user_id 충돌로 거짓 fail 하지 않게 격리한다.
+     */
+    @Bean
+    @Primary
+    public ModelGenerationDailyQuotaPort testModelGenerationDailyQuotaPort() {
+        return new ModelGenerationDailyQuotaPort() {
+            @Override
+            public QuotaResult tryConsume(Long userId) {
+                return new QuotaResult(true, 1L, 999L, Instant.now().plusSeconds(86_400));
+            }
+
+            @Override
+            public void rollback(Long userId) {
+                // no-op
+            }
+        };
     }
 
 

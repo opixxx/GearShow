@@ -43,6 +43,11 @@ logging:
 # 값은 @Validated + @Min으로 Bean 생성 시점에 검증된다
 # ===========================================
 app:
+  # 사용자별 3D 모델 일일 생성 quota — KST 자정 자동 초기화 (Redis TTL).
+  # 운영 임시 무력화: MODEL_GENERATION_DAILY_LIMIT=999999.
+  model-generation:
+    daily-limit-per-user: ${MODEL_GENERATION_DAILY_LIMIT:3}
+
   idempotency:
     retention-days: 7
     cleanup-batch-size: 1000

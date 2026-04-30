@@ -1,13 +1,17 @@
 package com.gearshow.backend.common.exception;
 
 import com.gearshow.backend.common.dto.ApiResponse;
+import com.gearshow.backend.showcase.application.exception.DailyLimitExceededException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.time.Instant;
 
 /**
  * 전역 예외 처리 핸들러.
@@ -24,6 +28,25 @@ public class GlobalExceptionHandler {
         log.warn("비즈니스 예외 발생: code={}, message={}", e.getCode(), e.getMessage());
         return ResponseEntity
                 .status(e.getStatus())
+                .body(ApiResponse.error(e.getStatus(), e.getCode(), e.getMessage()));
+    }
+
+    /**
+     * 3D 모델 일일 quota 초과 — HTTP 429 + {@code Retry-After} 헤더 (KST 다음 자정까지 남은 초).
+     *
+     * <p>Spring Security 의 {@code @ExceptionHandler} 우선순위 규칙상 더 구체적인 타입이 우선되므로
+     * {@link CustomException} 핸들러보다 본 핸들러가 먼저 매칭된다.</p>
+     */
+    @ExceptionHandler(DailyLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDailyLimitExceeded(
+            DailyLimitExceededException e) {
+        long retryAfterSeconds = Math.max(1L,
+                e.getResetAt().getEpochSecond() - Instant.now().getEpochSecond());
+        log.warn("3D 모델 일일 quota 초과: limit={}, resetAt={}, retryAfterSec={}",
+                e.getLimit(), e.getResetAt(), retryAfterSeconds);
+        return ResponseEntity
+                .status(e.getStatus())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfterSeconds))
                 .body(ApiResponse.error(e.getStatus(), e.getCode(), e.getMessage()));
     }
 
