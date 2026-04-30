@@ -87,8 +87,12 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
             List<String> imageTokens = uploadImagesToTripo(sourceImages);
 
             // 3. Multiview Task 생성 (여기서 과금 발생 — 정확히 1회만 호출)
+            TripoTaskRequest.MultiviewOptions options = new TripoTaskRequest.MultiviewOptions(
+                    tripoApiProperties.textureQuality(),
+                    tripoApiProperties.faceLimit(),
+                    tripoApiProperties.orientation());
             TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
-                    tripoConfig.getModelVersion(), imageTokens);
+                    tripoConfig.getModelVersion(), imageTokens, options);
             String taskId = tripoApiClient.createTask(taskRequest);
             log.info("Tripo task 생성 성공 - workflowId: {}, taskId: {}", workflowId, taskId);
             return taskId;

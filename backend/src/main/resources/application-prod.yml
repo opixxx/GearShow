@@ -70,6 +70,11 @@ app:
   # Tripo HTTP API 호출 설정
   tripo-api:
     semaphore-acquire-timeout-ms: 2000
+    # multiview_to_model 품질 옵션 (Tripo POST /task 요청에 직렬화).
+    # null/미설정 시 Tripo default 사용. 운영 1주 관측 후 단가/처리시간 트레이드오프 재평가.
+    texture-quality: ${TRIPO_TEXTURE_QUALITY:detailed}    # standard / detailed (4K 텍스처)
+    face-limit: ${TRIPO_FACE_LIMIT:200000}                # 폴리곤 수 상한 (web 로딩 균형)
+    orientation: ${TRIPO_ORIENTATION:align_image}         # default / align_image (4방향 정렬)
 
   # Reconcile 배치 (설계 §8.4 — P1-G)
   # ⚠️ 활성화는 다음 두 조건이 모두 충족되어야 한다 (코드 레벨 강제 — ReconcileBeansConfig 의
