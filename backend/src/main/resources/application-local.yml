@@ -17,8 +17,7 @@ logging:
     org.hibernate.orm.jdbc.bind: TRACE
 
 gearshow:
-  # 로컬 개발: docker-compose 로 기동한 Redis 컨테이너 활용
+  # 로컬 개발: docker-compose 로 기동한 Redis 컨테이너 활용 (ADR-013 — Redis 필수)
   redis:
-    enabled: true
     host: localhost
     port: 6379

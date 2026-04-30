@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBlockingQueue;
 import org.redisson.api.RDelayedQueue;
 import org.redisson.api.RedissonClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -20,12 +19,11 @@ import java.util.concurrent.TimeUnit;
  * 컨슈머가 {@link RBlockingQueue#take()} 로 일반 blocking queue 처럼 받을 수 있게 한다.
  * 단일 Poller 스레드 기준이며 소비자 확장은 후속 과제.</p>
  *
- * <p>{@code gearshow.redis.enabled=true} 일 때만 Bean 으로 등록된다. disabled 환경에서는
- * Poller 스케줄러 Bean 도 같은 조건으로 부재 — 전체 폴링 계층이 조용히 꺼진다.</p>
+ * <p>Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 본 어댑터는 무조건 빈으로 등록된다.
+ * 부팅 시 Redis 미연결이면 ApplicationContext 자체가 부팅에 실패한다 (fail-fast).</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
 public class RedissonWorkflowPollQueueAdapter implements WorkflowPollQueuePort {
 
     static final String QUEUE_KEY = "poll:delayed-queue:main";

@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
@@ -20,10 +19,12 @@ import java.util.concurrent.TimeUnit;
  * <p><b>대기 없음 정책</b>: {@code tryLock(0, leaseTime, ...)} 로 즉시 시도하고 실패 시
  * {@link WorkflowLockBusyException} 을 던진다. 설계 §6.6 "Worker 가 쥐고 있으면 Reconcile 이
  * 자연스럽게 대기/skip" 원칙을 반영 — 호출자가 경합 상황에서 블로킹되지 않도록 한다.</p>
+ *
+ * <p>Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 본 어댑터는 무조건 빈으로 등록된다.
+ * in-memory fallback (이전 {@code WorkflowLockFallbackConfig}) 은 ADR-013 으로 폐기됐다.</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class RedissonWorkflowLockAdapter implements WorkflowLockPort {
 

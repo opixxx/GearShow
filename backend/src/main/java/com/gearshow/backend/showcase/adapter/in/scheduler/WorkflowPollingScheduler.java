@@ -7,7 +7,7 @@ import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
 import com.gearshow.backend.showcase.infrastructure.config.WorkflowPollingProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -30,19 +30,17 @@ import java.time.Duration;
  *   <li>SKIPPED/SUCCEEDED/FAILED: 재enqueue 없음 (종결)</li>
  * </ul>
  *
- * <p>활성화 조건:</p>
- * <ul>
- *   <li>{@code gearshow.redis.enabled=true} — Redis 인프라가 붙어 있어야 한다. disabled 환경에서는
- *       {@code WorkflowPollQueuePort} Bean 도 없어 전체 Poller 계층이 꺼진다.</li>
- *   <li>{@code app.workflow-polling.scheduler-enabled=true} (기본값) — 어댑터/큐만 띄우고 루프 자체는
- *       끄고 싶은 통합 테스트에서 {@code false} 로 오버라이드한다. 끄면 Redis 어댑터·세마포어는
- *       그대로 살아 있지만 자동 소비자가 없어 테스트가 큐를 단독 사용한다.</li>
- * </ul>
+ * <p>활성화 조건: {@code app.workflow-polling.scheduler-enabled=true} (기본값). 어댑터/큐만 띄우고
+ * 루프 자체는 끄고 싶은 통합 테스트에서 {@code false} 로 오버라이드한다 — 자동 소비자가 없어
+ * 테스트가 큐를 단독 사용한다.</p>
+ *
+ * <p>Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 {@code WorkflowPollQueuePort} 는 항상
+ * 빈으로 등록되어 있다. 이전 {@code gearshow.redis.enabled} 분기는 ADR-013 으로 폐기됐다.</p>
  */
 @Slf4j
 @Component
-@ConditionalOnExpression(
-        "${gearshow.redis.enabled:false} and ${app.workflow-polling.scheduler-enabled:true}")
+@ConditionalOnProperty(name = "app.workflow-polling.scheduler-enabled",
+        havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class WorkflowPollingScheduler {
 

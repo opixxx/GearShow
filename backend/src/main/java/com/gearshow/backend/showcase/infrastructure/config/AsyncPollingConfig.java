@@ -1,6 +1,5 @@
 package com.gearshow.backend.showcase.infrastructure.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -11,25 +10,21 @@ import java.util.concurrent.Executor;
 /**
  * 쇼케이스 파이프라인용 비동기 실행기 설정 (설계 §6.2, §7 [8]).
  *
- * <p><b>{@code @EnableAsync} 는 조건 없이 항상 활성</b>한다. 이유: Redis 가 꺼져 있어도
- * Downloader 체인(수동 재처리, webhook 등 향후 유입 경로) 이나 다른 {@code @Async} 빈이
- * 정상 동작해야 한다. {@code @EnableAsync} 를 Redis 조건에 묶으면 Redis 비활성 환경에서
- * 모든 {@code @Async} 호출이 호출자 스레드에서 동기 실행되는 함정이 생긴다.</p>
+ * <p><b>{@code @EnableAsync} 는 조건 없이 항상 활성</b>한다. 모든 {@code @Async} 호출이
+ * 호출자 스레드에서 동기 실행되는 함정을 차단하기 위함.</p>
  *
- * <p>{@link #tripoPollingExecutor()} 는 Redis DelayedQueue 블로킹 소비자 전용이라 Redis 활성
- * 조건부로 유지한다. {@link #downloadExecutor()} 는 Redis 와 무관하게 Tripo 결과 I/O 를
- * 처리하므로 상시 활성.</p>
+ * <p>Redis 가 GearShow 의 필수 인프라 (ADR-013) 이므로 모든 executor 빈이 무조건 등록된다.
+ * 부팅 시 Redis 미연결이면 ApplicationContext 자체가 부팅에 실패한다.</p>
  */
 @Configuration
 @EnableAsync
 public class AsyncPollingConfig {
 
     /**
-     * {@code WorkflowPollingScheduler} 메인 루프 전용. core=max=1 (단일 consumer). Redis
-     * DelayedQueue 가 없는 환경에서는 소비할 게 없으므로 생성하지 않는다.
+     * {@code WorkflowPollingScheduler} 메인 루프 전용. core=max=1 (단일 consumer).
+     * Redis DelayedQueue 의 blocking take 루프를 단일 스레드가 영구 점유한다.
      */
     @Bean("tripoPollingExecutor")
-    @ConditionalOnProperty(name = "gearshow.redis.enabled", havingValue = "true")
     public Executor tripoPollingExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);
