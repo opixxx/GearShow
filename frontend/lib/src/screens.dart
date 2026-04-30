@@ -1781,7 +1781,7 @@ class _Viewer3dScreenState extends State<Viewer3dScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      '앞/뒤/좌/우 4장의 사진을 다시 업로드합니다.',
+                      '앞/좌/뒤/우 4장의 사진을 다시 업로드합니다.',
                       style: TextStyle(color: Color(0xFF71717A), fontSize: 12),
                     ),
                   ],
@@ -1818,7 +1818,8 @@ class _Viewer3dScreenState extends State<Viewer3dScreen> {
         baseUrl: widget.controller.baseUrl,
         accessToken: token,
         showcaseId: widget.args.showcaseId,
-        images: ['front', 'back', 'left', 'right']
+        // Tripo multiview_to_model 입력 순서 [front, left, back, right] 와 일치 (리서치 §5.2).
+        images: ['front', 'left', 'back', 'right']
             .map((dir) => picked[dir]!)
             .toList(),
       );
@@ -2676,10 +2677,12 @@ class ShowcaseCreateImagesScreen extends StatefulWidget {
 
 class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen> {
   final List<XFile> _images = [];
+  // Tripo multiview_to_model 입력 순서 [front, left, back, right] 와 일치 (리서치 §5.2).
+  // Dart Map 리터럴은 LinkedHashMap 이라 .values 가 삽입 순서를 보장한다.
   final Map<String, XFile?> _modelImages = {
     'front': null,
-    'back': null,
     'left': null,
+    'back': null,
     'right': null,
   };
   int _primaryIndex = 0;
@@ -2722,7 +2725,7 @@ class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen>
       return;
     }
     if (_enable3d && _modelImages.values.any((file) => file == null)) {
-      _showSnack(context, '3D 생성을 켰다면 앞/뒤/좌/우 이미지를 모두 선택해야 합니다.');
+      _showSnack(context, '3D 생성을 켰다면 앞/좌/뒤/우 이미지를 모두 선택해야 합니다.');
       return;
     }
 
@@ -2781,8 +2784,8 @@ class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen>
     final draft = widget.args.draft;
     final directions = const {
       'front': '앞',
-      'back': '뒤',
       'left': '좌',
+      'back': '뒤',
       'right': '우',
     };
 
@@ -2875,7 +2878,7 @@ class _ShowcaseCreateImagesScreenState extends State<ShowcaseCreateImagesScreen>
                   onChanged: (value) => setState(() => _enable3d = value),
                   activeThumbColor: const Color(0xFF22D3EE),
                   title: const Text('3D 모델 생성', style: TextStyle(color: Colors.white)),
-                  subtitle: const Text('앞/뒤/좌/우 4방향 사진 업로드', style: TextStyle(color: Color(0xFFA1A1AA))),
+                  subtitle: const Text('앞/좌/뒤/우 4방향 사진 업로드', style: TextStyle(color: Color(0xFFA1A1AA))),
                 ),
                 if (_enable3d) ...[
                   const SizedBox(height: 12),
@@ -3518,7 +3521,7 @@ class _ShowcaseCard extends StatelessWidget {
 
 /// 3D 모델 재생성용 4방향 이미지 선택 바텀시트.
 ///
-/// 4장(앞/뒤/좌/우)을 모두 고르면 [Navigator.pop] 으로 `Map<String, XFile>` 을 돌려준다.
+/// 4장(앞/좌/뒤/우)을 모두 고르면 [Navigator.pop] 으로 `Map<String, XFile>` 을 돌려준다.
 class _Model3dRetrySheet extends StatefulWidget {
   const _Model3dRetrySheet();
 
@@ -3529,8 +3532,8 @@ class _Model3dRetrySheet extends StatefulWidget {
 class _Model3dRetrySheetState extends State<_Model3dRetrySheet> {
   static const _directions = {
     'front': '앞',
-    'back': '뒤',
     'left': '좌',
+    'back': '뒤',
     'right': '우',
   };
   final Map<String, XFile> _picked = {};
@@ -3564,7 +3567,7 @@ class _Model3dRetrySheetState extends State<_Model3dRetrySheet> {
           ),
           const SizedBox(height: 6),
           const Text(
-            '앞/뒤/좌/우 4방향 사진을 새로 골라주세요.',
+            '앞/좌/뒤/우 4방향 사진을 새로 골라주세요.',
             style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 13),
           ),
           const SizedBox(height: 16),
