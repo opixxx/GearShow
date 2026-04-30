@@ -1,5 +1,6 @@
 package com.gearshow.backend.showcase.application.service;
 
+import com.gearshow.backend.showcase.application.event.Model3dCompletedEvent;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient.GenerationResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationEventPublisher;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
@@ -7,6 +8,7 @@ import com.gearshow.backend.showcase.application.port.out.Showcase3dModelPort;
 import com.gearshow.backend.showcase.domain.model.Showcase3dModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code workflowPort.markCompleted} affected=0 이면 즉시 false (다른 Downloader 선점)</li>
  *   <li>{@code showcase3dModelPort.save(Showcase3dModel.create(...))} UPSERT</li>
  *   <li>{@code eventPublisher.publishCompleted} — Outbox INSERT (같은 TX)</li>
+ *   <li>{@link Model3dCompletedEvent} 발행 — AFTER_COMMIT 리스너가 Showcase.has_3d_model
+ *       비정규화 플래그를 동기화 (목록 응답의 3D 뱃지 노출용)</li>
  * </ol>
  */
 @Slf4j
@@ -32,6 +36,7 @@ public class DownloadFinalizer {
     private final ModelGenerationWorkflowPort workflowPort;
     private final Showcase3dModelPort showcase3dModelPort;
     private final ModelGenerationEventPublisher eventPublisher;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * TX_final 을 단일 트랜잭션으로 실행한다. 호출자가 {@code workflow:lock} 을 보유한 상태에서
@@ -49,8 +54,12 @@ public class DownloadFinalizer {
         }
         showcase3dModelPort.save(Showcase3dModel.create(
                 showcaseId, result.modelFileUrl(), result.previewImageUrl()));
+        // 외부 채널 (다른 컨텍스트 / 외부 시스템): Outbox INSERT → Kafka relay
         eventPublisher.publishCompleted(
                 workflowId, showcaseId, result.modelFileUrl(), result.previewImageUrl());
+        // 내부 채널 (Showcase BC 내부 read-model 동기화): JVM 인메모리 ApplicationEvent.
+        // 발행은 in-memory 큐 등록일 뿐 TX 길이/락 시간에 영향 없음. 실제 listener 호출은 AFTER_COMMIT.
+        applicationEventPublisher.publishEvent(new Model3dCompletedEvent(showcaseId));
         log.info("TX_final 완료 — workflowId: {}, showcaseId: {}, modelUrl: {}",
                 workflowId, showcaseId, result.modelFileUrl());
         return true;

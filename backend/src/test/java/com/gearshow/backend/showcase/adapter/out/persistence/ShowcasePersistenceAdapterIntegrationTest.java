@@ -164,33 +164,59 @@ class ShowcasePersistenceAdapterIntegrationTest {
     class UpdateHas3dModel {
 
         @Test
-        @DisplayName("has3dModel을 true로 갱신한다")
+        @DisplayName("has3dModel을 true로 갱신한다 — affected=1")
         void updateHas3dModel_setsTrue() {
             // Given
             Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
             assertThat(saved.isHas3dModel()).isFalse();
 
             // When
-            adapter.updateHas3dModel(saved.getId(), true);
+            int affected = adapter.updateHas3dModel(saved.getId(), true);
 
             // Then
+            assertThat(affected).isEqualTo(1);
             Showcase found = adapter.findById(saved.getId()).orElseThrow();
             assertThat(found.isHas3dModel()).isTrue();
         }
 
         @Test
-        @DisplayName("has3dModel을 false로 갱신한다")
+        @DisplayName("has3dModel을 false로 갱신한다 — affected=1")
         void updateHas3dModel_setsFalse() {
             // Given
             Showcase saved = adapter.save(createShowcase("3D 모델 테스트"));
             adapter.updateHas3dModel(saved.getId(), true);
 
             // When
-            adapter.updateHas3dModel(saved.getId(), false);
+            int affected = adapter.updateHas3dModel(saved.getId(), false);
 
             // Then
+            assertThat(affected).isEqualTo(1);
             Showcase found = adapter.findById(saved.getId()).orElseThrow();
             assertThat(found.isHas3dModel()).isFalse();
+        }
+
+        @Test
+        @DisplayName("미존재 ID 는 affected=0")
+        void updateHas3dModel_missingId_returnsZero() {
+            int affected = adapter.updateHas3dModel(9_999_999L, true);
+
+            assertThat(affected).isZero();
+        }
+
+        @Test
+        @DisplayName("DELETED 상태 쇼케이스는 갱신되지 않는다 — affected=0")
+        void updateHas3dModel_deletedStatus_returnsZero() {
+            // Given — ACTIVE → DELETED 도메인 전이
+            Showcase saved = adapter.save(createShowcase("삭제될 쇼케이스"));
+            adapter.save(saved.delete());
+
+            // When
+            int affected = adapter.updateHas3dModel(saved.getId(), true);
+
+            // Then
+            assertThat(affected).isZero();
+            Showcase reloaded = adapter.findById(saved.getId()).orElseThrow();
+            assertThat(reloaded.isHas3dModel()).isFalse();
         }
     }
 
