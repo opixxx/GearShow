@@ -19,11 +19,13 @@ public interface RequestModelGenerationUseCase {
      * Outbox {@code event_id} 결정적 파생의 입력이 된다 (ADR-011 ①③).</p>
      *
      * @param showcaseId           쇼케이스 ID
+     * @param ownerId              요청자 ID (사용자별 일일 quota 카운터에 사용)
      * @param idempotencyKey       API 멱등성 키 (non-null, non-blank)
-     * @param modelSourceImageKeys 소스 이미지 S3 키 목록 (앞/뒤/좌/우, 최소 4개)
+     * @param modelSourceImageKeys 소스 이미지 S3 키 목록 (앞/좌/뒤/우, 최소 4개)
      * @return 생성 요청 결과
      */
     ModelGenerationResult requestOnCreate(Long showcaseId,
+                                          Long ownerId,
                                           String idempotencyKey,
                                           List<String> modelSourceImageKeys);
 

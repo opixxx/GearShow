@@ -51,6 +51,7 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
             case CreateShowcaseOutcome.Created created ->
                     requestModelIfNeeded(
                         created.showcase().getId(),
+                        command.ownerId(),
                         command.idempotencyKey(),
                         modelSourceImageKeys
                     );
@@ -88,13 +89,14 @@ public class CreateShowcaseFacade implements CreateShowcaseUseCase {
     }
 
     private ShowcaseModelStatus requestModelIfNeeded(Long showcaseId,
+                                                     Long ownerId,
                                                      String idempotencyKey,
                                                      List<String> modelSourceImageKeys) {
         if (modelSourceImageKeys == null || modelSourceImageKeys.isEmpty()) {
             return ShowcaseModelStatus.NONE;
         }
         ModelGenerationResult result = requestModelGenerationUseCase.requestOnCreate(
-                showcaseId, idempotencyKey, modelSourceImageKeys);
+                showcaseId, ownerId, idempotencyKey, modelSourceImageKeys);
         return result.modelStatus();
     }
 }

@@ -110,7 +110,7 @@ class CreateShowcaseFacadeCircuitGuardTest {
         facade.create(commandWithModelSource(false), IMAGE_KEYS, List.of());
 
         verify(requestModelGenerationUseCase, never())
-                .requestOnCreate(anyLong(), any(), any());
+                .requestOnCreate(anyLong(), anyLong(), any(), any());
     }
 
     @Test
@@ -122,12 +122,12 @@ class CreateShowcaseFacadeCircuitGuardTest {
                 .willReturn(new CreateShowcaseOutcome.Created(mockShowcase));
 
         // requestModelGenerationUseCase 는 modelSourceImageKeys 가 있으므로 호출됨 — 스텁하되 무시.
-        given(requestModelGenerationUseCase.requestOnCreate(anyLong(), any(), any()))
+        given(requestModelGenerationUseCase.requestOnCreate(anyLong(), anyLong(), any(), any()))
                 .willReturn(new com.gearshow.backend.showcase.application.dto.ModelGenerationResult(
                         1L, com.gearshow.backend.showcase.application.dto.ShowcaseModelStatus.GENERATING));
 
         facade.create(commandWithModelSource(true), IMAGE_KEYS, MODEL_SOURCE_KEYS);
 
-        verify(requestModelGenerationUseCase).requestOnCreate(anyLong(), any(), any());
+        verify(requestModelGenerationUseCase).requestOnCreate(anyLong(), anyLong(), any(), any());
     }
 }

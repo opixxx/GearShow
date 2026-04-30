@@ -3,10 +3,13 @@ package com.gearshow.backend.showcase.application.service;
 import com.gearshow.backend.showcase.application.dto.ModelGenerationResult;
 import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
+import com.gearshow.backend.showcase.application.exception.DailyLimitExceededException;
 import com.gearshow.backend.showcase.application.exception.InsufficientModelSourceImagesException;
 import com.gearshow.backend.showcase.application.exception.ModelAlreadyGeneratingException;
 import com.gearshow.backend.showcase.application.port.in.RequestModelGenerationUseCase;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationDailyQuotaPort.QuotaResult;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.domain.exception.NotFoundShowcaseException;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 3D 모델 생성 요청 Facade (ADR-010 프로세스 분리 반영).
@@ -40,9 +44,11 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
     private final ModelGenerationWorkflowPort modelGenerationWorkflowPort;
     private final ImageStoragePort imageStoragePort;
     private final TripoCircuitGuard tripoCircuitGuard;
+    private final ModelGenerationDailyQuotaPort dailyQuotaPort;
 
     @Override
     public ModelGenerationResult requestOnCreate(Long showcaseId,
+                                                  Long ownerId,
                                                   String idempotencyKey,
                                                   List<String> modelSourceImageKeys) {
         validateSourceImageCount(modelSourceImageKeys);
@@ -51,8 +57,9 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        return requestModelGenerationService.saveSourceImagesAndRequest(
-                showcaseId, idempotencyKey, imageUrls);
+        return consumeQuotaAndRun(ownerId, () ->
+                requestModelGenerationService.saveSourceImagesAndRequest(
+                        showcaseId, idempotencyKey, imageUrls));
     }
 
     @Override
@@ -70,8 +77,35 @@ public class RequestModelGenerationFacade implements RequestModelGenerationUseCa
                 .map(imageStoragePort::toUrl)
                 .toList();
 
-        return requestModelGenerationService.resetSourceImagesAndRequestRetry(
-                showcaseId, idempotencyKey, imageUrls);
+        return consumeQuotaAndRun(ownerId, () ->
+                requestModelGenerationService.resetSourceImagesAndRequestRetry(
+                        showcaseId, idempotencyKey, imageUrls));
+    }
+
+    /**
+     * 일일 quota 를 INCR 한 뒤 후속 작업을 실행한다. 후속 작업이 {@link RuntimeException} 으로
+     * 실패하면 quota 를 rollback 한다 (사용자 손해 방지). limit 초과 시
+     * {@link DailyLimitExceededException}.
+     *
+     * <p>호출 시점엔 {@code validateSourceImageCount} 등 입력 검증이 통과한 상태이고, 후속
+     * 작업의 도메인 검증/DB 충돌이 throw 되면 try/catch 가 rollback 으로 자동 보정한다. quota 가
+     * 부당하게 차감된 채 남는 경로는 없다.</p>
+     *
+     * <p>{@link Error} 는 의도적으로 catch 하지 않는다 — JVM 치명 에러는 프로세스 차원에서 처리.
+     * 이 경우 quota 는 자정 TTL 로 결국 초기화되므로 영구 손해는 없다.</p>
+     */
+    private ModelGenerationResult consumeQuotaAndRun(Long ownerId,
+                                                     Supplier<ModelGenerationResult> action) {
+        QuotaResult quota = dailyQuotaPort.tryConsume(ownerId);
+        if (!quota.allowed()) {
+            throw new DailyLimitExceededException(quota.limit(), quota.resetAt());
+        }
+        try {
+            return action.get();
+        } catch (RuntimeException e) {
+            dailyQuotaPort.rollback(quota.token());
+            throw e;
+        }
     }
 
     private void validateSourceImageCount(List<String> keys) {

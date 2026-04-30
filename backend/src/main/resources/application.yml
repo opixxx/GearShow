@@ -90,6 +90,12 @@ tripo:
   timeout-ms: ${TRIPO_TIMEOUT_MS:300000}
   model-version: ${TRIPO_MODEL_VERSION:v3.0-20250812}
 
+# 3D 모델 생성 사용자별 일일 quota (악성 사용자 비용 폭증 차단). KST 자정에 Redis TTL 로 자동 초기화.
+# 운영 임시 무력화: MODEL_GENERATION_DAILY_LIMIT=999999 envvar.
+app:
+  model-generation:
+    daily-limit-per-user: ${MODEL_GENERATION_DAILY_LIMIT:3}
+
 # JWT 설정
 jwt:
   secret: ${JWT_SECRET}
