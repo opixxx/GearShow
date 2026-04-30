@@ -426,7 +426,7 @@ class GearShowApiClient {
     return CreateShowcaseResult.fromJson(data);
   }
 
-  /// 3D 소스 이미지 4장(앞/뒤/좌/우)을 Presigned URL 로 S3 에 업로드하고 S3 키 목록을 돌려준다.
+  /// 3D 소스 이미지 4장(앞/좌/뒤/우)을 Presigned URL 로 S3 에 업로드하고 S3 키 목록을 돌려준다.
   /// 재시도 호출 직전에 사용한다.
   Future<List<String>> uploadModelSourceImages({
     required String baseUrl,

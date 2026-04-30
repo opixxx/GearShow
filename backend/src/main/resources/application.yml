@@ -88,7 +88,7 @@ tripo:
   base-url: ${TRIPO_BASE_URL:https://api.tripo3d.ai/v2/openapi}
   poll-interval-ms: ${TRIPO_POLL_INTERVAL_MS:3000}
   timeout-ms: ${TRIPO_TIMEOUT_MS:300000}
-  model-version: ${TRIPO_MODEL_VERSION:v2.5-20250123}
+  model-version: ${TRIPO_MODEL_VERSION:v3.0-20250812}
 
 # JWT 설정
 jwt:

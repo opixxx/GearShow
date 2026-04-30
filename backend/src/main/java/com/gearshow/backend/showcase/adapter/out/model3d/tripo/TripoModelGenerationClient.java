@@ -9,6 +9,7 @@ import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
 import com.gearshow.backend.showcase.application.port.out.TripoSemaphorePort;
 import com.gearshow.backend.showcase.domain.model.ModelSourceImage;
+import com.gearshow.backend.showcase.domain.vo.AngleType;
 import com.gearshow.backend.showcase.infrastructure.config.TripoConfig;
 import com.gearshow.backend.showcase.infrastructure.config.TripoApiProperties;
 import lombok.RequiredArgsConstructor;
@@ -20,8 +21,10 @@ import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Tripo API 를 사용한 3D 모델 생성 클라이언트.
@@ -43,6 +46,16 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
 
     private static final Duration DOWNLOAD_CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration DOWNLOAD_READ_TIMEOUT = Duration.ofSeconds(60);
+
+    /**
+     * Tripo {@code multiview_to_model} 입력 순서 [front, left, back, right] (리서치 문서 §5.2).
+     *
+     * <p>업스트림 매핑 ({@code RequestModelGenerationService.ANGLE_TYPES}) 이 변경되거나 잘못된
+     * sortOrder 가 들어와도 angleType 기준으로 다시 정렬해 Tripo 송신 시점에 한 번 더 방어한다
+     * (이중 안전망).</p>
+     */
+    private static final List<AngleType> TRIPO_MULTIVIEW_ORDER = List.of(
+            AngleType.FRONT, AngleType.LEFT, AngleType.BACK, AngleType.RIGHT);
 
     private final TripoApiClient tripoApiClient;
     private final TripoConfig tripoConfig;
@@ -76,19 +89,29 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
         // Worker 와 Poller 가 동일 세마포어(10 permits)를 공유해 Tripo rate limit 을 넘지 않게 한다.
         Duration acquireTimeout = Duration.ofMillis(tripoApiProperties.semaphoreAcquireTimeoutMs());
         return tripoSemaphorePort.runWithPermit(acquireTimeout, () -> {
-            // 1. 소스 이미지 조회 (앞/뒤/좌/우 순서)
-            List<ModelSourceImage> sourceImages = modelSourceImagePort
-                    .findByShowcaseId(showcaseId)
-                    .stream()
-                    .sorted(Comparator.comparingInt(ModelSourceImage::getSortOrder))
+            // 1. 소스 이미지 조회 — Tripo 요구 순서 [front, left, back, right] 로 명시 정렬.
+            //    sortOrder 만 의존하면 업스트림 매핑 변경/오염에 취약하므로 angleType 기준으로
+            //    EnumMap 에 모은 뒤 TRIPO_MULTIVIEW_ORDER 순서로 추출한다.
+            //    동일 angle 중복 시 첫 번째 유지, 알 수 없는 angle 은 자동 제외.
+            Map<AngleType, ModelSourceImage> byAngle = new EnumMap<>(AngleType.class);
+            for (ModelSourceImage img : modelSourceImagePort.findByShowcaseId(showcaseId)) {
+                byAngle.putIfAbsent(img.getAngleType(), img);
+            }
+            List<ModelSourceImage> sourceImages = TRIPO_MULTIVIEW_ORDER.stream()
+                    .map(byAngle::get)
+                    .filter(Objects::nonNull)
                     .toList();
 
             // 2. S3 다운로드 → Tripo 업로드 → image_token 획득
             List<String> imageTokens = uploadImagesToTripo(sourceImages);
 
             // 3. Multiview Task 생성 (여기서 과금 발생 — 정확히 1회만 호출)
+            TripoTaskRequest.MultiviewOptions options = new TripoTaskRequest.MultiviewOptions(
+                    tripoApiProperties.textureQuality(),
+                    tripoApiProperties.faceLimit(),
+                    tripoApiProperties.orientation());
             TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
-                    tripoConfig.getModelVersion(), imageTokens);
+                    tripoConfig.getModelVersion(), imageTokens, options);
             String taskId = tripoApiClient.createTask(taskRequest);
             log.info("Tripo task 생성 성공 - workflowId: {}, taskId: {}", workflowId, taskId);
             return taskId;
