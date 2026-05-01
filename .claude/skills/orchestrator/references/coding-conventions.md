@@ -112,6 +112,12 @@ public class Showcase {
 - 자가수정에서 `--no-verify`, `-DskipTests`로 우회
 - 실패 원인 분석 없이 brute-force 재시도
 - 에스컬레이션 조건 충족인데 계속 혼자 진행
+- 요청되지 않은 기능·옵션·configurability 선제 추가 (speculative feature)
+- 사용처가 1곳뿐인 추상화 도입 (두 번째 사용처가 생길 때 추출)
+- 요청 범위 외 인접 코드·주석·포맷의 "개선"
+- 기존 스타일과 다르더라도 기존 스타일을 따름 (광범위 리팩은 별도 PR)
+- 본 변경이 **새로** 만든 unused import/var만 제거 (기존 dead code는 발견 시 언급만)
+- 변경 라인이 사용자 요청까지 1:1로 추적되지 않음 (모든 라인 = 요청 근거)
 
 ### Common Pitfalls
 - Fetch Join/Batch Size 고려 없는 연관관계 조회 (N+1)
