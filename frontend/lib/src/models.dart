@@ -500,6 +500,26 @@ class ModelGenerationRetryResult {
   }
 }
 
+class ShowcaseCommentAuthor {
+  const ShowcaseCommentAuthor({
+    required this.userId,
+    required this.nickname,
+    required this.profileImageUrl,
+  });
+
+  final int? userId;
+  final String? nickname;
+  final String? profileImageUrl;
+
+  factory ShowcaseCommentAuthor.fromJson(Map<String, dynamic> json) {
+    return ShowcaseCommentAuthor(
+      userId: (json['userId'] as num?)?.toInt(),
+      nickname: json['nickname'] as String?,
+      profileImageUrl: json['profileImageUrl'] as String?,
+    );
+  }
+}
+
 class ShowcaseComment {
   const ShowcaseComment({
     required this.showcaseCommentId,
