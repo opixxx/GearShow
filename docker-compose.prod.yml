@@ -88,14 +88,19 @@ services:
     hostname: redis
     command:
       - redis-server
+      # RDB + AOF 하이브리드 (Redis 공식 권장):
+      #   - AOF: fail-safe 데이터 안전 (1초 fsync default)
+      #   - RDB: 빠른 재시작 base + point-in-time backup 가능
+      # 보수적 save 정책 — GearShow 변경량 (락/큐/quota) 기준 fork 평균 1~수 시간 1회.
+      # t3.medium burst credit 영향 미미 (memory 128mb 작아 fork CoW 비용 작음).
       - --appendonly
-      - "yes"                   # AOF 영속화 (재기동 시 락/큐 상태 보존)
+      - "yes"
       - --maxmemory
       - 128mb
       - --maxmemory-policy
       - allkeys-lru             # 메모리 임계 도달 시 가장 오래된 키부터 축출
       - --save
-      - ""                      # RDB 스냅샷 비활성화 (AOF 만 사용 — t3.medium I/O 보호)
+      - "3600 1 300 100"        # 1시간에 1번 변경 OR 5분에 100번 변경 시 RDB snapshot
     volumes:
       - gearshow-redis-data:/data
     healthcheck:
