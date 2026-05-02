@@ -7,7 +7,7 @@
 #
 # 옵션:
 #   --env=dev|prod    실행 환경 (default: prod). dev 면 카카오 SDK 초기화 스킵.
-#   --device=<id>     flutter device id 명시 (default: flutter 자동 선택)
+#   --device=<id>     flutter device id 명시 (default: 디바이스 캐시 → flutter 자동 선택)
 #   --user=<id>       DEV_USER_ID 주입 (--env=dev 와 함께만 의미, 그 외엔 경고 후 무시)
 #   --no-simulator    iOS Simulator 자동 부팅 스킵 (Android emulator/Chrome 등 사용 시)
 #   -h, --help        이 도움말 출력
@@ -20,6 +20,11 @@
 #   실행 시 frontend/.env 가 존재하면, 셸에 미셋된 키만 export 한다.
 #   셸 export 가 우선 — KAKAO_NATIVE_APP_KEY=foo bash scripts/run-frontend.sh
 #   같은 ad-hoc 주입은 .env 가 덮어쓰지 않는다.
+#
+# 디바이스 캐시:
+#   --device 미지정 시 ~/.gearshow/last-device 가 존재하면 그 값을 fallback 으로 사용.
+#   flutter run 이 정상 종료(코드 0, 보통 'q' 입력)했을 때 사용한 디바이스를 같은 파일에
+#   저장한다. 잘못된 디바이스로 즉사한 경우(코드 != 0)엔 캐시를 갱신하지 않아 이전 값 보존.
 #
 # 사용 예:
 #   bash scripts/run-frontend.sh                          # prod, iOS Simulator 자동 부팅
@@ -73,6 +78,40 @@ load_env_if_missing() {
     done < "$env_file"
 
     echo "[run-frontend] $env_file 로드 (셸 미셋 키만 fallback)"
+}
+
+# ─── 디바이스 캐시 ───────────────────────────────────────────────────────────
+# ~/.gearshow/last-device 파일 한 줄(디바이스 id)로 단일 슬롯 캐싱.
+# 읽기 실패는 silent (첫 실행). 쓰기 실패는 stderr 경고만 — Flutter 종료 코드 보존.
+CACHE_FILE="$HOME/.gearshow/last-device"
+
+# 캐시된 디바이스 id를 stdout으로 출력. 파일 없으면 빈 문자열.
+# eval/source 미사용 — 단순 read 만으로 인젝션 차단.
+load_cached_device() {
+    [[ ! -f "$CACHE_FILE" ]] && return 0
+    local cached
+    IFS= read -r cached < "$CACHE_FILE" || return 0
+    # 양 끝 공백 제거
+    cached="${cached#"${cached%%[![:space:]]*}"}"
+    cached="${cached%"${cached##*[![:space:]]}"}"
+    printf '%s' "$cached"
+}
+
+# 디바이스 id를 캐시 파일에 저장. 빈 인자 no-op.
+# 쓰기 실패 시 stderr 경고만 출력하고 종료 코드는 호출부에 영향 주지 않는다.
+save_cached_device() {
+    local device_id="${1:-}"
+    [[ -z "$device_id" ]] && return 0
+
+    if ! mkdir -p "$(dirname "$CACHE_FILE")" 2>/dev/null; then
+        echo "[run-frontend] 경고: $(dirname "$CACHE_FILE") 생성 실패. 디바이스 캐시 갱신 스킵." >&2
+        return 0
+    fi
+    if ! printf '%s\n' "$device_id" > "$CACHE_FILE" 2>/dev/null; then
+        echo "[run-frontend] 경고: $CACHE_FILE 쓰기 실패. 디바이스 캐시 갱신 스킵." >&2
+        return 0
+    fi
+    echo "[run-frontend] 디바이스 저장: $device_id → $CACHE_FILE"
 }
 
 # ─── 인자 파싱 ───────────────────────────────────────────────────────────────
@@ -135,6 +174,15 @@ if [[ -n "$DEV_USER_ID" && "$ENV_VALUE" != "dev" ]]; then
     DEV_USER_ID=""
 fi
 
+# ─── 디바이스 fallback (CLI 미지정 시 캐시 사용) ─────────────────────────────
+if [[ -z "$DEVICE" ]]; then
+    cached_device="$(load_cached_device)"
+    if [[ -n "$cached_device" ]]; then
+        DEVICE="$cached_device"
+        echo "[run-frontend] 캐시된 디바이스 사용: $DEVICE ($CACHE_FILE)"
+    fi
+fi
+
 # ─── 경로 계산 (스크립트 위치 기준) ──────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -174,7 +222,17 @@ if [[ -n "${KAKAO_JAVASCRIPT_APP_KEY:-}" ]]; then
 fi
 
 # ─── 실행 ────────────────────────────────────────────────────────────────────
+# exec 미사용 — 종료 코드를 보고 디바이스 캐시 갱신 여부를 결정해야 한다.
+# rc != 0 (잘못된 디바이스로 즉사 등) 시 캐시를 덮지 않아 이전 정상값 보존.
 echo "[run-frontend] cd $FRONTEND_DIR"
 echo "[run-frontend] flutter ${FLUTTER_ARGS[*]}"
 cd "$FRONTEND_DIR"
-exec flutter "${FLUTTER_ARGS[@]}"
+
+rc=0
+flutter "${FLUTTER_ARGS[@]}" || rc=$?
+
+if [[ $rc -eq 0 && -n "$DEVICE" ]]; then
+    save_cached_device "$DEVICE"
+fi
+
+exit $rc
