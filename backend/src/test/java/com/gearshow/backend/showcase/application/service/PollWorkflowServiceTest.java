@@ -76,7 +76,7 @@ class PollWorkflowServiceTest {
     @BeforeEach
     void setUp() {
         TripoApiProperties properties = new TripoApiProperties(
-                2_000L, "detailed", 200_000, "align_image");
+                2_000L, "detailed", 200_000, "align_image", "detailed");
         service = new PollWorkflowService(
                 workflowPort, modelGenerationClient,
                 tripoSemaphorePort, eventPublisher, properties);

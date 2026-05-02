@@ -109,7 +109,8 @@ public class TripoModelGenerationClient implements ModelGenerationClient {
             TripoTaskRequest.MultiviewOptions options = new TripoTaskRequest.MultiviewOptions(
                     tripoApiProperties.textureQuality(),
                     tripoApiProperties.faceLimit(),
-                    tripoApiProperties.orientation());
+                    tripoApiProperties.orientation(),
+                    tripoApiProperties.geometryQuality());
             TripoTaskRequest taskRequest = TripoTaskRequest.multiview(
                     tripoConfig.getModelVersion(), imageTokens, options);
             String taskId = tripoApiClient.createTask(taskRequest);

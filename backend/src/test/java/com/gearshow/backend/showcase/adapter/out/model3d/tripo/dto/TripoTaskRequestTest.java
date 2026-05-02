@@ -58,13 +58,15 @@ class TripoTaskRequestTest {
         assertThat(request.texture_quality()).isNull();
         assertThat(request.face_limit()).isNull();
         assertThat(request.orientation()).isNull();
+        assertThat(request.geometry_quality()).isNull();
     }
 
     @Test
     @DisplayName("MultiviewOptions 명시 시 record 필드에 그대로 매핑된다")
     void multiview_withOptions_includesFields() {
         // Given
-        MultiviewOptions options = new MultiviewOptions("detailed", 200_000, "align_image");
+        MultiviewOptions options = new MultiviewOptions(
+                "detailed", 200_000, "align_image", "detailed");
 
         // When
         TripoTaskRequest request = TripoTaskRequest.multiview(
@@ -74,6 +76,7 @@ class TripoTaskRequestTest {
         assertThat(request.texture_quality()).isEqualTo("detailed");
         assertThat(request.face_limit()).isEqualTo(200_000);
         assertThat(request.orientation()).isEqualTo("align_image");
+        assertThat(request.geometry_quality()).isEqualTo("detailed");
     }
 
     @Test
@@ -89,16 +92,18 @@ class TripoTaskRequestTest {
         // Then
         assertThat(json).contains("\"type\":\"multiview_to_model\"");
         assertThat(json).contains("\"model_version\":\"v3.0-20250812\"");
-        assertThat(json).doesNotContain("texture_quality");
-        assertThat(json).doesNotContain("face_limit");
-        assertThat(json).doesNotContain("orientation");
+        assertThat(json).doesNotContain("\"texture_quality\"");
+        assertThat(json).doesNotContain("\"face_limit\"");
+        assertThat(json).doesNotContain("\"orientation\"");
+        assertThat(json).doesNotContain("\"geometry_quality\"");
     }
 
     @Test
     @DisplayName("@JsonInclude(NON_NULL) — 명시된 옵션은 직렬화 결과에 포함된다")
     void multiview_explicitOptions_includesFieldsInJson() throws Exception {
         // Given
-        MultiviewOptions options = new MultiviewOptions("detailed", 200_000, "align_image");
+        MultiviewOptions options = new MultiviewOptions(
+                "detailed", 200_000, "align_image", "detailed");
         TripoTaskRequest request = TripoTaskRequest.multiview(
                 "v3.0-20250812", List.of("t1"), options);
 
@@ -109,5 +114,24 @@ class TripoTaskRequestTest {
         assertThat(json).contains("\"texture_quality\":\"detailed\"");
         assertThat(json).contains("\"face_limit\":200000");
         assertThat(json).contains("\"orientation\":\"align_image\"");
+        assertThat(json).contains("\"geometry_quality\":\"detailed\"");
+    }
+
+    @Test
+    @DisplayName("geometry_quality 만 단독 지정 시 다른 옵션 키는 빠지고 geometry_quality 만 포함된다")
+    void multiview_withGeometryQualityOnly_includesGeometryQualityInJson() throws Exception {
+        // Given — 운영 중 ENV 로 다른 옵션 무력화하고 geometry_quality 만 강제하는 시나리오 방어
+        MultiviewOptions options = new MultiviewOptions(null, null, null, "detailed");
+        TripoTaskRequest request = TripoTaskRequest.multiview(
+                "v3.0-20250812", List.of("t1"), options);
+
+        // When
+        String json = objectMapper.writeValueAsString(request);
+
+        // Then
+        assertThat(json).contains("\"geometry_quality\":\"detailed\"");
+        assertThat(json).doesNotContain("\"texture_quality\"");
+        assertThat(json).doesNotContain("\"face_limit\"");
+        assertThat(json).doesNotContain("\"orientation\"");
     }
 }
