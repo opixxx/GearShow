@@ -23,6 +23,10 @@ import org.springframework.validation.annotation.Validated;
  *                                  default 200_000 = web/Flutter 로딩 시간과 디테일의 균형.
  * @param orientation               이미지 정렬 모드. Tripo 옵션명 {@code orientation}.
  *                                  default {@code align_image} = 4방향 사진 일관성 향상.
+ * @param geometryQuality           메시 형상 품질. Tripo 옵션명 {@code geometry_quality}.
+ *                                  default {@code detailed} = v3.0+ Ultra Mode (최대 2M 폴리곤,
+ *                                  스터드/갑피 변형 등 형상 디테일 보존). 운영 단가/처리시간 부담
+ *                                  발생 시 {@code TRIPO_GEOMETRY_QUALITY=standard} 환경변수로 환원.
  */
 @Validated
 @ConfigurationProperties(prefix = "app.tripo-api")
@@ -39,6 +43,9 @@ public record TripoApiProperties(
         int faceLimit,
 
         @DefaultValue("align_image")
-        String orientation
+        String orientation,
+
+        @DefaultValue("detailed")
+        String geometryQuality
 ) {
 }

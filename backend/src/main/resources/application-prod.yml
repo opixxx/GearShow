@@ -80,6 +80,7 @@ app:
     texture-quality: ${TRIPO_TEXTURE_QUALITY:detailed}    # standard / detailed (4K 텍스처)
     face-limit: ${TRIPO_FACE_LIMIT:200000}                # 폴리곤 수 상한 (web 로딩 균형)
     orientation: ${TRIPO_ORIENTATION:align_image}         # default / align_image (4방향 정렬)
+    geometry-quality: ${TRIPO_GEOMETRY_QUALITY:detailed}  # standard / detailed (v3.0+ Ultra Mode)
 
   # Reconcile 배치 (설계 §8.4 — P1-G)
   # 활성화: app.reconcile.enabled=true. Redis 는 ADR-013 으로 필수 인프라이므로 별도 분기 없음.
