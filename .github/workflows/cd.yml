@@ -18,6 +18,20 @@ jobs:
   build-and-test:
     name: 빌드 & 테스트
     runs-on: ubuntu-latest
+
+    # Redis 는 GearShow 의 필수 인프라 (ADR-013). 테스트 ApplicationContext 부팅 시 RedissonClient
+    # 가 connect 시도하므로 CD runner 에 Redis service 컨테이너를 함께 띄운다. ci.yml 과 동일 패턴.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: 소스코드 체크아웃
         uses: actions/checkout@v4
