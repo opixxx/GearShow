@@ -43,6 +43,14 @@ public class CatalogItemJpaEntity {
     @Column(name = "official_image_url")
     private String officialImageUrl;
 
+    /** 한국어 풀네임 (검색 보강용 — ADR-016) */
+    @Column(name = "full_name_ko", length = 255)
+    private String fullNameKo;
+
+    /** 영문 풀네임 (검색 보강용 — ADR-016) */
+    @Column(name = "full_name_en", length = 255)
+    private String fullNameEn;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "catalog_status", nullable = false)
     private CatalogStatus status;
@@ -55,13 +63,17 @@ public class CatalogItemJpaEntity {
 
     @Builder
     private CatalogItemJpaEntity(Long id, Category category, String brand,
-                                 String modelCode, String officialImageUrl, CatalogStatus status,
+                                 String modelCode, String officialImageUrl,
+                                 String fullNameKo, String fullNameEn,
+                                 CatalogStatus status,
                                  Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.category = category;
         this.brand = brand;
         this.modelCode = modelCode;
         this.officialImageUrl = officialImageUrl;
+        this.fullNameKo = fullNameKo;
+        this.fullNameEn = fullNameEn;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

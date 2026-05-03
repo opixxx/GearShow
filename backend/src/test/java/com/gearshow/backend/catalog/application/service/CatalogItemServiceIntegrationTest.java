@@ -45,8 +45,9 @@ class CatalogItemServiceIntegrationTest {
         return new CreateCatalogItemCommand(
                 Category.BOOTS, "Nike",
                 modelCode, null,
+                null, null,
                 new CreateCatalogItemCommand.BootsSpecCommand(
-                        StudType.FG, "Mercurial", "2025", "천연잔디", null),
+                        StudType.FG, "Mercurial", null, "2025", "천연잔디", null),
                 null);
     }
 
@@ -73,9 +74,9 @@ class CatalogItemServiceIntegrationTest {
             // Given
             CreateCatalogItemCommand command = new CreateCatalogItemCommand(
                     Category.UNIFORM, "Nike",
-                    null, null, null,
+                    null, null, null, null, null,
                     new CreateCatalogItemCommand.UniformSpecCommand(
-                            "Liverpool", "2024-25", "EPL",
+                            "Liverpool", null, "2024-25", "EPL",
                             com.gearshow.backend.catalog.domain.vo.KitType.HOME, null));
 
             // When

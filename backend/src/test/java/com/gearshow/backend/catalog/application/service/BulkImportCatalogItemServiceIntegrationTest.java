@@ -149,8 +149,8 @@ class BulkImportCatalogItemServiceIntegrationTest {
         void futsal_registers() {
             // Given
             CreateCatalogItemCommand futsal = new CreateCatalogItemCommand(
-                    Category.BOOTS, "Nike", "FUTSAL-001", null,
-                    new BootsSpecCommand(StudType.TF, "Premier", "2025", "인조잔디", null),
+                    Category.BOOTS, "Nike", "FUTSAL-001", null, null, null,
+                    new BootsSpecCommand(StudType.TF, "Premier", null, "2025", "인조잔디", null),
                     null);
 
             // When
@@ -167,14 +167,14 @@ class BulkImportCatalogItemServiceIntegrationTest {
 
     private static CreateCatalogItemCommand boots(String brand, String modelCode) {
         return new CreateCatalogItemCommand(
-                Category.BOOTS, brand, modelCode, null,
-                new BootsSpecCommand(StudType.FG, "Mercurial", "2025", "천연잔디", null),
+                Category.BOOTS, brand, modelCode, null, null, null,
+                new BootsSpecCommand(StudType.FG, "Mercurial", null, "2025", "천연잔디", null),
                 null);
     }
 
     private static CreateCatalogItemCommand uniform(String clubName) {
         return new CreateCatalogItemCommand(
-                Category.UNIFORM, "Nike", null, null, null,
-                new UniformSpecCommand(clubName, "24-25", "EPL", KitType.HOME, null));
+                Category.UNIFORM, "Nike", null, null, null, null, null,
+                new UniformSpecCommand(clubName, null, "24-25", "EPL", KitType.HOME, null));
     }
 }

@@ -40,7 +40,9 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
             command.category(),
             command.brand(),
             command.modelCode(),
-            command.officialImageUrl()
+            command.officialImageUrl(),
+            command.fullNameKo(),
+            command.fullNameEn()
         );
 
         CatalogItem item = catalogItemPort.save(catalogItem);
@@ -60,6 +62,7 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
                 catalogItemId,
                 spec.studType(),
                 spec.siloName(),
+                spec.siloNameKo(),
                 spec.releaseYear(),
                 spec.surfaceType(),
                 spec.extraSpecJson()
@@ -70,6 +73,7 @@ public class CreateCatalogItemService implements CreateCatalogItemUseCase {
             UniformSpec uniformSpec = UniformSpec.create(
                 catalogItemId,
                 spec.clubName(),
+                spec.clubNameKo(),
                 spec.season(),
                 spec.league(),
                 spec.kitType(),

@@ -33,6 +33,10 @@ public class BootsSpecJpaEntity {
     @Column(name = "silo_name")
     private String siloName;
 
+    /** 사일로 한국어 alias (검색 보강용 — ADR-016) */
+    @Column(name = "silo_name_ko")
+    private String siloNameKo;
+
     @Column(name = "release_year")
     private String releaseYear;
 
@@ -50,13 +54,15 @@ public class BootsSpecJpaEntity {
 
     @Builder
     private BootsSpecJpaEntity(Long id, Long catalogItemId, StudType studType,
-                               String siloName, String releaseYear, String surfaceType,
+                               String siloName, String siloNameKo,
+                               String releaseYear, String surfaceType,
                                String extraSpecJson, Instant createdAt,
                                Instant updatedAt) {
         this.id = id;
         this.catalogItemId = catalogItemId;
         this.studType = studType;
         this.siloName = siloName;
+        this.siloNameKo = siloNameKo;
         this.releaseYear = releaseYear;
         this.surfaceType = surfaceType;
         this.extraSpecJson = extraSpecJson;
