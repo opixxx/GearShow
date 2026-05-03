@@ -129,7 +129,8 @@ public enum ErrorCode {
     // 자격증명 실패는 미존재 email 과 비밀번호 불일치를 동일 응답으로 통일 (OWASP — user enumeration 방지)
     ADMIN_INVALID_CREDENTIALS(401, "이메일 또는 비밀번호가 일치하지 않습니다"),
     ADMIN_FORBIDDEN(403, "관리자 권한이 필요합니다"),
-    ADMIN_INVALID_INPUT(400, "유효하지 않은 관리자 정보입니다");
+    ADMIN_INVALID_INPUT(400, "유효하지 않은 관리자 정보입니다"),
+    ADMIN_PASSWORD_SAME_AS_CURRENT(400, "새 비밀번호가 현재 비밀번호와 동일합니다");
 
     private final int status;
     private final String message;

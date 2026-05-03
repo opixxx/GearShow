@@ -26,6 +26,11 @@ public class AdminPersistenceAdapter implements AdminPort {
     }
 
     @Override
+    public Optional<Admin> findById(Long id) {
+        return repository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
     public boolean existsByEmail(String email) {
         return repository.existsByEmail(email);
     }

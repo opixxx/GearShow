@@ -20,6 +20,11 @@ public interface AdminPort {
     Optional<Admin> findByEmail(String email);
 
     /**
+     * id 로 관리자 계정을 조회한다.
+     */
+    Optional<Admin> findById(Long id);
+
+    /**
      * email 의 관리자 계정 존재 여부를 확인한다.
      */
     boolean existsByEmail(String email);

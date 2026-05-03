@@ -53,6 +53,28 @@ public class Admin {
                 .build();
     }
 
+    /**
+     * 비밀번호를 변경하여 새 인스턴스를 반환한다 (불변 객체 패턴).
+     *
+     * <p>평문은 절대 도메인에 들어오지 않는다. application 계층의 PasswordEncoder 로
+     * 해시한 결과를 받아 보유한다.</p>
+     *
+     * @param newPasswordHash 새 비밀번호 해시 (blank 금지)
+     * @return 새 hash 와 갱신된 updatedAt 을 가진 새 Admin 인스턴스 (id/email/createdAt 동일)
+     */
+    public Admin changePassword(String newPasswordHash) {
+        if (newPasswordHash == null || newPasswordHash.isBlank()) {
+            throw new InvalidAdminException();
+        }
+        return Admin.builder()
+                .id(this.id)
+                .email(this.email)
+                .passwordHash(newPasswordHash)
+                .createdAt(this.createdAt)
+                .updatedAt(Instant.now())
+                .build();
+    }
+
     private static void validate(String email, String passwordHash) {
         if (email == null || email.isBlank()
                 || passwordHash == null || passwordHash.isBlank()) {
