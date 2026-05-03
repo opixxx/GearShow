@@ -105,9 +105,13 @@ public class CatalogItem {
 
     /**
      * 카탈로그 아이템 정보를 수정한다.
-     * null이 아닌 필드만 변경된다.
+     * null인 인자는 변경하지 않는다 (기존값 보존).
+     *
+     * <p>{@code fullNameKo} / {@code fullNameEn} 정정 경로 — crawler 가 채운 한국어 alias 가
+     * 잘못 들어온 경우 admin 이 PATCH 로 보정한다 (ADR-016 §B3).</p>
      */
-    public CatalogItem update(String brand, String modelCode, String officialImageUrl) {
+    public CatalogItem update(String brand, String modelCode, String officialImageUrl,
+                              String fullNameKo, String fullNameEn) {
         if (brand != null && brand.isBlank()) {
             throw new InvalidCatalogItemException();
         }
@@ -118,8 +122,8 @@ public class CatalogItem {
                 .brand(brand != null ? brand : this.brand)
                 .modelCode(modelCode != null ? modelCode : this.modelCode)
                 .officialImageUrl(officialImageUrl != null ? officialImageUrl : this.officialImageUrl)
-                .fullNameKo(this.fullNameKo)
-                .fullNameEn(this.fullNameEn)
+                .fullNameKo(fullNameKo != null ? fullNameKo : this.fullNameKo)
+                .fullNameEn(fullNameEn != null ? fullNameEn : this.fullNameEn)
                 .status(this.status)
                 .createdAt(this.createdAt)
                 .updatedAt(Instant.now())

@@ -86,6 +86,58 @@ class CatalogItemTest {
     }
 
     @Nested
+    @DisplayName("update")
+    class UpdateMethod {
+
+        @Test
+        @DisplayName("ADR-016: 한국어 풀네임 정정이 가능하다 (다른 필드 보존)")
+        void update_correctsKoreanFullName_preservesOthers() {
+            // Given
+            CatalogItem item = CatalogItem.create(
+                    Category.BOOTS, "Nike", "AT5889-174", null,
+                    "잘못된 한국어", "Nike Premier 3");
+
+            // When
+            CatalogItem updated = item.update(null, null, null,
+                    "나이키 프리미어 3", null);
+
+            // Then
+            assertThat(updated.getFullNameKo()).isEqualTo("나이키 프리미어 3");
+            assertThat(updated.getFullNameEn()).isEqualTo("Nike Premier 3");
+            assertThat(updated.getBrand()).isEqualTo("Nike");
+            assertThat(updated.getModelCode()).isEqualTo("AT5889-174");
+        }
+
+        @Test
+        @DisplayName("ADR-016: brand 만 수정해도 한국어/영문 풀네임이 보존된다")
+        void update_brandOnly_preservesFullNames() {
+            // Given
+            CatalogItem item = CatalogItem.create(
+                    Category.BOOTS, "Nike", null, null,
+                    "나이키 프리미어 3", "Nike Premier 3");
+
+            // When
+            CatalogItem updated = item.update("Adidas", null, null, null, null);
+
+            // Then
+            assertThat(updated.getBrand()).isEqualTo("Adidas");
+            assertThat(updated.getFullNameKo()).isEqualTo("나이키 프리미어 3");
+            assertThat(updated.getFullNameEn()).isEqualTo("Nike Premier 3");
+        }
+
+        @Test
+        @DisplayName("brand 가 빈 문자열이면 예외가 발생한다")
+        void update_blankBrand_throwsException() {
+            // Given
+            CatalogItem item = CatalogItem.create(Category.BOOTS, "Nike");
+
+            // When & Then
+            assertThatThrownBy(() -> item.update("  ", null, null, null, null))
+                    .isInstanceOf(InvalidCatalogItemException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("deactivate")
     class Deactivate {
 
@@ -102,6 +154,23 @@ class CatalogItemTest {
             assertThat(deactivated.getStatus()).isEqualTo(CatalogStatus.INACTIVE);
             assertThat(deactivated.isActive()).isFalse();
             assertThat(deactivated.getBrand()).isEqualTo("Adidas");
+        }
+
+        @Test
+        @DisplayName("ADR-016: 비활성화해도 한국어/영문 풀네임이 보존된다")
+        void deactivate_preservesFullNames() {
+            // Given
+            CatalogItem item = CatalogItem.create(
+                    Category.BOOTS, "Nike", "AT5889-174", null,
+                    "나이키 프리미어 3", "Nike Premier 3");
+
+            // When
+            CatalogItem deactivated = item.deactivate();
+
+            // Then
+            assertThat(deactivated.isActive()).isFalse();
+            assertThat(deactivated.getFullNameKo()).isEqualTo("나이키 프리미어 3");
+            assertThat(deactivated.getFullNameEn()).isEqualTo("Nike Premier 3");
         }
     }
 }

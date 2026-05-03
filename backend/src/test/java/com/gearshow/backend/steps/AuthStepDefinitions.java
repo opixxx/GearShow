@@ -123,13 +123,29 @@ public class AuthStepDefinitions {
     @And("응답의 data의 {string} 필드는 {string}이다")
     public void 응답_data_필드_값_확인(String fieldName, String expectedValue) {
         Map<String, Object> data = extractData(context.getLastResponse());
-        Object actual = data.get(fieldName);
+        Object actual = resolveNestedPath(data, fieldName);
         if ("null".equals(expectedValue)) {
             // JSON null 을 가리키는 시나리오 표현 — Java null 과 매핑
             assertThat(actual).isNull();
         } else {
             assertThat(actual).asString().isEqualTo(expectedValue);
         }
+    }
+
+    /**
+     * 점(.)으로 구분된 nested path 를 따라 값을 조회한다.
+     * 단순 키("brand")는 그대로 반환하고, nested path("bootsSpec.siloNameKo") 는 재귀 탐색.
+     */
+    @SuppressWarnings("unchecked")
+    private Object resolveNestedPath(Map<String, Object> data, String path) {
+        Object current = data;
+        for (String part : path.split("\\.")) {
+            if (!(current instanceof Map<?, ?> map)) {
+                return null;
+            }
+            current = ((Map<String, Object>) map).get(part);
+        }
+        return current;
     }
 
     // ===== Helper =====

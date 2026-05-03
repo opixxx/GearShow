@@ -6,6 +6,7 @@ import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * 카탈로그 아이템 등록 요청 DTO.
@@ -18,20 +19,33 @@ public record CreateCatalogItemRequest(
         Category category,
 
         @NotBlank(message = "브랜드는 필수입니다")
+        @Size(max = 100, message = "브랜드는 100자 이하여야 합니다")
         String brand,
 
+        @Size(max = 100, message = "모델 코드는 100자 이하여야 합니다")
         String modelCode,
+
         String officialImageUrl,
+
+        @Size(max = 255, message = "한국어 풀네임은 255자 이하여야 합니다")
         String fullNameKo,
+
+        @Size(max = 255, message = "영문 풀네임은 255자 이하여야 합니다")
         String fullNameEn,
+
         BootsSpecRequest bootsSpec,
         UniformSpecRequest uniformSpec
 ) {
 
     public record BootsSpecRequest(
             StudType studType,
+
+            @Size(max = 255, message = "사일로명은 255자 이하여야 합니다")
             String siloName,
+
+            @Size(max = 255, message = "사일로 한국어 alias 는 255자 이하여야 합니다")
             String siloNameKo,
+
             String releaseYear,
             String surfaceType,
             String extraSpecJson
@@ -43,8 +57,12 @@ public record CreateCatalogItemRequest(
      * <p>{@code kitType} 은 ADR-016 에 따라 nullable — 빈티지 유니폼 케이스 허용.</p>
      */
     public record UniformSpecRequest(
+            @Size(max = 255, message = "클럽명은 255자 이하여야 합니다")
             String clubName,
+
+            @Size(max = 255, message = "클럽 한국어 alias 는 255자 이하여야 합니다")
             String clubNameKo,
+
             String season,
             String league,
             KitType kitType,
