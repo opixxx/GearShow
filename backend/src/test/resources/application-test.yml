@@ -72,3 +72,8 @@ gearshow:
 app:
   workflow-polling:
     scheduler-enabled: false
+  # 테스트 전용 admin 부트스트랩 — Cucumber/통합 테스트에서 /api/admin/** 가드 검증용
+  bootstrap:
+    admin:
+      email: cucumber-admin@test.gearshow.com
+      password: cucumber-admin-pw-1234

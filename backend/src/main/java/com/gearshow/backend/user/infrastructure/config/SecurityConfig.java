@@ -1,5 +1,8 @@
 package com.gearshow.backend.user.infrastructure.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gearshow.backend.common.dto.ApiResponse;
+import com.gearshow.backend.common.exception.ErrorCode;
 import com.gearshow.backend.user.infrastructure.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
@@ -9,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -41,6 +45,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ObjectMapper objectMapper;
 
     /**
      * WebSocket 엔드포인트 전용 보안 필터 체인.
@@ -143,18 +148,36 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/users/me/**").authenticated()
                 .requestMatchers("/api/v1/users/me").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/{userId}").permitAll()
+                // 관리자 인증 — 로그인은 인증 없이 접근, 그 외 admin 경로는 ADMIN 권한 필수
+                .requestMatchers("/api/admin/auth/login").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // 나머지는 인증 필요
                 .anyRequest().authenticated();
     }
 
     /**
-     * 인증 실패 시 응답 처리.
+     * 인증/인가 실패 시 응답 처리.
      *
-     * <p>인증되지 않은 요청에 대해 401 을 반환한다.</p>
+     * <ul>
+     *   <li>인증 실패(토큰 없음/유효하지 않음) → 401</li>
+     *   <li>인가 실패(인증은 됐지만 권한 부족, 예: USER 가 /api/admin/** 호출) → 403</li>
+     * </ul>
+     *
+     * <p>{@code accessDeniedHandler} 를 명시적으로 등록하지 않으면 Spring Security 기본 동작이
+     * 환경에 따라 401 로 fallback 되는 경우가 있어, 본 설정에서 명시적으로 403 을 반환하도록 한다.</p>
      */
     private void configureExceptionHandling(HttpSecurity http) throws Exception {
         http.exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                .accessDeniedHandler((request, response, ex) -> {
+                    ErrorCode code = ErrorCode.ADMIN_FORBIDDEN;
+                    response.setStatus(code.getStatus());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.setCharacterEncoding("UTF-8");
+                    objectMapper.writeValue(
+                            response.getWriter(),
+                            ApiResponse.error(code.getStatus(), code.name(), code.getMessage()));
+                }));
     }
 
     /**

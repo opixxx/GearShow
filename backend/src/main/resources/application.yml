@@ -95,6 +95,12 @@ tripo:
 app:
   model-generation:
     daily-limit-per-user: ${MODEL_GENERATION_DAILY_LIMIT:3}
+  # 첫 관리자 부트스트랩 — ApplicationStartedEvent 시점에 1회 INSERT.
+  # 둘 다 비어있으면 skip. 이미 존재하면 skip. 첫 부트스트랩 후 환경변수 제거 권장.
+  bootstrap:
+    admin:
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
 
 # JWT 설정
 jwt:

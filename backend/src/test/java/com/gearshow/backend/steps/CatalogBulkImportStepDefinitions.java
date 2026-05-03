@@ -99,8 +99,13 @@ public class CatalogBulkImportStepDefinitions {
     // ===== Helper =====
 
     private void sendBulkImport(Map<String, Object> body) {
-        String accessToken = context.get("accessToken");
-        apiClient.authenticate(accessToken);
+        // /api/admin/** 는 ADMIN 권한이 필요하므로 ADR-014 도입 후 admin 토큰을 사용한다.
+        // adminAccessToken 이 사전 등록되지 않았다면 기존 일반 사용자 토큰으로 폴백 (호환성용 — 시나리오는 가드 검증 시 명시적으로 admin 사전 조건을 둔다).
+        String token = context.get("adminAccessToken");
+        if (token == null) {
+            token = context.get("accessToken");
+        }
+        apiClient.authenticate(token);
         TestResponse<Map<String, Object>> response = apiClient.post(BULK_IMPORT_PATH, body);
         context.setLastResponse(response);
         apiClient.clearAuth();
