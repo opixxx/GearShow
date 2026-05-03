@@ -1,0 +1,36 @@
+[project]
+name = "kream-crawler"
+version = "0.1.0"
+description = "Kream 카탈로그 크롤러 — GearShow bulk-import API 호환 JSON export"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "requests-mock>=1.11",
+]
+
+[project.scripts]
+kream-crawler = "kream_crawler.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kream_crawler*"]
+
+[tool.setuptools.package-data]
+kream_crawler = ["dictionaries/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
