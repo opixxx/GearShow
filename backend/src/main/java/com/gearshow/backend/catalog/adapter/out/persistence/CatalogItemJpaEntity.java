@@ -14,7 +14,13 @@ import java.time.Instant;
  * 카탈로그 아이템 JPA 엔티티.
  */
 @Entity
-@Table(name = "catalog_item")
+@Table(
+        name = "catalog_item",
+        indexes = {
+                @Index(name = "idx_catalog_item_category_model_code",
+                        columnList = "category, model_code")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CatalogItemJpaEntity {
