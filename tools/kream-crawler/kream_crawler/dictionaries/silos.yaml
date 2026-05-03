@@ -1,0 +1,94 @@
+# 축구화 사일로 사전 — 30개 시작.
+# Kream 상품명에 대한 alias 매칭으로 GearShow BootsSpec.siloName (canonical) 도출.
+# 누락된 사일로는 운영자 검수 단계에서 발견 → 본 파일 보강 → 재크롤링.
+
+- canonical: "Mercurial Superfly"
+  brand: "Nike"
+  aliases: ["mercurial superfly", "머큐리얼 슈퍼플라이"]
+- canonical: "Mercurial Vapor"
+  brand: "Nike"
+  aliases: ["mercurial vapor", "머큐리얼 베이퍼"]
+- canonical: "Phantom GX"
+  brand: "Nike"
+  aliases: ["phantom gx", "팬텀 gx", "팬텀지엑스"]
+- canonical: "Phantom Luna"
+  brand: "Nike"
+  aliases: ["phantom luna", "팬텀 루나"]
+- canonical: "Tiempo Legend"
+  brand: "Nike"
+  aliases: ["tiempo legend", "티엠포 레전드"]
+- canonical: "Premier"
+  brand: "Nike"
+  aliases: ["nike premier"]
+- canonical: "Magista"
+  brand: "Nike"
+  aliases: ["magista", "마지스타"]
+- canonical: "Hypervenom"
+  brand: "Nike"
+  aliases: ["hypervenom", "하이퍼베놈"]
+- canonical: "Predator"
+  brand: "Adidas"
+  aliases: ["predator", "프레데터"]
+- canonical: "Copa Pure"
+  brand: "Adidas"
+  aliases: ["copa pure", "코파 퓨어", "코파퓨어"]
+- canonical: "Copa Mundial"
+  brand: "Adidas"
+  aliases: ["copa mundial", "코파 문디알"]
+- canonical: "X Crazyfast"
+  brand: "Adidas"
+  aliases: ["crazyfast", "크레이지패스트", "x crazyfast"]
+- canonical: "F50"
+  brand: "Adidas"
+  aliases: ["adidas f50"]
+- canonical: "Nemeziz"
+  brand: "Adidas"
+  aliases: ["nemeziz", "네메지즈"]
+- canonical: "Ace 16"
+  brand: "Adidas"
+  aliases: ["ace 16", "에이스 16"]
+- canonical: "Future"
+  brand: "Puma"
+  aliases: ["puma future", "퓨처"]
+- canonical: "Ultra"
+  brand: "Puma"
+  aliases: ["puma ultra", "푸마 울트라"]
+- canonical: "King"
+  brand: "Puma"
+  aliases: ["puma king", "푸마 킹"]
+- canonical: "Morelia Neo"
+  brand: "Mizuno"
+  aliases: ["morelia neo", "모렐리아 네오"]
+- canonical: "Morelia II"
+  brand: "Mizuno"
+  aliases: ["morelia ii", "morelia 2", "모렐리아 2", "모렐리아 II"]
+- canonical: "Rebula"
+  brand: "Mizuno"
+  aliases: ["rebula", "레불라"]
+- canonical: "Monarcida Neo"
+  brand: "Mizuno"
+  aliases: ["monarcida neo", "모나르시다 네오"]
+- canonical: "Furon"
+  brand: "New Balance"
+  aliases: ["furon", "퓨론"]
+- canonical: "Tekela"
+  brand: "New Balance"
+  aliases: ["tekela", "테켈라"]
+- canonical: "442"
+  brand: "New Balance"
+  aliases: ["new balance 442", "뉴발란스 442"]
+- canonical: "Lethal Tigreor"
+  brand: "Asics"
+  aliases: ["lethal tigreor", "리썰 타이거"]
+- canonical: "DS Light"
+  brand: "Asics"
+  aliases: ["ds light", "디에스 라이트"]
+- canonical: "Veloce"
+  brand: "Umbro"
+  aliases: ["veloce", "벨로체"]
+- canonical: "Medusae"
+  brand: "Umbro"
+  aliases: ["medusae", "메두사"]
+- canonical: "Tocco"
+  brand: "Diadora"
+  aliases: ["tocco", "토코"]
