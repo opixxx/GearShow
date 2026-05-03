@@ -13,7 +13,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from kream_crawler.exporter import export
-from kream_crawler.http_client import CrawlerBlockedError, KreamClient
+from kream_crawler.http_client import (
+    CrawlerBlockedError,
+    ForbiddenPathError,
+    KreamClient,
+)
 from kream_crawler.normalizer import (
     CatalogItem,
     compute_match_stats,
@@ -140,7 +144,11 @@ def _run_pipeline(
             break
         try:
             response = client.get(url)
-        except Exception as exc:  # noqa: BLE001 - crawler 전반 안전성 우선
+        except (CrawlerBlockedError, ForbiddenPathError):
+            # 정책 위반은 즉시 상위로 전파 (main 의 except 가 exit code 2 반환).
+            # 차단 응답을 만나도 다음 URL 로 넘어가면 추가 요청으로 차단이 가중됨.
+            raise
+        except Exception as exc:  # noqa: BLE001 - 일시적 네트워크/파싱 실패만 흡수
             LOGGER.warning("상품 페이지 fetch 실패 — url=%s, error=%s", url, exc)
             parse_failed += 1
             continue

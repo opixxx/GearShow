@@ -327,6 +327,32 @@ class TestExtractSeason:
     def test_none(self):
         assert extract_season(None) is None
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # modelCode false positive — code-reviewer Critical
+            "Nike Premier 3 FG White AT5889-174",
+            "Adidas Predator AC9876-001 Pro",
+            "Mercurial Vapor 16 (DJ4977-001)",
+            # 합당하지 않은 year 토큰
+            "Tokens 1500/600 invalid",
+        ],
+    )
+    def test_ignores_model_code_and_implausible_years(self, text):
+        """ADR-017 §D3: SEASON_PATTERN lookaround + year 범위 검증으로 false positive 차단."""
+        assert extract_season(text) is None
+
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("Adidas Predator 24-25 Pro AT5889-174", "24/25"),  # modelCode 가 함께 있어도 정상 시즌만 추출
+            ("Manchester United 2025/2026 Home", "2025/2026"),
+            ("Vintage 1990/91", "1990/91"),
+        ],
+    )
+    def test_extracts_real_season_when_model_code_coexists(self, text, expected):
+        assert extract_season(text) == expected
+
 
 class TestExtractKitType:
     @pytest.mark.parametrize(

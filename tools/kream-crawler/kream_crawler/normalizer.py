@@ -22,7 +22,8 @@ from kream_crawler.product_parser import RawProduct
 LOGGER = logging.getLogger(__name__)
 
 # 시즌 추출 정규식 — '24/25', '24-25', '1988/90' 모두 매칭 (ADR-017 §D3).
-SEASON_PATTERN = re.compile(r"(\d{2,4})[/-](\d{2,4})")
+# lookaround 로 modelCode (예: AT5889-174) 의 dash 부분이 시즌으로 오인식되는 false positive 차단.
+SEASON_PATTERN = re.compile(r"(?<![\w-])(\d{2,4})[/-](\d{2,4})(?![\w-])")
 
 # 킷 타입 영/한 매핑 (ADR-016 KitType 정규값).
 _KIT_TYPE_EN_PATTERN = re.compile(r"\b(HOME|AWAY|THIRD|3RD)\b", re.IGNORECASE)
@@ -249,13 +250,29 @@ def extract_season(text: str | None) -> str | None:
     """ADR-017 §D3: '24/25', '24-25', '1988/90' 등에서 시즌 추출. 매칭 시 'a/b' 형식.
 
     빈티지 4-digit 도 그대로 보존 ('1988/90' → '1988/90').
+
+    SEASON_PATTERN 의 lookaround 로 modelCode dash (예: AT5889-174) 1차 차단 후,
+    추출된 두 토큰의 year 범위를 검증하여 false positive 추가 차단.
     """
     if not text:
         return None
     match = SEASON_PATTERN.search(text)
     if not match:
         return None
-    return f"{match.group(1)}/{match.group(2)}"
+    a, b = match.group(1), match.group(2)
+    if not _is_plausible_season_token(a) or not _is_plausible_season_token(b):
+        return None
+    return f"{a}/{b}"
+
+
+def _is_plausible_season_token(token: str) -> bool:
+    """시즌 토큰이 합당한 year 표기인지 검증 — 2-digit (00-99) 또는 4-digit (1900-2099)."""
+    if len(token) == 2:
+        return token.isdigit()
+    if len(token) == 4:
+        n = int(token)
+        return 1900 <= n <= 2099
+    return False
 
 
 def extract_kit_type(text: str | None) -> str | None:

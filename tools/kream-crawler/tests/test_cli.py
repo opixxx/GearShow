@@ -171,3 +171,69 @@ class TestCrawlerBlockedExitCode:
         )
 
         assert rc == 2
+
+    def test_blocked_inside_pipeline_loop_returns_exit_code_2(self, tmp_path, mocker):
+        """ADR-017 / code-reviewer M5: _run_pipeline 의 fetch 루프에서 차단 시
+        광범위 except 가 삼키지 않고 main 으로 전파 → exit code 2.
+
+        과거 PR #74 에서 같은 패턴 (광범위 except Exception 이 CrawlerBlockedError 삼킴) 회귀 차단.
+        """
+        from kream_crawler.http_client import CrawlerBlockedError
+
+        mocker.patch.object(
+            cli, "discover_boots_product_urls",
+            return_value=[
+                "https://kream.co.kr/products/100",
+                "https://kream.co.kr/products/200",
+            ],
+        )
+        # 첫 fetch 에서 CrawlerBlockedError 발생 → 즉시 중단 (loop 가 두 번째 URL 시도하면 안 됨)
+        mocker.patch.object(
+            cli, "KreamClient",
+            return_value=mocker.Mock(
+                get=mocker.Mock(side_effect=CrawlerBlockedError("403 forbidden")),
+            ),
+        )
+
+        rc = cli.main(
+            [
+                "--category", "boots",
+                "--limit", "2",
+                "--output", str(tmp_path / "blocked.json"),
+            ]
+        )
+
+        assert rc == 2
+
+    def test_forbidden_path_inside_pipeline_returns_exit_code_2(self, tmp_path, mocker):
+        """ForbiddenPathError 도 정책 위반 — 광범위 except 에 삼켜지면 안 됨."""
+        from kream_crawler.http_client import ForbiddenPathError
+
+        mocker.patch.object(
+            cli, "discover_boots_product_urls",
+            return_value=["https://kream.co.kr/products/100"],
+        )
+        mocker.patch.object(
+            cli, "KreamClient",
+            return_value=mocker.Mock(
+                get=mocker.Mock(
+                    side_effect=ForbiddenPathError("/my/* 차단 경로"),
+                ),
+            ),
+        )
+
+        # ForbiddenPathError 는 ValueError 자식이지만 main 의 except CrawlerBlockedError 에는
+        # 잡히지 않으므로 ValueError 로 propagate. 운영 시 fail-fast 가 의도.
+        try:
+            rc = cli.main(
+                [
+                    "--category", "boots",
+                    "--limit", "1",
+                    "--output", str(tmp_path / "forbidden.json"),
+                ]
+            )
+        except ForbiddenPathError:
+            # 정책 위반이 즉시 전파됨 — 광범위 except 에 삼켜지지 않음 (회귀 차단점).
+            return
+        # 만약 rc 가 반환됐다면 광범위 except 에 삼켜진 것 — 회귀.
+        pytest.fail(f"ForbiddenPathError 가 전파되지 않고 rc={rc} 로 종료됨 — 광범위 except 회귀")
