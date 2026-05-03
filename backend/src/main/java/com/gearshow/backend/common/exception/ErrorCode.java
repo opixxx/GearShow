@@ -120,7 +120,10 @@ public enum ErrorCode {
     IDEMPOTENCY_RESPONSE_SERIALIZATION_FAILED(500, "요청 처리 중 오류가 발생했습니다"),
     IDEMPOTENCY_KEY_MISSING_AFTER_ACQUIRE(500, "요청 처리 중 오류가 발생했습니다"),
     IDEMPOTENCY_INVALID_STATUS_TRANSITION(500, "요청 처리 중 오류가 발생했습니다"),
-    MISSING_REQUIRED_HEADER(400, "필수 요청 헤더가 누락되었습니다");
+    MISSING_REQUIRED_HEADER(400, "필수 요청 헤더가 누락되었습니다"),
+
+    // COMMON
+    INTERNAL_ERROR(500, "서버 내부 오류가 발생했습니다");
 
     private final int status;
     private final String message;
