@@ -21,3 +21,34 @@ gearshow:
   redis:
     host: localhost
     port: 6379
+
+# ===========================================
+# 로컬 Tripo 3D 모델 생성 옵션 튜닝 노브
+# ===========================================
+# 목적: 코드 수정·재배포 없이 백엔드 IDE 재기동만으로 Tripo 요청 옵션을 실험하기 위함.
+# 운영 영향: 없음 — application-prod.yml 에는 의도적으로 추가하지 않는다 (운영은 EC2 환경변수가
+#            단일 진실 소스). 이 블록은 application-local 프로파일에서만 적용된다.
+# 시크릿 정책: tripo.api-key / tripo.enabled / AWS_S3_* 는 yml 에 절대 박지 않는다.
+#              자격증명·실연동 스위치는 backend/.env 에서만 주입한다 (.env.example 참고).
+# 우선순위: 환경변수가 yml 보다 우선이다 (Spring Boot 외부 설정 규칙).
+#           실험 시에는 IDE 실행 구성의 환경변수를 바꾸는 게 가장 빠르다.
+#             예: APP_TRIPO_API_TEXTURE_QUALITY=standard ./gradlew bootRun
+#           아래 yml 값은 "기본 노브 위치"를 보여주는 용도이며, 모두 TripoApiProperties /
+#           application.yml 의 default 와 동일한 값을 명시해 동작 변경이 없다.
+# ===========================================
+tripo:
+  # Tripo 모델 버전. 변경 시 Tripo 공식 문서의 발표 버전 ID 를 그대로 사용한다.
+  # 변경 후 백엔드 재기동 필요.
+  model-version: v3.0-20250812
+
+app:
+  tripo-api:
+    # 텍스처 품질. standard(저품질·빠름) / detailed(4K — 유니폼 디테일 향상).
+    # 변경 후 백엔드 재기동 필요.
+    texture-quality: detailed
+    # 메시 폴리곤 수 상한. 낮을수록 GLB 가 가벼워지고 web/Flutter 로딩이 빨라지지만
+    # 너무 낮으면 디테일이 손실된다. 변경 후 백엔드 재기동 필요.
+    face-limit: 200000
+    # 이미지 정렬 모드. default(자유) / align_image(4방향 멀티뷰 일관성 향상 — 권장).
+    # 변경 후 백엔드 재기동 필요.
+    orientation: align_image
