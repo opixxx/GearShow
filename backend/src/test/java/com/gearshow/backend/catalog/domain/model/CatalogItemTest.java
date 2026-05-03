@@ -53,6 +53,36 @@ class CatalogItemTest {
             assertThatThrownBy(() -> CatalogItem.create(Category.UNIFORM, "  "))
                     .isInstanceOf(InvalidCatalogItemException.class);
         }
+
+        @Test
+        @DisplayName("ADR-016: 한국어/영문 풀네임 포함하여 생성한다")
+        void create_withFullNames_returnsItemWithBothNames() {
+            // Given & When
+            CatalogItem item = CatalogItem.create(
+                    Category.BOOTS, "Nike", "AT5889-174", "https://example/img.jpg",
+                    "나이키 프리미어 3 FG 화이트 메탈릭 골드",
+                    "Nike Premier 3 FG White Metallic Gold");
+
+            // Then
+            assertThat(item.getFullNameKo()).isEqualTo("나이키 프리미어 3 FG 화이트 메탈릭 골드");
+            assertThat(item.getFullNameEn()).isEqualTo("Nike Premier 3 FG White Metallic Gold");
+            assertThat(item.getModelCode()).isEqualTo("AT5889-174");
+            assertThat(item.getOfficialImageUrl()).isEqualTo("https://example/img.jpg");
+            assertThat(item.isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("한국어/영문 풀네임은 nullable — 사용자 직접 입력 케이스")
+        void create_withNullFullNames_isAllowed() {
+            // Given & When (사용자 직접 입력 시 풀네임 미제공)
+            CatalogItem item = CatalogItem.create(
+                    Category.UNIFORM, "Adidas", "GR3920", null, null, null);
+
+            // Then
+            assertThat(item.getFullNameKo()).isNull();
+            assertThat(item.getFullNameEn()).isNull();
+            assertThat(item.getBrand()).isEqualTo("Adidas");
+        }
     }
 
     @Nested

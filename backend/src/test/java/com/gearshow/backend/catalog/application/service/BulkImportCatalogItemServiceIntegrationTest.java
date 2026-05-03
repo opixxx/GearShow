@@ -141,6 +141,86 @@ class BulkImportCatalogItemServiceIntegrationTest {
     }
 
     @Nested
+    @DisplayName("ADR-016: 한국어 alias / 빈티지 / 국가대표 페이로드")
+    class SearchFoundationFields {
+
+        @Test
+        @DisplayName("BOOTS 한국어 풀네임 + siloNameKo 가 영속된다")
+        void boots_withKoreanAliases_persistsAll() {
+            // Given
+            CreateCatalogItemCommand boots = new CreateCatalogItemCommand(
+                    Category.BOOTS, "Nike",
+                    "AT5889-174", "https://example/img.jpg",
+                    "나이키 프리미어 3 FG 화이트 메탈릭 골드",
+                    "Nike Premier 3 FG White Metallic Gold",
+                    new BootsSpecCommand(StudType.MG, "Premier", "프리미어",
+                            "2024", "MG", null),
+                    null);
+
+            // When
+            BulkImportCatalogItemResult result = bulkImportUseCase.bulkImport(
+                    new BulkImportCatalogItemCommand(List.of(boots)));
+
+            // Then
+            assertThat(result.created()).isEqualTo(1);
+            var item = catalogItemJpaRepository.findAll().get(0);
+            assertThat(item.getFullNameKo()).isEqualTo("나이키 프리미어 3 FG 화이트 메탈릭 골드");
+            assertThat(item.getFullNameEn()).isEqualTo("Nike Premier 3 FG White Metallic Gold");
+            var spec = bootsSpecJpaRepository.findByCatalogItemId(item.getId()).orElseThrow();
+            assertThat(spec.getSiloNameKo()).isEqualTo("프리미어");
+            assertThat(spec.getStudType()).isEqualTo(StudType.MG);
+        }
+
+        @Test
+        @DisplayName("UNIFORM 빈티지 (kitType null) + clubNameKo 가 영속된다")
+        void uniformVintage_persists() {
+            // Given
+            CreateCatalogItemCommand vintage = new CreateCatalogItemCommand(
+                    Category.UNIFORM, "Adidas",
+                    "VINTAGE-MUFC-8890", null, null, null, null,
+                    new UniformSpecCommand(
+                            "Manchester United", "맨체스터 유나이티드",
+                            "1988/90", "EPL", null, null));
+
+            // When
+            BulkImportCatalogItemResult result = bulkImportUseCase.bulkImport(
+                    new BulkImportCatalogItemCommand(List.of(vintage)));
+
+            // Then
+            assertThat(result.created()).isEqualTo(1);
+            var item = catalogItemJpaRepository.findAll().get(0);
+            var uniform = uniformSpecJpaRepository.findByCatalogItemId(item.getId()).orElseThrow();
+            assertThat(uniform.getClubNameKo()).isEqualTo("맨체스터 유나이티드");
+            assertThat(uniform.getSeason()).isEqualTo("1988/90");
+            assertThat(uniform.getKitType()).isNull();
+        }
+
+        @Test
+        @DisplayName("UNIFORM 국가대표 (league null) 이 영속된다")
+        void uniformNationalTeam_persists() {
+            // Given
+            CreateCatalogItemCommand korea = new CreateCatalogItemCommand(
+                    Category.UNIFORM, "Nike",
+                    "KOREA-2425-HOME", null, null, null, null,
+                    new UniformSpecCommand(
+                            "Korea", "대한민국",
+                            "24-25", null, KitType.HOME, null));
+
+            // When
+            BulkImportCatalogItemResult result = bulkImportUseCase.bulkImport(
+                    new BulkImportCatalogItemCommand(List.of(korea)));
+
+            // Then
+            assertThat(result.created()).isEqualTo(1);
+            var item = catalogItemJpaRepository.findAll().get(0);
+            var uniform = uniformSpecJpaRepository.findByCatalogItemId(item.getId()).orElseThrow();
+            assertThat(uniform.getClubNameKo()).isEqualTo("대한민국");
+            assertThat(uniform.getLeague()).isNull();
+            assertThat(uniform.getKitType()).isEqualTo(KitType.HOME);
+        }
+    }
+
+    @Nested
     @DisplayName("풋살화 등록 — Category.BOOTS + StudType.TF")
     class FutsalRegistration {
 

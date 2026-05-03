@@ -1,5 +1,8 @@
 package com.gearshow.backend.catalog.application.service;
 
+import com.gearshow.backend.catalog.adapter.out.persistence.BootsSpecJpaRepository;
+import com.gearshow.backend.catalog.adapter.out.persistence.CatalogItemJpaRepository;
+import com.gearshow.backend.catalog.adapter.out.persistence.UniformSpecJpaRepository;
 import com.gearshow.backend.catalog.application.dto.*;
 import com.gearshow.backend.catalog.application.port.in.CreateCatalogItemUseCase;
 import com.gearshow.backend.catalog.application.port.in.GetCatalogItemUseCase;
@@ -9,6 +12,7 @@ import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.catalog.domain.exception.DuplicateModelCodeException;
 import com.gearshow.backend.catalog.domain.exception.NotFoundCatalogItemException;
 import com.gearshow.backend.catalog.domain.vo.Category;
+import com.gearshow.backend.catalog.domain.vo.KitType;
 import com.gearshow.backend.catalog.domain.vo.StudType;
 import com.gearshow.backend.support.TestOAuthConfig;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +44,15 @@ class CatalogItemServiceIntegrationTest {
 
     @Autowired
     private UpdateCatalogItemUseCase updateCatalogItemUseCase;
+
+    @Autowired
+    private CatalogItemJpaRepository catalogItemJpaRepository;
+
+    @Autowired
+    private BootsSpecJpaRepository bootsSpecJpaRepository;
+
+    @Autowired
+    private UniformSpecJpaRepository uniformSpecJpaRepository;
 
     private CreateCatalogItemCommand createBootsCommand(String modelCode) {
         return new CreateCatalogItemCommand(
@@ -95,6 +108,77 @@ class CatalogItemServiceIntegrationTest {
             // When & Then
             assertThatThrownBy(() -> createCatalogItemUseCase.create(createBootsCommand("DUPLICATE-001")))
                     .isInstanceOf(DuplicateModelCodeException.class);
+        }
+
+        @Test
+        @DisplayName("ADR-016: BOOTS 등록 시 한국어 풀네임 + 사일로 한국어가 영속된다")
+        void create_boots_persistsKoreanFields() {
+            // Given
+            CreateCatalogItemCommand command = new CreateCatalogItemCommand(
+                    Category.BOOTS, "Nike",
+                    "AT5889-174", "https://example/img.jpg",
+                    "나이키 프리미어 3 FG 화이트 메탈릭 골드",
+                    "Nike Premier 3 FG White Metallic Gold",
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.MG, "Mercurial Superfly", "머큐리얼 슈퍼플라이",
+                            "2024", "MG", null),
+                    null);
+
+            // When
+            CreateCatalogItemResult result = createCatalogItemUseCase.create(command);
+
+            // Then — JpaEntity 까지 한국어 필드 영속 확인
+            var item = catalogItemJpaRepository.findById(result.catalogItemId()).orElseThrow();
+            assertThat(item.getFullNameKo()).isEqualTo("나이키 프리미어 3 FG 화이트 메탈릭 골드");
+            assertThat(item.getFullNameEn()).isEqualTo("Nike Premier 3 FG White Metallic Gold");
+
+            var bootsSpec = bootsSpecJpaRepository.findByCatalogItemId(result.catalogItemId()).orElseThrow();
+            assertThat(bootsSpec.getStudType()).isEqualTo(StudType.MG);
+            assertThat(bootsSpec.getSiloNameKo()).isEqualTo("머큐리얼 슈퍼플라이");
+        }
+
+        @Test
+        @DisplayName("ADR-016: 빈티지 UNIFORM (kitType null) + 한국어 alias 가 영속된다")
+        void create_uniformVintage_persistsNullableKitTypeAndKoreanAlias() {
+            // Given — 1988/90 빈티지 저지, kitType 미명시
+            CreateCatalogItemCommand command = new CreateCatalogItemCommand(
+                    Category.UNIFORM, "Adidas",
+                    "VINTAGE-MUFC-8890", null, null, null, null,
+                    new CreateCatalogItemCommand.UniformSpecCommand(
+                            "Manchester United", "맨체스터 유나이티드",
+                            "1988/90", "EPL", null, null));
+
+            // When
+            CreateCatalogItemResult result = createCatalogItemUseCase.create(command);
+
+            // Then
+            var uniform = uniformSpecJpaRepository.findByCatalogItemId(result.catalogItemId()).orElseThrow();
+            assertThat(uniform.getClubName()).isEqualTo("Manchester United");
+            assertThat(uniform.getClubNameKo()).isEqualTo("맨체스터 유나이티드");
+            assertThat(uniform.getSeason()).isEqualTo("1988/90");
+            assertThat(uniform.getKitType()).isNull();
+        }
+
+        @Test
+        @DisplayName("ADR-016: 국가대표 UNIFORM (league null) 이 영속된다")
+        void create_uniformNationalTeam_persistsNullLeague() {
+            // Given — 대한민국 국가대표
+            CreateCatalogItemCommand command = new CreateCatalogItemCommand(
+                    Category.UNIFORM, "Nike",
+                    "KOREA-2425-HOME", null, null, null, null,
+                    new CreateCatalogItemCommand.UniformSpecCommand(
+                            "Korea", "대한민국",
+                            "24-25", null, KitType.HOME, null));
+
+            // When
+            CreateCatalogItemResult result = createCatalogItemUseCase.create(command);
+
+            // Then
+            var uniform = uniformSpecJpaRepository.findByCatalogItemId(result.catalogItemId()).orElseThrow();
+            assertThat(uniform.getClubName()).isEqualTo("Korea");
+            assertThat(uniform.getClubNameKo()).isEqualTo("대한민국");
+            assertThat(uniform.getLeague()).isNull();
+            assertThat(uniform.getKitType()).isEqualTo(KitType.HOME);
         }
     }
 
