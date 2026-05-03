@@ -1,0 +1,26 @@
+# 브랜드 사전 — 한국어 alias 매칭용 (ADR-017 §D2).
+# 운영 후 누락된 브랜드는 본 파일 보강 → 재크롤링.
+
+- canonical: "Nike"
+  aliases: ["나이키"]
+
+- canonical: "Adidas"
+  aliases: ["아디다스"]
+
+- canonical: "Puma"
+  aliases: ["푸마"]
+
+- canonical: "Mizuno"
+  aliases: ["미즈노"]
+
+- canonical: "New Balance"
+  aliases: ["뉴발란스"]
+
+- canonical: "Asics"
+  aliases: ["아식스"]
+
+- canonical: "Umbro"
+  aliases: ["엄브로"]
+
+- canonical: "Diadora"
+  aliases: ["디아도라"]

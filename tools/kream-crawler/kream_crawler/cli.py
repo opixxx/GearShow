@@ -1,21 +1,33 @@
-"""CLI 진입점 — sitemap → product → normalize → JSON export."""
+"""CLI 진입점 — sitemap → product → normalize → JSON export.
+
+ADR-017: --category boots / uniform 두 카테고리 지원. 통계 집계는
+normalizer.compute_match_stats 에 위임하여 cli 가 dict 키 형태에 결합되지 않도록 분리.
+"""
 
 from __future__ import annotations
 
 import argparse
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from kream_crawler.exporter import export
 from kream_crawler.http_client import CrawlerBlockedError, KreamClient
 from kream_crawler.normalizer import (
     CatalogItem,
+    compute_match_stats,
+    load_brands,
+    load_clubs,
     load_silos,
-    to_bulk_import_item,
+    to_boots_item,
+    to_uniform_item,
 )
 from kream_crawler.product_parser import parse_product_html
-from kream_crawler.sitemap import discover_boots_product_urls
+from kream_crawler.sitemap import (
+    discover_boots_product_urls,
+    discover_uniform_product_urls,
+)
 
 LOGGER = logging.getLogger("kream_crawler")
 
@@ -27,9 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--category",
-        choices=["boots"],
+        choices=["boots", "uniform"],
         required=True,
-        help="크롤링할 카테고리. 본 PR 은 boots 만 지원 (uniform 은 후속 PR).",
+        help="크롤링할 카테고리 — boots / uniform (ADR-017).",
     )
     parser.add_argument(
         "--limit",
@@ -58,10 +70,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
 
-    if args.category != "boots":
-        raise NotImplementedError("uniform 카테고리는 후속 PR 에서 지원합니다.")
-
     try:
+        if args.category == "uniform":
+            return _run_uniform(args)
         return _run_boots(args)
     except CrawlerBlockedError as exc:
         LOGGER.error("크롤러 차단됨 — 운영자 확인 필요: %s", exc)
@@ -69,16 +80,58 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_boots(args: argparse.Namespace) -> int:
-    client = KreamClient(rate_limit_per_sec=args.rate_limit)
     silos = load_silos()
     LOGGER.info("로드한 사일로: %d", len(silos))
 
-    LOGGER.info("sitemap 으로 상품 URL 수집 중...")
-    candidate_urls = discover_boots_product_urls(client, limit=args.limit)
-    LOGGER.info("후보 URL: %d", len(candidate_urls))
+    def normalize(raw: dict) -> CatalogItem:
+        return to_boots_item(raw, silos)
+
+    return _run_pipeline(
+        args,
+        category="BOOTS",
+        discover=discover_boots_product_urls,
+        normalize=normalize,
+        unmatched_label="사일로 매칭 실패 — silos.yaml 보강 가이드:",
+        unmatched_predicate=lambda item: not (item.get("bootsSpec") or {}).get("siloName"),
+    )
+
+
+def _run_uniform(args: argparse.Namespace) -> int:
+    clubs = load_clubs()
+    brands = load_brands()
+    LOGGER.info("로드한 사전: clubs=%d, brands=%d", len(clubs), len(brands))
+
+    def normalize(raw: dict) -> CatalogItem:
+        return to_uniform_item(raw, clubs, brands)
+
+    return _run_pipeline(
+        args,
+        category="UNIFORM",
+        discover=discover_uniform_product_urls,
+        normalize=normalize,
+        unmatched_label="클럽 매칭 실패 — clubs.yaml 보강 가이드:",
+        unmatched_predicate=lambda item: not (item.get("uniformSpec") or {}).get("clubName"),
+    )
+
+
+def _run_pipeline(
+    args: argparse.Namespace,
+    *,
+    category: str,
+    discover: Callable[[KreamClient, int], list[str]],
+    normalize: Callable[[dict], CatalogItem],
+    unmatched_label: str,
+    unmatched_predicate: Callable[[CatalogItem], bool],
+) -> int:
+    """축구화/유니폼 공통 파이프라인 — discover → fetch → parse → normalize → export."""
+    client = KreamClient(rate_limit_per_sec=args.rate_limit)
+
+    LOGGER.info("[%s] 검색 endpoint 으로 상품 URL 수집 중...", category)
+    candidate_urls = discover(client, args.limit)
+    LOGGER.info("[%s] 후보 URL: %d", category, len(candidate_urls))
 
     items: list[CatalogItem] = []
-    silo_unmatched: list[str] = []
+    unmatched: list[str] = []
     fetched = 0
     parse_failed = 0
 
@@ -97,40 +150,37 @@ def _run_boots(args: argparse.Namespace) -> int:
         fetched += 1
 
         raw = parse_product_html(response.text, source_url=url)
-        # Kream 상품 페이지는 SSR HTML 에 카테고리 정보가 노출되지 않으므로
-        # 검색 keyword="축구화" 결과를 신뢰. 비축구화 항목은 운영자 검수에서 제거.
-        item = to_bulk_import_item(raw, silos)
+        item = normalize(raw)
         items.append(item)
 
-        if not item.get("bootsSpec", {}).get("siloName"):
-            silo_unmatched.append(raw.get("name") or url)
+        if unmatched_predicate(item):
+            unmatched.append(raw.get("name") or raw.get("name_ko") or url)
 
-    stud_matched = sum(
-        1 for it in items if it.get("bootsSpec", {}).get("studType")
-    )
-    silo_matched = sum(
-        1 for it in items if it.get("bootsSpec", {}).get("siloName")
-    )
-
+    match_stats = compute_match_stats(items)
     stats = {
+        "category": category,
         "candidateUrls": len(candidate_urls),
         "fetched": fetched,
         "parseFailed": parse_failed,
-        "items": len(items),
-        "siloMatched": silo_matched,
-        "studMatched": stud_matched,
+        **match_stats,
     }
 
     export(items, args.output, stats=stats)
-    LOGGER.info("export 완료 → %s (items=%d)", args.output, len(items))
+    LOGGER.info("[%s] export 완료 → %s (items=%d)", category, args.output, len(items))
     LOGGER.info(
-        "매칭률: silo %d/%d, studType %d/%d",
-        silo_matched, len(items), stud_matched, len(items),
+        "[%s] 매칭률: silo=%d/%d, club=%d/%d, season=%d/%d, kitType=%d/%d, brand=%d/%d, koFullName=%d/%d",
+        category,
+        match_stats["silo_matched"], match_stats["total"],
+        match_stats["club_matched"], match_stats["total"],
+        match_stats["season_extracted"], match_stats["total"],
+        match_stats["kit_type_inferred"], match_stats["total"],
+        match_stats["brand_matched"], match_stats["total"],
+        match_stats["korean_full_name_present"], match_stats["total"],
     )
 
-    if silo_unmatched:
-        LOGGER.warning("사일로 매칭 실패 — silos.yaml 보강 가이드:")
-        for name in silo_unmatched[:20]:
+    if unmatched:
+        LOGGER.warning(unmatched_label)
+        for name in unmatched[:20]:
             LOGGER.warning("  - %s", name)
 
     return 0

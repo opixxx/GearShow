@@ -104,3 +104,13 @@ def discover_boots_product_urls(
 ) -> list[str]:
     """축구화 상품 URL 발견. 검색 endpoint 우선 사용."""
     return discover_boots_product_urls_via_search(client, limit=limit)
+
+
+def discover_uniform_product_urls(
+    client: KreamClient, limit: int = 50, keyword: str = "축구 유니폼"
+) -> list[str]:
+    """유니폼 상품 URL 발견 (ADR-017). 검색 keyword 는 '축구 유니폼' / '저지' 등.
+
+    축구화 흐름과 동일한 검색 SSR HTML 파싱 — keyword 만 교체.
+    """
+    return discover_boots_product_urls_via_search(client, limit=limit, keyword=keyword)

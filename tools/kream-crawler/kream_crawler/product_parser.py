@@ -24,12 +24,32 @@ LOGGER = logging.getLogger(__name__)
 class RawProduct(TypedDict, total=False):
     name: str | None
     name_ko: str | None
+    name_en: str | None
     brand: str | None
     style_code: str | None
     release_date: str | None
     image_url: str | None
     category_path: str | None
     source_url: str | None
+
+
+def parse_keywords(
+    keywords: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Kream `<meta name="keywords">` 의 콤마 구분 토큰을 (modelCode, name_ko, name_en) 으로 분리.
+
+    실측 형식:
+    "AT5889-174,나이키 프리미어 3 FG 화이트 메탈릭 골드,Nike Premier 3 FG White Metallic Gold"
+
+    토큰 < 3 개 또는 빈 입력은 (None, None, None) — 호출자가 fallback (og:title, JSON-LD 등) 책임.
+    1-token 만 있어도 modelCode 로 추정하지 않는다 (오추론보다 누락이 안전).
+    """
+    if not keywords:
+        return None, None, None
+    parts = [p.strip() for p in keywords.split(",")]
+    if len(parts) >= 3:
+        return parts[0] or None, parts[1] or None, parts[2] or None
+    return None, None, None
 
 
 def parse_product_html(html: str, source_url: str | None = None) -> RawProduct:
@@ -46,24 +66,30 @@ def parse_product_html(html: str, source_url: str | None = None) -> RawProduct:
     name = _meta(soup, "og:title")
     image_url = _meta(soup, "og:image")
 
+    # ADR-017 §D1: keywords 메타에서 (modelCode, name_ko, name_en) 추출.
+    # 사전 매칭에 한국어 풀네임이 가장 가치 있는 신호 — JSON-LD/og:title 보다 우선.
+    keywords_model_code, name_ko, name_en = parse_keywords(_meta(soup, "keywords"))
+
     jsonld_product = _extract_jsonld_by_type(soup, "Product")
     jsonld_breadcrumb = _extract_jsonld_by_type(soup, "BreadcrumbList")
 
     style_code = (
-        (jsonld_product or {}).get("sku")
+        keywords_model_code
+        or (jsonld_product or {}).get("sku")
         or _extract_labeled_value(soup, ("스타일 코드", "Style code", "Model"))
     )
     release_date = _extract_labeled_value(soup, ("발매일", "Release date", "출시일"))
     brand = (
         _extract_brand_from_breadcrumb(jsonld_breadcrumb)
         or _extract_labeled_value(soup, ("브랜드", "Brand"))
-        or _guess_brand_from_name(name)
+        or _guess_brand_from_name(name_en or name)
     )
     category_path = _extract_path_from_breadcrumb(jsonld_breadcrumb)
 
     return RawProduct(
         name=name,
-        name_ko=None,
+        name_ko=name_ko,
+        name_en=name_en,
         brand=brand,
         style_code=style_code,
         release_date=_normalize_date(release_date),
