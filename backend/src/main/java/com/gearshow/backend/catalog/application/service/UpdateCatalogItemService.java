@@ -38,7 +38,9 @@ public class UpdateCatalogItemService implements UpdateCatalogItemUseCase {
         CatalogItem updated = item.update(
             command.brand(),
             command.modelCode(),
-            command.officialImageUrl()
+            command.officialImageUrl(),
+            command.fullNameKo(),
+            command.fullNameEn()
         );
         catalogItemPort.save(updated);
 

@@ -122,8 +122,8 @@ class BulkImportCatalogItemServiceTest {
             CreateCatalogItemCommand uniformOk = uniformCommand("UNIFORM-OK");
             CreateCatalogItemCommand bootsDup = bootsCommand("BOOTS-DUP");
             CreateCatalogItemCommand bootsBad = new CreateCatalogItemCommand(
-                    Category.BOOTS, "", "BOOTS-BAD", null,
-                    new BootsSpecCommand(StudType.FG, "Mercurial", "2025", "천연잔디", null),
+                    Category.BOOTS, "", "BOOTS-BAD", null, null, null,
+                    new BootsSpecCommand(StudType.FG, "Mercurial", null, "2025", "천연잔디", null),
                     null);
             List<CreateCatalogItemCommand> items = List.of(bootsOk, uniformOk, bootsDup, bootsBad);
 
@@ -170,15 +170,15 @@ class BulkImportCatalogItemServiceTest {
 
     private static CreateCatalogItemCommand bootsCommand(String modelCode) {
         return new CreateCatalogItemCommand(
-                Category.BOOTS, "Nike", modelCode, null,
-                new BootsSpecCommand(StudType.FG, "Mercurial", "2025", "천연잔디", null),
+                Category.BOOTS, "Nike", modelCode, null, null, null,
+                new BootsSpecCommand(StudType.FG, "Mercurial", null, "2025", "천연잔디", null),
                 null);
     }
 
     private static CreateCatalogItemCommand uniformCommand(String modelCode) {
         return new CreateCatalogItemCommand(
-                Category.UNIFORM, "Nike", modelCode, null,
+                Category.UNIFORM, "Nike", modelCode, null, null, null,
                 null,
-                new UniformSpecCommand("Liverpool", "24-25", "EPL", KitType.HOME, null));
+                new UniformSpecCommand("Liverpool", null, "24-25", "EPL", KitType.HOME, null));
     }
 }

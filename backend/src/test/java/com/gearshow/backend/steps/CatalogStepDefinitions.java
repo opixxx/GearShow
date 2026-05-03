@@ -96,6 +96,59 @@ public class CatalogStepDefinitions {
         context.setLastResponse(apiClient.post("/api/v1/catalogs", request));
     }
 
+    // ===== ADR-016 — 한국어 alias / 빈티지 / 정정 =====
+
+    @Given("한국어 alias 를 포함한 축구화 카탈로그 아이템을 등록한다")
+    public void 한국어_alias_축구화_카탈로그가_등록되어_있다() {
+        한국어_alias_축구화_등록_수행();
+    }
+
+    @When("한국어 alias 를 포함한 축구화 카탈로그 아이템 등록을 요청한다")
+    public void 한국어_alias_축구화_등록_요청() {
+        한국어_alias_축구화_등록_수행();
+    }
+
+    @When("빈티지 유니폼 카탈로그 아이템 등록을 요청한다")
+    public void 빈티지_유니폼_등록_요청() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        // ADR-016: kitType 미명시 (빈티지) 케이스
+        Map<String, Object> request = Map.of(
+                "category", "UNIFORM",
+                "brand", "Adidas",
+                "modelCode", "VINTAGE-MUFC-" + System.currentTimeMillis(),
+                "uniformSpec", Map.of(
+                        "clubName", "Manchester United",
+                        "clubNameKo", "맨체스터 유나이티드",
+                        "season", "1988/90",
+                        "league", "EPL"
+                )
+        );
+
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/catalogs", request);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("catalogItemId", ((Number) data.get("catalogItemId")).longValue());
+        }
+    }
+
+    @When("등록된 카탈로그 아이템의 한국어 풀네임을 {string}로 정정한다")
+    public void 한국어_풀네임_정정(String newFullNameKo) {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Long catalogItemId = context.get("catalogItemId");
+        context.setLastResponse(apiClient.patch(
+                "/api/v1/catalogs/" + catalogItemId,
+                Map.of("fullNameKo", newFullNameKo)));
+        apiClient.clearAuth();
+    }
+
     // ===== Helper =====
 
     /**
@@ -115,6 +168,40 @@ public class CatalogStepDefinitions {
                         "siloName", "Mercurial",
                         "releaseYear", "2025",
                         "surfaceType", "천연잔디"
+                )
+        );
+
+        TestResponse<Map<String, Object>> response = apiClient.post("/api/v1/catalogs", request);
+        context.setLastResponse(response);
+        apiClient.clearAuth();
+
+        if (response.statusCode() == 201) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) response.body().get("data");
+            context.put("catalogItemId", ((Number) data.get("catalogItemId")).longValue());
+        }
+    }
+
+    /**
+     * ADR-016: 한국어 alias 를 포함한 축구화 카탈로그 등록 공통 로직.
+     * Given/When 양쪽에서 재사용한다.
+     */
+    private void 한국어_alias_축구화_등록_수행() {
+        String accessToken = context.get("accessToken");
+        apiClient.authenticate(accessToken);
+
+        Map<String, Object> request = Map.of(
+                "category", "BOOTS",
+                "brand", "Nike",
+                "modelCode", "AT5889-" + System.currentTimeMillis(),
+                "fullNameKo", "나이키 머큐리얼 슈퍼플라이",
+                "fullNameEn", "Nike Mercurial Superfly",
+                "bootsSpec", Map.of(
+                        "studType", "MG",
+                        "siloName", "Mercurial Superfly",
+                        "siloNameKo", "머큐리얼 슈퍼플라이",
+                        "releaseYear", "2024",
+                        "surfaceType", "MG"
                 )
         );
 

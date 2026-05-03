@@ -49,6 +49,8 @@ erDiagram
         string brand
         string modelCode
         string officialImageUrl
+        string fullNameKo "ADR-016 한국어 풀네임 (검색 보강, nullable)"
+        string fullNameEn "ADR-016 영문 풀네임 (검색 보강, nullable)"
         enum catalogStatus
         timestamp createdAt
         timestamp updatedAt
@@ -57,8 +59,9 @@ erDiagram
     BOOTS_SPEC {
         bigint bootsSpecId PK
         bigint catalogItemId FK "FK → CATALOG_ITEM (같은 Aggregate)"
-        enum studType
+        enum studType "FG/SG/AG/TF/IC/MG/HG (ADR-016: MG/HG 추가)"
         string siloName
+        string siloNameKo "ADR-016 사일로 한국어 alias (nullable)"
         string releaseYear
         string surfaceType
         json extraSpecJson
@@ -70,9 +73,10 @@ erDiagram
         bigint uniformSpecId PK
         bigint catalogItemId FK "FK → CATALOG_ITEM (같은 Aggregate)"
         string clubName
+        string clubNameKo "ADR-016 클럽 한국어 alias (nullable)"
         string season
-        string league
-        enum kitType
+        string league "nullable (국가대표)"
+        enum kitType "nullable (ADR-016: 빈티지 케이스)"
         json extraSpecJson
         timestamp createdAt
         timestamp updatedAt
@@ -286,6 +290,8 @@ erDiagram
 | brand | string | NOT NULL | 브랜드명 |
 | modelCode | string | | 모델 코드 |
 | officialImageUrl | string | | 공식 이미지 URL |
+| fullNameKo | varchar(255) | NULL | 한국어 풀네임 (ADR-016 검색 보강용 — crawler 채움) |
+| fullNameEn | varchar(255) | NULL | 영문 풀네임 (ADR-016 검색 보강용 — crawler 채움) |
 | catalogStatus | enum | NOT NULL | 카탈로그 상태 (ACTIVE, INACTIVE 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
@@ -298,8 +304,9 @@ erDiagram
 |:------|:-----|:--------|:-----|
 | bootsSpecId | bigint | PK | 축구화 스펙 고유 식별자 |
 | catalogItemId | bigint | NOT NULL, FK → CATALOG_ITEM, UNIQUE | 카탈로그 아이템 ID |
-| studType | enum | NOT NULL | 스터드 타입 (FG, SG, AG, TF, IC 등) |
+| studType | enum | NOT NULL | 스터드 타입 (FG, SG, AG, TF, IC, MG, HG — ADR-016 MG/HG 추가) |
 | siloName | string | | 사일로 이름 (Mercurial, Predator 등) |
+| siloNameKo | string | NULL | 사일로 한국어 alias (ADR-016 — "머큐리얼 슈퍼플라이" 등) |
 | releaseYear | string | | 출시 연도 |
 | surfaceType | string | | 적합 표면 (천연잔디, 인조잔디 등) |
 | extraSpecJson | json | | 추가 스펙 (무게, 갑피 소재 등) |
@@ -315,9 +322,10 @@ erDiagram
 | uniformSpecId | bigint | PK | 유니폼 스펙 고유 식별자 |
 | catalogItemId | bigint | NOT NULL, FK → CATALOG_ITEM, UNIQUE | 카탈로그 아이템 ID |
 | clubName | string | NOT NULL | 클럽 이름 |
-| season | string | NOT NULL | 시즌 (2024-25 등) |
-| league | string | | 리그 (EPL, LaLiga 등) |
-| kitType | enum | NOT NULL | 킷 타입 (HOME, AWAY, THIRD) |
+| clubNameKo | string | NULL | 클럽 한국어 alias (ADR-016 — "맨체스터 유나이티드", "대한민국" 등) |
+| season | string | NOT NULL | 시즌 (2024-25, 1988/90 등) |
+| league | string | NULL | 리그 (EPL, LaLiga 등 — 국가대표는 NULL) |
+| kitType | enum | NULL | 킷 타입 (HOME, AWAY, THIRD — ADR-016 빈티지는 NULL) |
 | extraSpecJson | json | | 추가 스펙 (소재, 핏 등) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |
