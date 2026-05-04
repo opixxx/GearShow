@@ -132,9 +132,12 @@ def match_X(haystack: str, dictionary: list[X]) -> X | None:
 
 ### 후속 작업
 
-- **PR-B (crawler 안정성)**: defusedxml / 부분 결과 보존 (partial.json) / `except CrawlerBlockedError` re-raise — 별도 PR
-- **사전 보강**: 운영 후 매칭률 보고에 따라 `silos.yaml` / `clubs.yaml` 점진 보강
-- **PR-3 (showcase.search_text 합성)**: catalog 한국어/영문 풀네임을 source 로 검색 텍스트 합성
+- ~~**PR-B (crawler 안정성)**: defusedxml / 부분 결과 보존 (partial.json) / `except CrawlerBlockedError` re-raise~~ — **PR-B 머지 완료** (kream-crawler-hardening). MatchStats NamedTuple 추가 + `_extract_korean_alias` 한글 범위/순서 의존 보강 + silos/brands/clubs 70 entry parametrize 회귀 + AG/IC StudType 케이스 함께.
+- ~~**PR-3 (showcase.search_text 합성)**~~ — PR #77 머지 완료
+- **사전 보강** (운영 사이클): 운영 후 매칭률 보고에 따라 `silos.yaml` / `brands.yaml` / `clubs.yaml` 점진 보강. parametrize 회귀가 yaml 변경을 자동 검증하므로 안전.
+- **TypedDict ↔ Java DTO 자동 회귀 검증** (PR #76 architecture-reviewer Major + code-reviewer S1): backend 빌드 시 `BulkImportCatalogItemRequest` 의 JSON Schema 를 `tools/kream-crawler/contracts/bulk-import-item.schema.json` 으로 export → crawler 측 `jsonschema` 로 export 직전 검증. 양방향 보호 (백엔드 DTO 변경 누락 시 backend CI fail). 별도 PR + ADR — 본 PR 은 docstring 추적 + parametrize 회귀로 충당.
+- **`KreamClient` SRP 분리** (PR #74 code-reviewer Major): RateLimiter / PathPolicy / BlockedStatusGuard 분리. 단일 스레드 도구라 즉시 위협 없음 — 멀티스레드 또는 async 도입 시 리팩토링.
+- **PR-4 (`?keyword=` 검색 API)**: ADR-018 위에서 진행. crawler 와 무관.
 
 ## 참조 매트릭스 (백엔드 contract)
 

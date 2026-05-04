@@ -139,30 +139,37 @@ def _run_pipeline(
     fetched = 0
     parse_failed = 0
 
-    for url in candidate_urls:
-        if len(items) >= args.limit:
-            break
-        try:
-            response = client.get(url)
-        except (CrawlerBlockedError, ForbiddenPathError):
-            # 정책 위반은 즉시 상위로 전파 (main 의 except 가 exit code 2 반환).
-            # 차단 응답을 만나도 다음 URL 로 넘어가면 추가 요청으로 차단이 가중됨.
-            raise
-        except Exception as exc:  # noqa: BLE001 - 일시적 네트워크/파싱 실패만 흡수
-            LOGGER.warning("상품 페이지 fetch 실패 — url=%s, error=%s", url, exc)
-            parse_failed += 1
-            continue
-        if response.status_code != 200:
-            parse_failed += 1
-            continue
-        fetched += 1
+    try:
+        for url in candidate_urls:
+            if len(items) >= args.limit:
+                break
+            try:
+                response = client.get(url)
+            except (CrawlerBlockedError, ForbiddenPathError):
+                # 정책 위반 — 부분 결과 dump 후 즉시 상위로 전파 (PR-B: code-reviewer Major #3).
+                # 차단 응답을 만나도 다음 URL 로 넘어가면 추가 요청으로 차단이 가중됨.
+                # 30개 중 25개 처리 후 차단 시점까지 모은 items 가 영구 유실되는 것을 막는다.
+                _dump_partial(items, args.output, category)
+                raise
+            except Exception as exc:  # noqa: BLE001 - 일시적 네트워크/파싱 실패만 흡수
+                LOGGER.warning("상품 페이지 fetch 실패 — url=%s, error=%s", url, exc)
+                parse_failed += 1
+                continue
+            if response.status_code != 200:
+                parse_failed += 1
+                continue
+            fetched += 1
 
-        raw = parse_product_html(response.text, source_url=url)
-        item = normalize(raw)
-        items.append(item)
+            raw = parse_product_html(response.text, source_url=url)
+            item = normalize(raw)
+            items.append(item)
 
-        if unmatched_predicate(item):
-            unmatched.append(raw.get("name") or raw.get("name_ko") or url)
+            if unmatched_predicate(item):
+                unmatched.append(raw.get("name") or raw.get("name_ko") or url)
+    except Exception:
+        # 예상치 못한 에러도 부분 결과 보존
+        _dump_partial(items, args.output, category)
+        raise
 
     match_stats = compute_match_stats(items)
     stats = {
@@ -170,7 +177,7 @@ def _run_pipeline(
         "candidateUrls": len(candidate_urls),
         "fetched": fetched,
         "parseFailed": parse_failed,
-        **match_stats,
+        **match_stats._asdict(),
     }
 
     export(items, args.output, stats=stats)
@@ -178,12 +185,12 @@ def _run_pipeline(
     LOGGER.info(
         "[%s] 매칭률: silo=%d/%d, club=%d/%d, season=%d/%d, kitType=%d/%d, brand=%d/%d, koFullName=%d/%d",
         category,
-        match_stats["silo_matched"], match_stats["total"],
-        match_stats["club_matched"], match_stats["total"],
-        match_stats["season_extracted"], match_stats["total"],
-        match_stats["kit_type_inferred"], match_stats["total"],
-        match_stats["brand_matched"], match_stats["total"],
-        match_stats["korean_full_name_present"], match_stats["total"],
+        match_stats.silo_matched, match_stats.total,
+        match_stats.club_matched, match_stats.total,
+        match_stats.season_extracted, match_stats.total,
+        match_stats.kit_type_inferred, match_stats.total,
+        match_stats.brand_matched, match_stats.total,
+        match_stats.korean_full_name_present, match_stats.total,
     )
 
     if unmatched:
@@ -192,6 +199,23 @@ def _run_pipeline(
             LOGGER.warning("  - %s", name)
 
     return 0
+
+
+def _dump_partial(items: list, output_path, category: str) -> None:
+    """부분 결과 보존 — fatal 예외 propagate 전 그때까지 모은 items 를 .partial.json 으로 dump.
+
+    items 가 비어있으면 dump 하지 않는다 (빈 파일 노이즈 방지). 운영자는 .partial.json 을
+    검수 후 정식 import 또는 재크롤링 결정.
+    """
+    if not items:
+        return
+    partial_path = output_path.with_suffix(".partial.json")
+    export(items, partial_path, stats={
+        "partial": True,
+        "category": category,
+        "items": len(items),
+    })
+    LOGGER.warning("부분 결과 저장 → %s (%d 건)", partial_path, len(items))
 
 
 def _configure_logging(verbose: bool) -> None:

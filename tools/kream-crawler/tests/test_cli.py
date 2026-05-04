@@ -237,3 +237,73 @@ class TestCrawlerBlockedExitCode:
             return
         # 만약 rc 가 반환됐다면 광범위 except 에 삼켜진 것 — 회귀.
         pytest.fail(f"ForbiddenPathError 가 전파되지 않고 rc={rc} 로 종료됨 — 광범위 except 회귀")
+
+
+class TestPartialResultDump:
+    """PR-B (code-reviewer Major #3): 부분 결과 보존 — fatal 예외 propagate 전 .partial.json dump."""
+
+    def test_blocked_after_partial_progress_dumps_partial_json(self, tmp_path, mocker):
+        """3개 URL 중 2개 fetch 후 차단 발생 → 그때까지 모은 items 가 .partial.json 으로 저장."""
+        from kream_crawler.http_client import CrawlerBlockedError
+
+        urls = [
+            "https://kream.co.kr/products/100",
+            "https://kream.co.kr/products/200",
+            "https://kream.co.kr/products/300",
+        ]
+        mocker.patch.object(cli, "discover_boots_product_urls", return_value=urls)
+
+        # 처음 2개는 정상 응답, 3번째에서 CrawlerBlockedError
+        responses = [
+            _FakeResponse(_boots_fixture_html()),
+            _FakeResponse(_boots_fixture_html()),
+            CrawlerBlockedError("403 forbidden"),
+        ]
+        get_mock = mocker.Mock(side_effect=responses)
+        mocker.patch.object(cli, "KreamClient", return_value=mocker.Mock(get=get_mock))
+
+        output = tmp_path / "boots.json"
+        rc = cli.main([
+            "--category", "boots",
+            "--limit", "10",
+            "--output", str(output),
+        ])
+
+        assert rc == 2  # fatal — main 의 except 가 exit code 2
+        # 정식 output.json 은 생성되지 않음 (fatal 전파 후 export 미수행)
+        assert not output.exists()
+        # .partial.json 이 그때까지 모은 2건으로 생성됨
+        partial = output.with_suffix(".partial.json")
+        assert partial.exists(), "부분 결과 .partial.json 미생성 — code-reviewer Major #3 회귀"
+        payload = json.loads(partial.read_text(encoding="utf-8"))
+        assert payload["stats"]["partial"] is True
+        assert payload["stats"]["category"] == "BOOTS"
+        assert payload["stats"]["items"] == 2
+        assert len(payload["items"]) == 2
+
+    def test_blocked_before_any_progress_does_not_dump_partial_json(self, tmp_path, mocker):
+        """첫 URL 에서 차단 시 모은 items 0건 — 빈 .partial.json 노이즈 회피."""
+        from kream_crawler.http_client import CrawlerBlockedError
+
+        mocker.patch.object(
+            cli, "discover_boots_product_urls",
+            return_value=["https://kream.co.kr/products/100"],
+        )
+        mocker.patch.object(
+            cli, "KreamClient",
+            return_value=mocker.Mock(get=mocker.Mock(
+                side_effect=CrawlerBlockedError("403"),
+            )),
+        )
+
+        output = tmp_path / "boots.json"
+        rc = cli.main([
+            "--category", "boots",
+            "--limit", "10",
+            "--output", str(output),
+        ])
+
+        assert rc == 2
+        assert not output.exists()
+        partial = output.with_suffix(".partial.json")
+        assert not partial.exists(), "0건 상태에서 .partial.json 빈 파일 생성 회귀"

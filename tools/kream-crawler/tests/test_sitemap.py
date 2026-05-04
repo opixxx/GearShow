@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+import pytest
 import requests_mock
 
 from kream_crawler.http_client import KreamClient
@@ -11,6 +12,7 @@ from kream_crawler.sitemap import (
     KREAM_BASE,
     discover_boots_product_urls_via_search,
     discover_uniform_product_urls,
+    fetch_sitemap_index,
 )
 
 
@@ -107,3 +109,35 @@ def test_discover_uniform_custom_keyword_overrides_default():
         urls = discover_uniform_product_urls(client, limit=1, keyword="저지")
 
     assert urls == [f"{KREAM_BASE}/products/888"]
+
+
+# ===== PR-B: defusedxml XXE 보호 회귀 =====
+
+
+def test_fetch_sitemap_index_rejects_external_entity_payload():
+    """PR-B (code-reviewer Major #2): defusedxml 이 외부 entity 참조를 차단한다.
+
+    stdlib xml.etree.ElementTree 는 XXE / billion laughs 에 취약. defusedxml 로 교체했으므로
+    XXE payload 가 EntitiesForbidden / DefusedXmlException 으로 거부되어야 한다.
+    """
+    xxe_payload = (
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '  <sitemap><loc>&xxe;</loc></sitemap>\n'
+        '</sitemapindex>'
+    )
+
+    client = KreamClient()
+    with requests_mock.Mocker() as m:
+        m.get(f"{KREAM_BASE}/sitemap.xml", text=xxe_payload)
+        with pytest.raises(Exception) as exc_info:
+            fetch_sitemap_index(client)
+
+        # defusedxml 의 EntitiesForbidden / DefusedXmlException — 정확한 클래스명은 버전 의존이라
+        # module 또는 클래스 이름으로 검증
+        exc_module = type(exc_info.value).__module__
+        exc_name = type(exc_info.value).__name__
+        assert "defusedxml" in exc_module or "Forbidden" in exc_name, (
+            f"defusedxml 차단 실패 — exc={exc_module}.{exc_name}"
+        )

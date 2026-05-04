@@ -10,7 +10,10 @@ from __future__ import annotations
 import logging
 import re
 from urllib.parse import quote
-from xml.etree import ElementTree as ET
+
+# 외부 사이트 XML 파싱은 defusedxml 사용 — XXE/billion laughs 차단 (PR-B 보강).
+# stdlib xml.etree 는 entity expansion 에 취약하다고 알려져 있어 외부 입력 신뢰 영역엔 부적합.
+from defusedxml import ElementTree as ET
 
 from kream_crawler.http_client import KreamClient
 
