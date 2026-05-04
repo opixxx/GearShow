@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseOutcome;
+import com.gearshow.backend.showcase.application.dto.CatalogSearchSource;
 import com.gearshow.backend.showcase.application.exception.ShowcaseSpecSerializationException;
+import com.gearshow.backend.showcase.application.port.out.LoadCatalogForSearchPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseSpecPort;
@@ -45,6 +47,7 @@ public class CreateShowcaseService {
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
     private final ShowcaseSpecPort showcaseSpecPort;
+    private final LoadCatalogForSearchPort loadCatalogForSearchPort;
     private final ObjectMapper objectMapper;
 
     /**
@@ -72,7 +75,9 @@ public class CreateShowcaseService {
                 primaryImageUrl,
                 command.contentHash()
         );
-        Showcase saved = showcasePort.save(showcase);
+        // ADR-018: 등록 시점 1회 search_text 합성 후 영속.
+        Showcase withSearchText = showcase.changeSearchText(composeSearchText(showcase));
+        Showcase saved = showcasePort.save(withSearchText);
 
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
         saveSpec(saved.getId(), command.category(), command);
@@ -88,6 +93,17 @@ public class CreateShowcaseService {
         Instant threshold = Instant.now().minus(CONTENT_HASH_DEDUP_WINDOW);
         return showcasePort.findRecentByOwnerAndContentHash(
                 command.ownerId(), contentHash, threshold);
+    }
+
+    /**
+     * ADR-018 §D3: catalog 의 한국어 alias + Showcase 직접 입력값을 합성하여 search_text 를 만든다.
+     * catalogItemId 가 없거나 catalog 조회 실패 시 직접 입력값만으로 합성.
+     */
+    private String composeSearchText(Showcase showcase) {
+        CatalogSearchSource source = showcase.getCatalogItemId() != null
+                ? loadCatalogForSearchPort.findCatalogSearchSource(showcase.getCatalogItemId()).orElse(null)
+                : null;
+        return SearchTextComposer.compose(showcase, source);
     }
 
     private void saveImages(Long showcaseId, List<String> imageUrls, int primaryImageIndex) {

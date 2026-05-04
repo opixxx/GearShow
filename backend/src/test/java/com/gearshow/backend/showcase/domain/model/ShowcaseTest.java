@@ -252,4 +252,76 @@ class ShowcaseTest {
                     .isInstanceOf(InvalidShowcaseException.class);
         }
     }
+
+    @Nested
+    @DisplayName("ADR-018: searchText")
+    class SearchTextField {
+
+        @Test
+        @DisplayName("create() 직후 searchText 는 null — application 레이어가 합성 후 주입")
+        void create_searchText_isNullByDefault() {
+            // Given & When
+            Showcase showcase = createShowcase();
+
+            // Then
+            assertThat(showcase.getSearchText()).isNull();
+        }
+
+        @Test
+        @DisplayName("changeSearchText() 가 새 값으로 갱신한다")
+        void changeSearchText_replacesValue() {
+            // Given
+            Showcase showcase = createShowcase();
+
+            // When
+            Showcase updated = showcase.changeSearchText(
+                    "Nike Mercurial 나이키 머큐리얼 슈퍼플라이");
+
+            // Then
+            assertThat(updated.getSearchText())
+                    .isEqualTo("Nike Mercurial 나이키 머큐리얼 슈퍼플라이");
+        }
+
+        @Test
+        @DisplayName("changeSearchText(null) 도 허용 — 합성 누락 시 등록 차단 안 함")
+        void changeSearchText_acceptsNull() {
+            // Given
+            Showcase showcase = createShowcase().changeSearchText("기존 텍스트");
+
+            // When
+            Showcase cleared = showcase.changeSearchText(null);
+
+            // Then
+            assertThat(cleared.getSearchText()).isNull();
+        }
+
+        @Test
+        @DisplayName("update() 흐름에서 searchText 가 보존된다 (재합성은 application 책임)")
+        void update_preservesSearchText() {
+            // Given
+            Showcase showcase = createShowcase()
+                    .changeSearchText("Nike Mercurial 나이키");
+            ShowcaseUpdate update = new ShowcaseUpdate(
+                    "새 제목", null, null, null, null, null, null);
+
+            // When
+            Showcase updated = showcase.update(update);
+
+            // Then — 도메인 레벨 update 는 searchText 유지, 재합성은 application 책임
+            assertThat(updated.getTitle()).isEqualTo("새 제목");
+            assertThat(updated.getSearchText()).isEqualTo("Nike Mercurial 나이키");
+        }
+
+        @Test
+        @DisplayName("상태 전이 (hide/activate/sold/delete) 후에도 searchText 보존")
+        void statusTransitions_preserveSearchText() {
+            // Given
+            Showcase active = createShowcase().changeSearchText("검색용 텍스트");
+
+            // When & Then — ACTIVE → HIDDEN, ACTIVE → DELETED, ACTIVE → SOLD 모두 보존
+            assertThat(active.hide().getSearchText()).isEqualTo("검색용 텍스트");
+            assertThat(active.delete().getSearchText()).isEqualTo("검색용 텍스트");
+            assertThat(active.markAsSold().getSearchText()).isEqualTo("검색용 텍스트");
+        }
+    }
 }

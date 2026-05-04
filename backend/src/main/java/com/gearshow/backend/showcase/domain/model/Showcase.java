@@ -37,6 +37,17 @@ public class Showcase {
     /** 이미지 조합의 SHA-256 해시. 10분 창 내 중복 등록 감지용. null 허용 (기존 데이터 보호). */
     private final ContentHash contentHash;
     private final boolean has3dModel;
+    /**
+     * 검색 보강용 합성 텍스트 (ADR-018).
+     *
+     * <p>catalog 의 fullNameKo/En + brand + siloNameKo/clubNameKo 와 직접 입력값
+     * (brand, modelCode, title, description) 을 공백 join 한 결과. application 의
+     * {@code SearchTextComposer} 가 합성하여 도메인에 주입한다 (도메인은 합성 책임 X).</p>
+     *
+     * <p>nullable — 합성 누락 시 등록 자체는 차단하지 않는다. 후속 PR-4 의 LIKE 검색이
+     * 누락된 행을 검색 결과에서 제외할 뿐.</p>
+     */
+    private final String searchText;
     private final ShowcaseStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -47,6 +58,7 @@ public class Showcase {
                      String title, String description, String userSize,
                      ConditionGrade conditionGrade, int wearCount, boolean forSale,
                      String primaryImageUrl, ContentHash contentHash, boolean has3dModel,
+                     String searchText,
                      ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -63,6 +75,7 @@ public class Showcase {
         this.primaryImageUrl = primaryImageUrl;
         this.contentHash = contentHash;
         this.has3dModel = has3dModel;
+        this.searchText = searchText;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -111,9 +124,25 @@ public class Showcase {
                 .primaryImageUrl(primaryImageUrl)
                 .contentHash(contentHash)
                 .has3dModel(false)
+                .searchText(null)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)
+                .build();
+    }
+
+    /**
+     * 검색 텍스트를 새로 주입한다 (ADR-018).
+     *
+     * <p>application 의 {@code SearchTextComposer} 가 catalog 의 한국어 alias 와
+     * 직접 입력값을 합성하여 호출한다. 도메인은 단순 보존만 담당.</p>
+     *
+     * @param searchText 새 검색 텍스트 (nullable)
+     * @return 변경된 쇼케이스
+     */
+    public Showcase changeSearchText(String searchText) {
+        return toBuilder()
+                .searchText(searchText)
                 .build();
     }
 
@@ -270,6 +299,7 @@ public class Showcase {
                 .primaryImageUrl(this.primaryImageUrl)
                 .contentHash(this.contentHash)
                 .has3dModel(this.has3dModel)
+                .searchText(this.searchText)
                 .status(this.status)
                 .createdAt(this.createdAt)
                 .updatedAt(Instant.now());
