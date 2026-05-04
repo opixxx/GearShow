@@ -604,7 +604,7 @@ class ShowcaseServiceIntegrationTest {
             createAndGetShowcaseId(1L);
 
             // When
-            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(null, 20);
+            PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(null, null, 20);
 
             // Then
             assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);
@@ -642,7 +642,7 @@ class ShowcaseServiceIntegrationTest {
                     command, createFakeImageKeys(2), List.of());
 
             // Then - 첫 번째 이미지(primaryImageIndex=0)의 URL이 설정되어야 함
-            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, null, 20)
                     .data().stream()
                     .filter(s -> s.showcaseId().equals(result.showcaseId()))
                     .findFirst().orElseThrow();
@@ -675,7 +675,7 @@ class ShowcaseServiceIntegrationTest {
             manageShowcaseImageUseCase.reorderImages(showcaseId, 1L, orders);
 
             // Then - primaryImageUrl이 두 번째 이미지의 URL로 변경
-            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, null, 20)
                     .data().stream()
                     .filter(s -> s.showcaseId().equals(showcaseId))
                     .findFirst().orElseThrow();
@@ -690,7 +690,7 @@ class ShowcaseServiceIntegrationTest {
                     createCommand(1L), createFakeImageKeys(1), List.of());
 
             // Then
-            ShowcaseListResult listItem = listShowcasesUseCase.list(null, 20)
+            ShowcaseListResult listItem = listShowcasesUseCase.list(null, null, 20)
                     .data().stream()
                     .filter(s -> s.showcaseId().equals(result.showcaseId()))
                     .findFirst().orElseThrow();

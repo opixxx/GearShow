@@ -52,6 +52,50 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
             @Param("cursorId") Long cursorId,
             Pageable pageable);
 
+    // ── 키워드 검색 (ADR-019) ──
+
+    /**
+     * 키워드 LIKE 매칭 첫 페이지 (ACTIVE, search_text NOT NULL, 최신순).
+     *
+     * <p>ADR-019 §D1: collation {@code utf8mb4_0900_ai_ci} 의 자동 case-insensitive 동작에 의존
+     * (양측 LOWER 제거 — database-optimizer 권고로 함수 호출 cost 제거). search_text 합성 결과
+     * (catalog 한국어/영문 풀네임 + spec 한국어 alias + 직접 입력값) 안에서 부분 문자열 매칭.</p>
+     *
+     * <p><b>NULL 가드</b>: backfill 안 한 기등록 행 (search_text IS NULL) 은 결과에서 자동 제외.
+     * MySQL 옵티마이저 영향은 미미하나 ADR-019 §D4 의 backfill 운영 누락 silent skip 의도 표현.</p>
+     *
+     * <p><b>ESCAPE '\\'</b>: keyword 의 {@code %} / {@code _} / {@code \\} 가 호출자
+     * ({@code ShowcasePersistenceAdapter.escapeLike}) 에서 escape 되어 들어오므로 ESCAPE 명시 필수
+     * (ADR-019 §D1 LIKE 메타문자 처리).</p>
+     *
+     * <p><b>인덱스</b>: 본 PR 시점에는 LIKE 풀스캔 (N&lt;10,000 가정). N≥10,000 도달 시 ADR-019
+     * §D2 의 FULLTEXT(n-gram) 인덱스 도입.</p>
+     */
+    @Query("SELECT s FROM ShowcaseJpaEntity s" +
+            " WHERE s.status = 'ACTIVE'" +
+            " AND s.searchText IS NOT NULL" +
+            " AND s.searchText LIKE CONCAT('%', :keyword, '%') ESCAPE '\\'" +
+            " ORDER BY s.createdAt DESC, s.id DESC")
+    List<ShowcaseJpaEntity> findByKeywordFirstPage(
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    /**
+     * 키워드 LIKE 매칭 커서 페이징 (Keyset Pagination, createdAt DESC, id DESC).
+     */
+    @Query("SELECT s FROM ShowcaseJpaEntity s" +
+            " WHERE s.status = 'ACTIVE'" +
+            " AND s.searchText IS NOT NULL" +
+            " AND s.searchText LIKE CONCAT('%', :keyword, '%') ESCAPE '\\'" +
+            " AND (s.createdAt < :cursorCreatedAt OR" +
+            "   (s.createdAt = :cursorCreatedAt AND s.id < :cursorId))" +
+            " ORDER BY s.createdAt DESC, s.id DESC")
+    List<ShowcaseJpaEntity> findByKeywordWithCursor(
+            @Param("keyword") String keyword,
+            @Param("cursorCreatedAt") Instant cursorCreatedAt,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
     // ── 내 쇼케이스 목록 조회 ──
 
     /**

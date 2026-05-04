@@ -22,6 +22,7 @@ import com.gearshow.backend.showcase.application.port.in.UpdateShowcaseUseCase;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -59,16 +60,22 @@ public class ShowcaseController {
 
     /**
      * 쇼케이스 목록을 조회한다 (최신순).
+     *
+     * <p>ADR-019: {@code keyword} 가 제공되면 {@code search_text} LIKE 매칭 결과만 반환.
+     * 한국어/영문 풀네임 + brand + spec 한국어 alias + 직접 입력값 모두에서 부분 문자열 매칭.</p>
      */
     @GetMapping
     public ApiResponse<PageInfo<ShowcaseListResult>> list(
+            @RequestParam(required = false)
+            @Size(min = 1, max = 100, message = "검색어는 1~100자여야 합니다")
+            String keyword,
             @RequestParam(required = false) String pageToken,
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다")
             @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다")
             int size) {
 
-        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(pageToken, size);
+        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(keyword, pageToken, size);
 
         return ApiResponse.of(200, "쇼케이스 목록 조회 성공", result);
     }

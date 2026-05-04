@@ -65,6 +65,42 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     }
 
     @Override
+    public List<Showcase> findByKeywordFirstPage(String keyword, int size) {
+        // PR-4 보강 (code-reviewer Critical #1): hasNext 판단을 위해 size + 1 조회.
+        // PageInfo.of 가 data.size() <= expectedSize 로 hasNext 결정.
+        return showcaseJpaRepository.findByKeywordFirstPage(
+                        escapeLike(keyword), PageRequest.of(0, size + 1))
+                .stream()
+                .map(showcaseMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Showcase> findByKeywordWithCursor(String keyword, Instant cursorCreatedAt,
+                                                   Long cursorId, int size) {
+        return showcaseJpaRepository.findByKeywordWithCursor(
+                        escapeLike(keyword), cursorCreatedAt, cursorId,
+                        PageRequest.of(0, size + 1))
+                .stream()
+                .map(showcaseMapper::toDomain)
+                .toList();
+    }
+
+    /**
+     * LIKE wildcard ({@code %}, {@code _}, {@code \}) 를 리터럴로 escape (ADR-019 §D1).
+     *
+     * <p>사용자 입력의 {@code %} / {@code _} 가 LIKE 메타문자로 해석되어 의도와 다른 매칭 또는
+     * DoS amplification (예: {@code ?keyword=%} 가 모든 행 매칭) 을 차단. JPQL 의 {@code ESCAPE '\\'}
+     * 와 짝을 이뤄 동작.</p>
+     */
+    private static String escapeLike(String input) {
+        return input
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
+    @Override
     public List<Showcase> findByOwnerIdFirstPage(Long ownerId, int size,
                                                   ShowcaseStatus showcaseStatus) {
         return showcaseJpaRepository.findByOwnerIdFirstPage(
