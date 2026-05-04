@@ -2019,24 +2019,22 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   bool _isForSale = false;
 
   // 축구화 전용
+  // 카탈로그 모드 SPEC 칩에서만 사용. 직접 입력 모드에서는 폼 단순화 정책에 따라 미노출.
   String _studType = 'FG';
   String _bootsSize = '260';
   String? _bootsBrand;
-  String? _bootsSilo;
   String? _releaseYear;
   final _bootsBrandCustomController = TextEditingController();
-  final _bootsSiloCustomController = TextEditingController();
 
   // 유니폼 전용
+  // 카탈로그 모드 SPEC 칩에서만 사용. 직접 입력 모드에서는 폼 단순화 정책에 따라 미노출.
   String _uniformSize = 'L';
   String? _league;
   String? _clubName;
   String? _season;
-  String _kitType = 'HOME';
-  final _modelCodeController = TextEditingController();
-
-  static const _kitTypes = ['HOME', 'AWAY', 'THIRD'];
-  static const _kitTypeLabels = {'HOME': '홈', 'AWAY': '어웨이', 'THIRD': '써드'};
+  // 카탈로그 모드에서 사용자 변경 수단이 없어 항상 default. 페이로드 송신용으로만 보존.
+  // catalog 데이터에 kitType 이 포함되어 있을 때 백엔드에서 우선 사용된다.
+  final String _kitType = 'HOME';
 
   static const _studTypes = ['FG', 'SG', 'AG', 'TF', 'MG', 'HG'];
   static const _bootsSizes = [
@@ -2046,19 +2044,10 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   ];
   static const _uniformSizes = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 
-  // 축구화 브랜드
+  // 축구화 브랜드 (직접 입력 모드 칩에서 사용)
   static const _bootsBrands = [
     'Nike', 'Adidas', 'Puma', 'Mizuno', 'Asics', 'New Balance', '기타',
   ];
-  // 브랜드별 사일로/모델 라인
-  static const _silosByBrand = <String, List<String>>{
-    'Nike': ['Mercurial', 'Tiempo', 'Phantom', '직접 입력'],
-    'Adidas': ['Predator', 'X', 'Copa', 'F50', '직접 입력'],
-    'Puma': ['Future', 'King', 'Ultra', '직접 입력'],
-    'Mizuno': ['Morelia', 'Rebula', '직접 입력'],
-    'Asics': ['DS Light', 'Ultrezza', '직접 입력'],
-    'New Balance': ['Furon', 'Tekela', '직접 입력'],
-  };
   // 출시 연도
   static const _releaseYears = [
     '2026', '2025', '2024', '2023', '2022', '2021', '2020', '직접 입력',
@@ -2164,9 +2153,15 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
     ];
   }
 
-  /// 현재 사이즈 값
-  String get _resolvedSize =>
-      _resolvedCategory == 'BOOTS' ? '${_bootsSize}mm' : _uniformSize;
+  /// 현재 사이즈 값.
+  /// 직접 입력 모드는 사이즈 입력을 받지 않으므로 빈 문자열을 반환한다 (memory: feedback_form_simplicity).
+  /// 백엔드 userSize 는 nullable / not-blank 가 아니므로 빈 문자열 허용.
+  String get _resolvedSize {
+    if (_isManualEntry) {
+      return '';
+    }
+    return _resolvedCategory == 'BOOTS' ? '${_bootsSize}mm' : _uniformSize;
+  }
 
   @override
   void dispose() {
@@ -2174,9 +2169,7 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
     _descriptionController.dispose();
     _wearCountController.dispose();
     _brandController.dispose();
-    _modelCodeController.dispose();
     _bootsBrandCustomController.dispose();
-    _bootsSiloCustomController.dispose();
     _releaseYearCustomController.dispose();
     _leagueCustomController.dispose();
     _clubCustomController.dispose();
@@ -2239,23 +2232,10 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                       _category = v ?? 'BOOTS';
                       // 축구화 초기화
                       _bootsBrand = null;
-                      _bootsSilo = null;
-                      _studType = 'FG';
-                      _bootsSize = '260';
-                      _releaseYear = null;
                       _bootsBrandCustomController.clear();
-                      _bootsSiloCustomController.clear();
                       // 유니폼 초기화
-                      _league = null;
-                      _clubName = null;
-                      _season = null;
                       _uniformBrand = null;
-                      _uniformSize = 'L';
-                      _kitType = 'HOME';
                       _uniformBrandCustomController.clear();
-                      _leagueCustomController.clear();
-                      _clubCustomController.clear();
-                      _seasonCustomController.clear();
                     }),
                   ),
                   const SizedBox(height: 16),
@@ -2275,9 +2255,7 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                           return GestureDetector(
                             onTap: () => setState(() {
                               _bootsBrand = brand;
-                              _bootsSilo = null;
                               _bootsBrandCustomController.clear();
-                              _bootsSiloCustomController.clear();
                             }),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -2299,48 +2277,6 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                         controller: _bootsBrandCustomController,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(labelText: '브랜드명 직접 입력'),
-                      ),
-                    ],
-                    // 사일로/모델 라인 (브랜드 선택 후 표시)
-                    if (_bootsBrand != null && _bootsBrand != '기타' && _silosByBrand.containsKey(_bootsBrand)) ...[
-                      const SizedBox(height: 16),
-                      const Text('사일로', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 44,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _silosByBrand[_bootsBrand]!.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final silo = _silosByBrand[_bootsBrand]![index];
-                            final selected = _bootsSilo == silo;
-                            return GestureDetector(
-                              onTap: () => setState(() {
-                                _bootsSilo = silo;
-                                _bootsSiloCustomController.clear();
-                              }),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: selected ? const Color(0xFF19C37D) : const Color(0xFF111111),
-                                  borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(color: selected ? const Color(0xFF19C37D) : const Color(0xFF3F3F46)),
-                                ),
-                                child: Text(silo, style: TextStyle(color: selected ? Colors.white : const Color(0xFFA1A1AA), fontWeight: FontWeight.w700)),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                    // 직접 입력 모델명 (기타 브랜드 or 직접 입력 사일로)
-                    if (_bootsBrand == '기타' || _bootsSilo == '직접 입력') ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _bootsSiloCustomController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: '모델명 직접 입력'),
                       ),
                     ],
                   ],
@@ -2383,38 +2319,12 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                         decoration: const InputDecoration(labelText: '브랜드명 직접 입력'),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    const Text('킷 타입', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 44,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _kitTypes.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final kit = _kitTypes[index];
-                          final selected = _kitType == kit;
-                          return GestureDetector(
-                            onTap: () => setState(() => _kitType = kit),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: selected ? const Color(0xFF19C37D) : const Color(0xFF111111),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: selected ? const Color(0xFF19C37D) : const Color(0xFF3F3F46)),
-                              ),
-                              child: Text(_kitTypeLabels[kit] ?? kit, style: TextStyle(color: selected ? Colors.white : const Color(0xFFA1A1AA), fontWeight: FontWeight.w700)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                   ],
                 ],
                 const SizedBox(height: 20),
-                // ── 축구화 SPEC ──
-                if (_resolvedCategory == 'BOOTS') ...[
+                // ── 축구화 SPEC (카탈로그 모드 전용) ──
+                // 직접 입력 모드는 폼 단순화 정책상 spec 칩을 노출하지 않는다 (memory: feedback_form_simplicity).
+                if (!_isManualEntry && _resolvedCategory == 'BOOTS') ...[
                   ..._buildChipPicker('스터드 타입', _studTypes, _studType, (v) => setState(() => _studType = v)),
                   const SizedBox(height: 20),
                   ..._buildChipPicker('사이즈 (mm)', _bootsSizes, _bootsSize, (v) => setState(() => _bootsSize = v)),
@@ -2425,8 +2335,9 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                     TextField(controller: _releaseYearCustomController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: '출시 연도 직접 입력 (예: 2019)')),
                   ],
                 ],
-                // ── 유니폼 SPEC ──
-                if (_resolvedCategory == 'UNIFORM') ...[
+                // ── 유니폼 SPEC (카탈로그 모드 전용) ──
+                // 직접 입력 모드는 폼 단순화 정책상 spec 칩을 노출하지 않는다.
+                if (!_isManualEntry && _resolvedCategory == 'UNIFORM') ...[
                   ..._buildOptionalChipPicker('리그', _leagues, _league, (v) => setState(() { _league = v; _clubName = null; _leagueCustomController.clear(); _clubCustomController.clear(); })),
                   if (_league == '직접 입력') ...[
                     const SizedBox(height: 12),
@@ -2450,13 +2361,6 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                   ..._buildChipPicker('사이즈', _uniformSizes, _uniformSize, (v) => setState(() => _uniformSize = v)),
                 ],
                 const SizedBox(height: 20),
-                if (_isManualEntry)
-                  TextField(
-                    controller: _modelCodeController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(labelText: '모델 코드 (선택, 예: DJ4978-001)'),
-                  ),
-                if (_isManualEntry) const SizedBox(height: 16),
                 TextField(
                   controller: _titleController,
                   style: const TextStyle(color: Colors.white),
@@ -2541,7 +2445,9 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                 _showSnack(context, '제목은 필수입니다.');
                 return;
               }
-              // 직접 입력 검증 - 축구화
+              // 직접 입력 검증 — 카테고리/브랜드만 필수 (memory: feedback_form_simplicity).
+              // 사일로/스터드/사이즈/클럽/시즌/킷타입 등 카탈로그성 메타는 catalog 책임이므로
+              // 직접 입력 모드에서는 더 이상 강제하지 않는다.
               if (_isManualEntry && _resolvedCategory == 'BOOTS') {
                 if (_bootsBrand == null) {
                   _showSnack(context, '브랜드를 선택해주세요.');
@@ -2551,17 +2457,7 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                   _showSnack(context, '브랜드명을 입력해주세요.');
                   return;
                 }
-                final needsSilo = _bootsBrand != '기타' && _silosByBrand.containsKey(_bootsBrand);
-                if (needsSilo && _bootsSilo == null) {
-                  _showSnack(context, '사일로를 선택해주세요.');
-                  return;
-                }
-                if ((_bootsBrand == '기타' || _bootsSilo == '직접 입력') && _bootsSiloCustomController.text.trim().isEmpty) {
-                  _showSnack(context, '모델명을 입력해주세요.');
-                  return;
-                }
               }
-              // 직접 입력 검증 - 유니폼
               if (_isManualEntry && _resolvedCategory == 'UNIFORM') {
                 if (_uniformBrand == null) {
                   _showSnack(context, '브랜드를 선택해주세요.');
@@ -2571,24 +2467,8 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                   _showSnack(context, '브랜드명을 입력해주세요.');
                   return;
                 }
-                if (_clubName == null || _clubName!.isEmpty) {
-                  _showSnack(context, '클럽을 선택해주세요.');
-                  return;
-                }
-                if (_clubName == '직접 입력' && _clubCustomController.text.trim().isEmpty) {
-                  _showSnack(context, '클럽명을 입력해주세요.');
-                  return;
-                }
-                if (_season == null || _season!.isEmpty) {
-                  _showSnack(context, '시즌을 선택해주세요.');
-                  return;
-                }
-                if (_season == '직접 입력' && _seasonCustomController.text.trim().isEmpty) {
-                  _showSnack(context, '시즌을 입력해주세요.');
-                  return;
-                }
               }
-              // 직접 입력인 경우 카탈로그 생성
+              // 직접 입력인 경우 임시 카탈로그 생성 (catalog_item_id=0, modelCode 미수집)
               String resolvedBrand;
               if (_isManualEntry && _resolvedCategory == 'BOOTS') {
                 resolvedBrand = _bootsBrand == '기타'
@@ -2605,32 +2485,25 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                 catalogItemId: 0,
                 category: _category,
                 brand: resolvedBrand,
-                modelCode: _modelCodeController.text.trim(),
+                modelCode: '',
                 officialImageUrl: null,
               );
-              // 사일로 resolve
-              String? resolvedSilo;
-              if (_resolvedCategory == 'BOOTS' && _bootsSilo != null) {
-                resolvedSilo = _bootsSilo == '직접 입력' ? _bootsSiloCustomController.text.trim() : _bootsSilo;
-              }
-              // 출시 연도 resolve
+              // 카탈로그 모드 SPEC 칩에서 사용자가 변경한 값을 resolve.
+              // 직접 입력 모드는 spec UI 자체가 미노출이라 모든 값이 default 상태로 남는다 → null 처리.
               String? resolvedYear;
-              if (_releaseYear != null) {
+              if (!_isManualEntry && _releaseYear != null) {
                 resolvedYear = _releaseYear == '직접 입력' ? _releaseYearCustomController.text.trim() : _releaseYear;
               }
-              // 클럽 resolve
               String? resolvedClub;
-              if (_resolvedCategory == 'UNIFORM' && _clubName != null) {
+              if (!_isManualEntry && _resolvedCategory == 'UNIFORM' && _clubName != null) {
                 resolvedClub = _clubName == '직접 입력' ? _clubCustomController.text.trim() : _clubName;
               }
-              // 시즌 resolve
               String? resolvedSeason;
-              if (_resolvedCategory == 'UNIFORM' && _season != null) {
+              if (!_isManualEntry && _resolvedCategory == 'UNIFORM' && _season != null) {
                 resolvedSeason = _season == '직접 입력' ? _seasonCustomController.text.trim() : _season;
               }
-              // 리그 resolve
               String? resolvedLeague;
-              if (_resolvedCategory == 'UNIFORM' && _league != null) {
+              if (!_isManualEntry && _resolvedCategory == 'UNIFORM' && _league != null) {
                 resolvedLeague = _league == '직접 입력' ? _leagueCustomController.text.trim() : _league;
               }
               final draft = ShowcaseDraft(
@@ -2641,13 +2514,12 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                 conditionGrade: _grade,
                 wearCount: int.tryParse(_wearCountController.text.trim()) ?? 0,
                 isForSale: _isForSale,
-                studType: _resolvedCategory == 'BOOTS' ? _studType : null,
-                siloName: resolvedSilo,
+                studType: !_isManualEntry && _resolvedCategory == 'BOOTS' ? _studType : null,
                 releaseYear: resolvedYear,
                 clubName: resolvedClub,
                 season: resolvedSeason,
                 league: resolvedLeague,
-                kitType: _resolvedCategory == 'UNIFORM' ? _kitType : null,
+                kitType: !_isManualEntry && _resolvedCategory == 'UNIFORM' ? _kitType : null,
               );
               Navigator.of(context).pushNamed(
                 '/create/images',
