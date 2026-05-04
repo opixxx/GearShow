@@ -13,7 +13,7 @@ import logging
 import re
 from dataclasses import dataclass
 from importlib import resources
-from typing import TypedDict
+from typing import NamedTuple, TypedDict
 
 import yaml
 
@@ -155,9 +155,12 @@ def load_clubs() -> list[Club]:
 
 
 def match_silo(name: str | None, silos: list[Silo]) -> Silo | None:
-    """상품명에 사일로의 alias 가 포함되면 해당 Silo 반환.
+    """상품명 단일 haystack 에 사일로의 alias 가 포함되면 해당 Silo 반환.
 
-    ADR-017 §D3: longest alias match wins. 동률 시 canonical 알파벳 정렬 (결정성 보장).
+    ADR-017 §D3 매칭 정책 — 단일 haystack:
+    - longest alias match wins
+    - 동률 시 canonical 알파벳 정렬 (결정성 보장)
+    - {@code match_brand} 와 달리 영문/한국어 분리 처리 안 함 (사일로 alias 가 영/한 함께 yaml 에 등재되어 있어 단일 lower 검색이면 충분)
     """
     if not name:
         return None
@@ -176,9 +179,15 @@ def match_silo(name: str | None, silos: list[Silo]) -> Silo | None:
 def match_brand(
     brand_en: str | None, name_ko: str | None, brands: list[Brand]
 ) -> Brand | None:
-    """ADR-017 §D3: 영문 brand canonical 우선 매칭, 실패 시 한국어 alias 매칭.
+    """ADR-017 §D3 매칭 정책 — 영문 우선, 한국어 fallback (직렬):
 
-    name_ko 매칭 시에도 longest match wins + canonical 알파벳 tiebreaker.
+    1. brand_en 의 canonical 정확 일치 시 즉시 반환 (영문 brand 가 1차 신호).
+    2. 실패 시 name_ko 에서 한국어 alias longest match.
+    3. 동률 시 canonical 알파벳 정렬 (결정성).
+
+    {@code match_club} 과 비대칭인 이유: brand 는 영문이 운영 진실의 원천이며 (silos.yaml 의
+    brand 필드, Kream 페이지의 BreadcrumbList) 한국어 alias 는 사용자 직접 입력 케이스에만
+    등장하므로 영문 우선이 합리. 클럽은 영/한 둘 중 하나만 노출되는 케이스가 흔하다.
     """
     if brand_en:
         lower_en = brand_en.lower()
@@ -202,9 +211,15 @@ def match_brand(
 def match_club(
     name_en: str | None, name_ko: str | None, clubs: list[Club]
 ) -> Club | None:
-    """ADR-017 §D3: 영문 canonical / 한국어 alias 양쪽에서 longest match wins.
+    """ADR-017 §D3 매칭 정책 — 영/한 양쪽 검색 (병렬):
 
-    동률 시 canonical 알파벳 정렬 (결정성). 양쪽 모두 매칭되면 더 긴 매칭 우선.
+    1. name_en 과 name_ko 두 haystack 모두에서 canonical / alias 매칭 시도.
+    2. 모든 매칭 후보 중 longest alias match wins.
+    3. 동률 시 canonical 알파벳 정렬 (결정성).
+
+    {@code match_brand} 와 비대칭인 이유: 클럽명은 영/한 둘 중 하나만 노출되는 케이스가
+    실측에 흔하다 ("Manchester United Home" / "맨유 24/25 홈" 둘 다 사용자 입력 가능).
+    영문 우선 직렬로 처리하면 한국어만 있는 입력에서 매칭 실패. 양쪽 병렬 검색이 매칭률↑.
     """
     if not (name_en or name_ko):
         return None
@@ -212,10 +227,15 @@ def match_club(
     matches: list[tuple[int, Club]] = []
     for club in clubs:
         canonical_lower = club.canonical.lower()
+        # PR-B (code-reviewer Major #2): 운영자가 yaml 의 aliases 에 canonical 을
+        # (실수 또는 의도적으로) 포함시키면 같은 club 이 matches 에 두 번 push 되어
+        # 동률 형성으로 의도치 않은 우선순위 변동 발생. canonical 이 alias 와 중복되면
+        # alias 매칭에 위임하고 별도 canonical 매칭 step 을 생략한다.
+        canonical_in_aliases = canonical_lower in club.aliases
         for hay in haystacks:
             if not hay:
                 continue
-            if canonical_lower in hay:
+            if canonical_lower in hay and not canonical_in_aliases:
                 matches.append((len(canonical_lower), club))
             for alias in club.aliases:
                 if alias in hay:
@@ -391,49 +411,99 @@ def to_bulk_import_item(
     return to_boots_item(raw, silos)
 
 
-def _extract_korean_alias(entry: Silo | Club | None) -> str | None:
-    """alias 들 중 한글 문자가 포함된 첫 항목 반환 (없으면 None).
+def _is_korean_char(ch: str) -> bool:
+    """한국어 문자 판정 — 음절 + 자모 + 호환 자모 모두 포함 (PR-B 보강).
 
-    silos.yaml 은 alias 에 영문 lowercase 와 한국어를 함께 가지므로 한글만 골라낸다.
+    이전 구현은 음절 (U+AC00-D7A3, "가-힣") 만 인식해서 자모 ("ㄱㄴㄷ") / 호환 자모를
+    가진 alias (드물지만 yaml 보강 시 가능) 를 영문으로 오인. 본 함수는 세 범위 모두 인식.
+    """
+    code = ord(ch)
+    return (
+        0xAC00 <= code <= 0xD7A3       # 한글 음절 (가-힣)
+        or 0x1100 <= code <= 0x11FF    # 한글 자모
+        or 0x3130 <= code <= 0x318F    # 한글 호환 자모
+    )
+
+
+def _korean_char_count(s: str) -> int:
+    return sum(1 for c in s if _is_korean_char(c))
+
+
+def _extract_korean_alias(entry: Silo | Club | None) -> str | None:
+    """alias 중 한글이 가장 많이 포함된 항목 반환 (없으면 None) — PR-B 보강.
+
+    이전 구현은 yaml 순서의 첫 한글 alias 를 반환했다. 운영자가 yaml 갱신 시 영/한 순서를
+    뒤집으면 의도치 않게 영문 prefix alias 가 한국어로 잡히거나, 첫 한국어 alias 가
+    무시되는 fragile 동작. 본 구현은 한글 char count 기준으로 정렬하여 yaml 순서에 무관.
+
+    동률 시 yaml 등재 순서 우선 (Python sort 가 stable). 한글 음절/자모/호환 자모 모두 인식.
     """
     if entry is None:
         return None
-    for alias in entry.aliases:
-        if any("가" <= ch <= "힣" for ch in alias):
-            return alias
-    return None
+    # walrus 로 한 번의 list 생성 — 한글 char count 0 인 alias 제거 (PR-B 최적화).
+    candidates = [(a, n) for a in entry.aliases if (n := _korean_char_count(a)) > 0]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: -x[1])  # 한글 가장 많은 alias 우선, 동률은 등재 순서
+    return candidates[0][0]
 
 
-def compute_match_stats(items: list[CatalogItem]) -> dict[str, int]:
-    """ADR-017 §D4 매칭률 측정용 통계 — cli 가 normalizer 의 dict 키 형태에 결합되지 않도록 helper 분리.
+class MatchStats(NamedTuple):
+    """ADR-017 §D4 매칭률 통계 — typed contract (PR-B 보강).
+
+    NamedTuple 로 표현하여 cli 가 dict 키 형태에 결합되지 않도록 attribute access 강제.
+    IDE/mypy 가 키 변경을 즉시 감지. 기존 export schema 의 stats dict 호환은
+    {@code stats._asdict()} 로 유지.
+
+    **호환성 명세**: Python 3.7+ 부터 {@code _asdict()} 가 plain {@code dict}
+    (insertion-ordered) 를 반환 — export JSON 의 stats 키 순서가 NamedTuple 필드 선언
+    순서와 동일. 본 프로젝트는 Python 3.11+ (pyproject.toml `requires-python`) 라
+    CPython/PyPy 3.11+ 모두 동일 동작.
+    """
+    total: int
+    silo_matched: int
+    club_matched: int
+    season_extracted: int
+    kit_type_inferred: int
+    brand_matched: int
+    korean_full_name_present: int
+
+
+def compute_match_stats(items: list[CatalogItem]) -> MatchStats:
+    """ADR-017 §D4 매칭률 측정 — cli 가 dict 키 형태에 결합되지 않도록 typed NamedTuple 반환.
 
     각 카운트:
     - total / silo_matched / club_matched / season_extracted / kit_type_inferred
     - brand_matched / korean_full_name_present
     """
-    stats = {
-        "total": len(items),
-        "silo_matched": 0,
-        "club_matched": 0,
-        "season_extracted": 0,
-        "kit_type_inferred": 0,
-        "brand_matched": 0,
-        "korean_full_name_present": 0,
-    }
+    silo_matched = 0
+    club_matched = 0
+    season_extracted = 0
+    kit_type_inferred = 0
+    brand_matched = 0
+    korean_full_name_present = 0
     for item in items:
         if item.get("brand"):
-            stats["brand_matched"] += 1
+            brand_matched += 1
         if item.get("fullNameKo"):
-            stats["korean_full_name_present"] += 1
+            korean_full_name_present += 1
         boots = item.get("bootsSpec")
         if boots and boots.get("siloName"):
-            stats["silo_matched"] += 1
+            silo_matched += 1
         uniform = item.get("uniformSpec")
         if uniform:
             if uniform.get("clubName"):
-                stats["club_matched"] += 1
+                club_matched += 1
             if uniform.get("season"):
-                stats["season_extracted"] += 1
+                season_extracted += 1
             if uniform.get("kitType"):
-                stats["kit_type_inferred"] += 1
-    return stats
+                kit_type_inferred += 1
+    return MatchStats(
+        total=len(items),
+        silo_matched=silo_matched,
+        club_matched=club_matched,
+        season_extracted=season_extracted,
+        kit_type_inferred=kit_type_inferred,
+        brand_matched=brand_matched,
+        korean_full_name_present=korean_full_name_present,
+    )

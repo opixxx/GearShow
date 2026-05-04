@@ -10,7 +10,10 @@ from __future__ import annotations
 import logging
 import re
 from urllib.parse import quote
-from xml.etree import ElementTree as ET
+
+# 외부 사이트 XML 파싱은 defusedxml 사용 — XXE/billion laughs 차단 (PR-B 보강).
+# stdlib xml.etree 는 entity expansion 에 취약하다고 알려져 있어 외부 입력 신뢰 영역엔 부적합.
+from defusedxml import ElementTree as ET
 
 from kream_crawler.http_client import KreamClient
 
@@ -31,7 +34,10 @@ def fetch_sitemap_index(client: KreamClient, sitemap_url: str = SITEMAP_URL) -> 
     """
     response = client.get(sitemap_url)
     response.raise_for_status()
-    root = ET.fromstring(response.content)
+    # forbid_dtd=True: DTD declaration 자체 금지 (PR-B test-writer M1).
+    # defusedxml default 는 forbid_dtd=False 라 DTD 안의 external SYSTEM 참조를
+    # 차단하지 못한다. 정상 Kream sitemap 에는 DOCTYPE 없으므로 안전하게 강제.
+    root = ET.fromstring(response.content, forbid_dtd=True)
 
     if root.tag.endswith("sitemapindex"):
         return [
@@ -56,7 +62,7 @@ def fetch_product_urls(
     """
     response = client.get(sitemap_url)
     response.raise_for_status()
-    root = ET.fromstring(response.content)
+    root = ET.fromstring(response.content, forbid_dtd=True)
 
     urls: list[str] = []
     for loc in root.findall(f"{SITEMAP_NS}url/{SITEMAP_NS}loc"):
