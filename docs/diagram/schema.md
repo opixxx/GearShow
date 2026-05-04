@@ -97,6 +97,7 @@ erDiagram
         boolean isForSale
         string primaryImageUrl "비정규화: 대표 이미지 URL"
         boolean has3dModel "비정규화: 3D 모델 보유 여부"
+        string searchText "ADR-018 검색 합성 (catalog 한국어 alias + 직접 입력값, VARCHAR(1000), nullable)"
         enum showcaseStatus
         timestamp createdAt
         timestamp updatedAt
@@ -348,6 +349,7 @@ erDiagram
 | isForSale | boolean | NOT NULL, DEFAULT false | 판매 여부 |
 | primaryImageUrl | string | | 대표 이미지 URL (비정규화, 목록 조회 최적화) |
 | has3dModel | boolean | NOT NULL, DEFAULT false | 3D 모델 보유 여부 (비정규화, 목록 조회 최적화) |
+| search_text | varchar(1000) | NULL | 검색 합성 텍스트 (ADR-018 — catalog 한국어 alias + 직접 입력값) |
 | showcaseStatus | enum | NOT NULL | 쇼케이스 상태 (ACTIVE, HIDDEN, SOLD, DELETED) |
 | createdAt | timestamp | NOT NULL | 생성일시 |
 | updatedAt | timestamp | NOT NULL | 수정일시 |

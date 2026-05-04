@@ -45,6 +45,7 @@ public class CreateShowcaseService {
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
     private final ShowcaseSpecPort showcaseSpecPort;
+    private final SearchTextSynchronizer searchTextSynchronizer;
     private final ObjectMapper objectMapper;
 
     /**
@@ -58,6 +59,8 @@ public class CreateShowcaseService {
         if (existing.isPresent()) {
             log.info("content_hash 기반 중복 등록 감지 — 기존 쇼케이스 반환. ownerId={}, showcaseId={}",
                     command.ownerId(), existing.get().getId());
+            // ADR-018 §D4: dedup hit 시 기존 search_text 유지 — 재합성 안 함.
+            // 중복 등록을 update 로 변질시키지 않는다.
             return new CreateShowcaseOutcome.Deduped(existing.get());
         }
 
@@ -72,7 +75,9 @@ public class CreateShowcaseService {
                 primaryImageUrl,
                 command.contentHash()
         );
-        Showcase saved = showcasePort.save(showcase);
+        // ADR-018: 등록 시점 1회 search_text 합성 후 영속.
+        Showcase withSearchText = searchTextSynchronizer.synchronize(showcase);
+        Showcase saved = showcasePort.save(withSearchText);
 
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
         saveSpec(saved.getId(), command.category(), command);
