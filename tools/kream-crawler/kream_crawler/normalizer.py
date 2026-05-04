@@ -227,10 +227,15 @@ def match_club(
     matches: list[tuple[int, Club]] = []
     for club in clubs:
         canonical_lower = club.canonical.lower()
+        # PR-B (code-reviewer Major #2): 운영자가 yaml 의 aliases 에 canonical 을
+        # (실수 또는 의도적으로) 포함시키면 같은 club 이 matches 에 두 번 push 되어
+        # 동률 형성으로 의도치 않은 우선순위 변동 발생. canonical 이 alias 와 중복되면
+        # alias 매칭에 위임하고 별도 canonical 매칭 step 을 생략한다.
+        canonical_in_aliases = canonical_lower in club.aliases
         for hay in haystacks:
             if not hay:
                 continue
-            if canonical_lower in hay:
+            if canonical_lower in hay and not canonical_in_aliases:
                 matches.append((len(canonical_lower), club))
             for alias in club.aliases:
                 if alias in hay:
@@ -435,8 +440,8 @@ def _extract_korean_alias(entry: Silo | Club | None) -> str | None:
     """
     if entry is None:
         return None
-    candidates = [(a, _korean_char_count(a)) for a in entry.aliases]
-    candidates = [(a, n) for a, n in candidates if n > 0]
+    # walrus 로 한 번의 list 생성 — 한글 char count 0 인 alias 제거 (PR-B 최적화).
+    candidates = [(a, n) for a in entry.aliases if (n := _korean_char_count(a)) > 0]
     if not candidates:
         return None
     candidates.sort(key=lambda x: -x[1])  # 한글 가장 많은 alias 우선, 동률은 등재 순서
@@ -449,6 +454,11 @@ class MatchStats(NamedTuple):
     NamedTuple 로 표현하여 cli 가 dict 키 형태에 결합되지 않도록 attribute access 강제.
     IDE/mypy 가 키 변경을 즉시 감지. 기존 export schema 의 stats dict 호환은
     {@code stats._asdict()} 로 유지.
+
+    **호환성 명세**: Python 3.7+ 부터 {@code _asdict()} 가 plain {@code dict}
+    (insertion-ordered) 를 반환 — export JSON 의 stats 키 순서가 NamedTuple 필드 선언
+    순서와 동일. 본 프로젝트는 Python 3.11+ (pyproject.toml `requires-python`) 라
+    CPython/PyPy 3.11+ 모두 동일 동작.
     """
     total: int
     silo_matched: int

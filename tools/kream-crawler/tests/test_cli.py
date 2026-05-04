@@ -206,7 +206,12 @@ class TestCrawlerBlockedExitCode:
         assert rc == 2
 
     def test_forbidden_path_inside_pipeline_returns_exit_code_2(self, tmp_path, mocker):
-        """ForbiddenPathError 도 정책 위반 — 광범위 except 에 삼켜지면 안 됨."""
+        """ForbiddenPathError 도 정책 위반 — main 의 except 가 잡아 exit code 2.
+
+        PR-B (code-reviewer Minor): 이전엔 main 이 CrawlerBlockedError 만 잡고 ForbiddenPathError
+        는 unhandled 로 traceback + exit 1 이었으나, 둘 다 정책 위반의 운영 의미가 동등하므로
+        main 이 두 예외 모두 잡아 exit 2 반환하도록 통합.
+        """
         from kream_crawler.http_client import ForbiddenPathError
 
         mocker.patch.object(
@@ -222,21 +227,15 @@ class TestCrawlerBlockedExitCode:
             ),
         )
 
-        # ForbiddenPathError 는 ValueError 자식이지만 main 의 except CrawlerBlockedError 에는
-        # 잡히지 않으므로 ValueError 로 propagate. 운영 시 fail-fast 가 의도.
-        try:
-            rc = cli.main(
-                [
-                    "--category", "boots",
-                    "--limit", "1",
-                    "--output", str(tmp_path / "forbidden.json"),
-                ]
-            )
-        except ForbiddenPathError:
-            # 정책 위반이 즉시 전파됨 — 광범위 except 에 삼켜지지 않음 (회귀 차단점).
-            return
-        # 만약 rc 가 반환됐다면 광범위 except 에 삼켜진 것 — 회귀.
-        pytest.fail(f"ForbiddenPathError 가 전파되지 않고 rc={rc} 로 종료됨 — 광범위 except 회귀")
+        rc = cli.main(
+            [
+                "--category", "boots",
+                "--limit", "1",
+                "--output", str(tmp_path / "forbidden.json"),
+            ]
+        )
+
+        assert rc == 2
 
 
 class TestPartialResultDump:
@@ -276,10 +275,17 @@ class TestPartialResultDump:
         partial = output.with_suffix(".partial.json")
         assert partial.exists(), "부분 결과 .partial.json 미생성 — code-reviewer Major #3 회귀"
         payload = json.loads(partial.read_text(encoding="utf-8"))
+        # partial 식별 키
         assert payload["stats"]["partial"] is True
         assert payload["stats"]["category"] == "BOOTS"
         assert payload["stats"]["items"] == 2
         assert len(payload["items"]) == 2
+        # PR-B (test-writer M4): partial.json schema 가 정식 export 와 통일 — MatchStats 키 포함.
+        # 운영자가 정식 import 와 같은 jq pipeline 을 쓸 수 있다.
+        assert "total" in payload["stats"]
+        assert payload["stats"]["total"] == 2
+        assert "silo_matched" in payload["stats"]
+        assert "korean_full_name_present" in payload["stats"]
 
     def test_blocked_before_any_progress_does_not_dump_partial_json(self, tmp_path, mocker):
         """첫 URL 에서 차단 시 모은 items 0건 — 빈 .partial.json 노이즈 회피."""
@@ -307,3 +313,42 @@ class TestPartialResultDump:
         assert not output.exists()
         partial = output.with_suffix(".partial.json")
         assert not partial.exists(), "0건 상태에서 .partial.json 빈 파일 생성 회귀"
+
+    def test_blocked_dumps_partial_only_once_no_double_invocation(self, tmp_path, mocker):
+        """PR-B (code-reviewer Major #1 + architecture-reviewer Major #1):
+        inner except 의 raise 가 outer except 에 다시 catch 되어 _dump_partial 이 두 번
+        호출되던 결함의 회귀 차단점. outer 에서 (CrawlerBlockedError, ForbiddenPathError)
+        를 명시 re-raise 하여 1회만 호출되어야 함.
+        """
+        from kream_crawler.http_client import CrawlerBlockedError
+
+        urls = [
+            "https://kream.co.kr/products/100",
+            "https://kream.co.kr/products/200",
+        ]
+        mocker.patch.object(cli, "discover_boots_product_urls", return_value=urls)
+
+        responses = [
+            _FakeResponse(_boots_fixture_html()),
+            CrawlerBlockedError("403 forbidden"),
+        ]
+        mocker.patch.object(
+            cli, "KreamClient",
+            return_value=mocker.Mock(get=mocker.Mock(side_effect=responses)),
+        )
+
+        # _dump_partial 을 spy 로 감싸 호출 횟수 검증
+        dump_spy = mocker.patch.object(cli, "_dump_partial", wraps=cli._dump_partial)
+
+        output = tmp_path / "boots.json"
+        rc = cli.main([
+            "--category", "boots",
+            "--limit", "10",
+            "--output", str(output),
+        ])
+
+        assert rc == 2
+        # 이중 호출 방지 — 정확히 1회만 호출되어야 함
+        assert dump_spy.call_count == 1, (
+            f"_dump_partial 이 {dump_spy.call_count} 회 호출됨 — outer except 중복 회귀"
+        )

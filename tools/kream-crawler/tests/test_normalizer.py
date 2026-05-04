@@ -66,6 +66,24 @@ class TestExtractStudType:
     def test_none(self):
         assert extract_stud_type(None) is None
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "ICONIC Edition",        # IC 가 단어 내부
+            "BAGGY Pants",           # AG 가 단어 내부
+            "PICTURE Frame",         # IC 가 단어 내부
+            "TAGLINE Marker",        # AG 가 단어 내부
+            "MGMT Album",            # MG 가 단어 내부
+        ],
+    )
+    def test_substring_false_positive_blocked_by_word_boundary(self, name):
+        """PR-B (test-writer M3): AG/IC/MG 가 단어 내부에 우연히 포함될 때 false positive 차단.
+
+        STUD_PATTERN 의 \b word boundary 가 단어 경계에서만 매칭하므로 위 케이스 모두 None.
+        word boundary 가 미래에 변경되면 즉시 회귀 신호.
+        """
+        assert extract_stud_type(name) is None
+
 
 class TestInferSurfaceType:
     @pytest.mark.parametrize(
@@ -323,6 +341,30 @@ class TestMatchClub:
         c = match_club("Random Title", "랜덤", self.clubs)
         assert c is None
 
+    def test_canonical_in_aliases_does_not_double_count(self):
+        """PR-B (code-reviewer Major #2): aliases 에 canonical 이 (실수 또는 의도적으로)
+        포함되어도 동일 club 을 matches 에 두 번 push 하지 않는다 — 동률 형성으로 인한
+        의도치 않은 우선순위 변동 차단.
+
+        clubs.yaml 운영자가 canonical 을 alias 에 명시 포함시킬 가능성에 대비한 가드.
+        """
+        clubs = [
+            # canonical "Korea" 가 aliases 에 lowercase 로 포함된 케이스
+            Club("Korea", ("korea", "대한민국", "한국"), None),
+            # 다른 club 의 alias 는 더 긴 케이스 — 정상이면 longer 가 이김
+            Club("KoreaRepublic", ("kr-team",), None),
+        ]
+        # haystack 에 "korea" 와 "kr-team" 모두 포함 — kr-team(7) > korea(5)
+        c = match_club("Korea Football Team kr-team Edition", None, clubs)
+        assert c.canonical == "KoreaRepublic", (
+            "canonical+alias 중복 카운트가 발생하면 Korea 가 동률 형성으로 우선순위가 흔들릴 수 있음"
+        )
+
+        # 또한 단일 club 시나리오: canonical+alias 모두 lower haystack 에 매칭되어도 결정성 유지
+        single_club = [Club("Korea", ("korea", "대한민국"), None)]
+        c2 = match_club("Korea National Team Home", None, single_club)
+        assert c2.canonical == "Korea"
+
 
 class TestExtractSeason:
     @pytest.mark.parametrize(
@@ -560,6 +602,45 @@ class TestComputeMatchStats:
         assert stats.korean_full_name_present == 2
         # 기존 export schema 호환 — _asdict() 로 dict 변환 가능
         assert stats._asdict()["total"] == 3
+
+    def test_empty_list_returns_all_zero_stats(self):
+        """test-writer M2: 빈 list 입력 회귀 — 모든 카운트 0."""
+        stats = compute_match_stats([])
+        assert stats.total == 0
+        assert stats.silo_matched == 0
+        assert stats.club_matched == 0
+        assert stats.season_extracted == 0
+        assert stats.kit_type_inferred == 0
+        assert stats.brand_matched == 0
+        assert stats.korean_full_name_present == 0
+
+    def test_boots_only_items_do_not_count_uniform_stats(self):
+        """test-writer M2: BOOTS-only items — uniform 통계는 0 유지 (None safe)."""
+        items: list = [
+            {
+                "category": "BOOTS",
+                "brand": "Nike",
+                "fullNameKo": "나이키 머큐리얼",
+                "bootsSpec": {"siloName": "Mercurial Superfly"},
+                "uniformSpec": None,    # uniform 없음 — clubName/season/kitType 카운트 0
+            },
+            {
+                "category": "BOOTS",
+                "brand": "Adidas",
+                "fullNameKo": None,
+                "bootsSpec": {"siloName": None},
+                "uniformSpec": None,
+            },
+        ]
+        stats = compute_match_stats(items)
+        assert stats.total == 2
+        assert stats.silo_matched == 1
+        assert stats.brand_matched == 2
+        assert stats.korean_full_name_present == 1
+        # uniform 카운트 모두 0
+        assert stats.club_matched == 0
+        assert stats.season_extracted == 0
+        assert stats.kit_type_inferred == 0
 
 
 # ===== PR-B: _extract_korean_alias 한글 범위 + 순서 무관 회귀 =====

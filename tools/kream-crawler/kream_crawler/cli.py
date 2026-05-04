@@ -78,8 +78,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.category == "uniform":
             return _run_uniform(args)
         return _run_boots(args)
-    except CrawlerBlockedError as exc:
-        LOGGER.error("크롤러 차단됨 — 운영자 확인 필요: %s", exc)
+    except (CrawlerBlockedError, ForbiddenPathError) as exc:
+        # 정책 위반 — 둘 다 운영자 검수 신호 (exit code 2).
+        # CrawlerBlockedError: 403/429 차단 응답. ForbiddenPathError: robots.txt 금지 경로.
+        LOGGER.error("크롤러 차단/금지 경로 — 운영자 확인 필요: %s", exc)
         return 2
 
 
@@ -166,8 +168,12 @@ def _run_pipeline(
 
             if unmatched_predicate(item):
                 unmatched.append(raw.get("name") or raw.get("name_ko") or url)
+    except (CrawlerBlockedError, ForbiddenPathError):
+        # 정책 위반은 inner 에서 이미 _dump_partial 1회 호출 후 raise — 중복 dump 회피.
+        # (code-reviewer Major #1 + architecture-reviewer Major #1: outer except 중복 호출 차단)
+        raise
     except Exception:
-        # 예상치 못한 에러도 부분 결과 보존
+        # inner 가 잡지 않는 예상치 못한 에러 (parse/normalize 등) 만 outer 가 부분 결과 보존
         _dump_partial(items, args.output, category)
         raise
 
@@ -201,19 +207,25 @@ def _run_pipeline(
     return 0
 
 
-def _dump_partial(items: list, output_path, category: str) -> None:
+def _dump_partial(items: list[CatalogItem], output_path: Path, category: str) -> None:
     """부분 결과 보존 — fatal 예외 propagate 전 그때까지 모은 items 를 .partial.json 으로 dump.
 
     items 가 비어있으면 dump 하지 않는다 (빈 파일 노이즈 방지). 운영자는 .partial.json 을
     검수 후 정식 import 또는 재크롤링 결정.
+
+    stats schema 는 정식 export 와 통일 (test-writer M4):
+    `{partial: True, category, items, **MatchStats._asdict()}`. 운영자가 정식 import 와
+    같은 jq pipeline 을 쓸 수 있다. `partial: True` 키 존재 여부로 두 schema 구분.
     """
     if not items:
         return
     partial_path = output_path.with_suffix(".partial.json")
+    match_stats = compute_match_stats(items)
     export(items, partial_path, stats={
         "partial": True,
         "category": category,
         "items": len(items),
+        **match_stats._asdict(),
     })
     LOGGER.warning("부분 결과 저장 → %s (%d 건)", partial_path, len(items))
 

