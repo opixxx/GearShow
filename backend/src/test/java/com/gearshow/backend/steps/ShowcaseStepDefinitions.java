@@ -143,6 +143,25 @@ public class ShowcaseStepDefinitions {
         context.setLastResponse(apiClient.get("/api/v1/showcases"));
     }
 
+    // ===== ADR-019: ?keyword= 검색 =====
+
+    @When("등록된 쇼케이스의 title 키워드로 쇼케이스 목록을 검색한다")
+    public void 등록된_쇼케이스_title_키워드_검색() {
+        // 직전 등록 시 사용한 title 의 일부 키워드를 사용해 LIKE 매칭 시도
+        // ShowcaseStepDefinitions 의 등록 헬퍼가 title 에 사용하는 prefix "테스트" 로 검색
+        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=테스트"));
+    }
+
+    @When("빈 키워드로 쇼케이스 목록을 검색한다")
+    public void 빈_키워드_검색() {
+        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword="));
+    }
+
+    @When("매칭되지 않는 키워드 {string} 로 쇼케이스 목록을 검색한다")
+    public void 매칭되지_않는_키워드_검색(String keyword) {
+        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=" + keyword));
+    }
+
     @When("내 쇼케이스 목록을 조회한다")
     public void 내_쇼케이스_목록_조회() {
         String accessToken = context.get("accessToken");

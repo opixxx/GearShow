@@ -65,6 +65,25 @@ public class ShowcasePersistenceAdapter implements ShowcasePort {
     }
 
     @Override
+    public List<Showcase> findByKeywordFirstPage(String keyword, int size) {
+        return showcaseJpaRepository.findByKeywordFirstPage(
+                        keyword, PageRequest.of(0, size))
+                .stream()
+                .map(showcaseMapper::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Showcase> findByKeywordWithCursor(String keyword, Instant cursorCreatedAt,
+                                                   Long cursorId, int size) {
+        return showcaseJpaRepository.findByKeywordWithCursor(
+                        keyword, cursorCreatedAt, cursorId, PageRequest.of(0, size))
+                .stream()
+                .map(showcaseMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<Showcase> findByOwnerIdFirstPage(Long ownerId, int size,
                                                   ShowcaseStatus showcaseStatus) {
         return showcaseJpaRepository.findByOwnerIdFirstPage(

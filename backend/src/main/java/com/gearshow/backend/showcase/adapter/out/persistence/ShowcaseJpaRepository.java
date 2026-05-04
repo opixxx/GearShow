@@ -52,6 +52,43 @@ public interface ShowcaseJpaRepository extends JpaRepository<ShowcaseJpaEntity, 
             @Param("cursorId") Long cursorId,
             Pageable pageable);
 
+    // ── 키워드 검색 (ADR-019) ──
+
+    /**
+     * 키워드 LIKE 매칭 첫 페이지 (ACTIVE, search_text NOT NULL, 최신순).
+     *
+     * <p>ADR-019 §D1: 대소문자 무시 (LOWER). search_text 합성 결과 (catalog 한국어/영문 풀네임
+     * + spec 한국어 alias + 직접 입력값) 안에서 부분 문자열 매칭. backfill 안 된 기등록 행
+     * (search_text IS NULL) 은 결과에서 제외.</p>
+     *
+     * <p><b>인덱스</b>: 본 PR 시점에는 LIKE 풀스캔 (N&lt;10,000 가정). N≥10,000 도달 시 ADR-019
+     * §D2 의 FULLTEXT(n-gram) 인덱스 도입.</p>
+     */
+    @Query("SELECT s FROM ShowcaseJpaEntity s" +
+            " WHERE s.status = 'ACTIVE'" +
+            " AND s.searchText IS NOT NULL" +
+            " AND LOWER(s.searchText) LIKE LOWER(CONCAT('%', :keyword, '%'))" +
+            " ORDER BY s.createdAt DESC, s.id DESC")
+    List<ShowcaseJpaEntity> findByKeywordFirstPage(
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    /**
+     * 키워드 LIKE 매칭 커서 페이징 (Keyset Pagination, createdAt DESC, id DESC).
+     */
+    @Query("SELECT s FROM ShowcaseJpaEntity s" +
+            " WHERE s.status = 'ACTIVE'" +
+            " AND s.searchText IS NOT NULL" +
+            " AND LOWER(s.searchText) LIKE LOWER(CONCAT('%', :keyword, '%'))" +
+            " AND (s.createdAt < :cursorCreatedAt OR" +
+            "   (s.createdAt = :cursorCreatedAt AND s.id < :cursorId))" +
+            " ORDER BY s.createdAt DESC, s.id DESC")
+    List<ShowcaseJpaEntity> findByKeywordWithCursor(
+            @Param("keyword") String keyword,
+            @Param("cursorCreatedAt") Instant cursorCreatedAt,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
     // ── 내 쇼케이스 목록 조회 ──
 
     /**

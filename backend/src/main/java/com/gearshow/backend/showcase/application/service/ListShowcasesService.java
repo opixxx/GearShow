@@ -39,13 +39,19 @@ public class ListShowcasesService implements ListShowcasesUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageInfo<ShowcaseListResult> list(String pageToken, int size) {
+    public PageInfo<ShowcaseListResult> list(String keyword, String pageToken, int size) {
         List<Showcase> showcases;
+        // ADR-019 §D1: keyword 가 non-blank 이면 search_text LIKE 분기, 그 외엔 기존 ACTIVE 전체 목록
+        boolean hasKeyword = keyword != null && !keyword.isBlank();
         if (pageToken == null) {
-            showcases = showcasePort.findAllFirstPage(size);
+            showcases = hasKeyword
+                    ? showcasePort.findByKeywordFirstPage(keyword, size)
+                    : showcasePort.findAllFirstPage(size);
         } else {
             Pair<Instant, Long> cursor = PageTokenUtil.decode(pageToken, Instant.class, Long.class);
-            showcases = showcasePort.findAllWithCursor(cursor.getLeft(), cursor.getRight(), size);
+            showcases = hasKeyword
+                    ? showcasePort.findByKeywordWithCursor(keyword, cursor.getLeft(), cursor.getRight(), size)
+                    : showcasePort.findAllWithCursor(cursor.getLeft(), cursor.getRight(), size);
         }
 
         return toPageInfo(showcases, size);
