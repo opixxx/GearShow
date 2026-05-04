@@ -67,8 +67,23 @@ public final class SearchTextComposer {
             return null;
         }
         if (joined.length() > MAX_LENGTH) {
-            return joined.substring(0, MAX_LENGTH);
+            return safeSubstring(joined, MAX_LENGTH);
         }
         return joined;
+    }
+
+    /**
+     * UTF-16 surrogate pair 중간에서 절단되어 invalid UTF-16 이 만들어지는 것을 방지.
+     *
+     * <p>BMP 외 문자 (이모지, CJK Extension B 등) 는 high+low surrogate 두 char 로 저장된다.
+     * {@code substring(0, max)} 가 high surrogate 직후를 자르면 low surrogate 가 떨어져 나가
+     * MySQL utf8mb4 INSERT 시 데이터 손실 또는 예외 발생. high surrogate 를 만나면 한 char 앞당긴다.</p>
+     */
+    private static String safeSubstring(String text, int max) {
+        int cut = max;
+        if (Character.isHighSurrogate(text.charAt(cut - 1))) {
+            cut = cut - 1;
+        }
+        return text.substring(0, cut);
     }
 }

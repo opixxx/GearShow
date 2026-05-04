@@ -6,6 +6,7 @@ import com.gearshow.backend.catalog.application.port.out.UniformSpecPort;
 import com.gearshow.backend.catalog.domain.model.BootsSpec;
 import com.gearshow.backend.catalog.domain.model.CatalogItem;
 import com.gearshow.backend.catalog.domain.model.UniformSpec;
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CatalogSearchSource;
 import com.gearshow.backend.showcase.application.port.out.LoadCatalogForSearchPort;
 import lombok.RequiredArgsConstructor;
@@ -44,12 +45,21 @@ public class LoadCatalogForSearchService implements LoadCatalogForSearchPort {
     }
 
     private CatalogSearchSource toSearchSource(CatalogItem item, Long catalogItemId) {
-        String siloNameKo = bootsSpecPort.findByCatalogItemId(catalogItemId)
-                .map(BootsSpec::getSiloNameKo)
-                .orElse(null);
-        String clubNameKo = uniformSpecPort.findByCatalogItemId(catalogItemId)
-                .map(UniformSpec::getClubNameKo)
-                .orElse(null);
+        // ADR-018 §D2 + database-optimizer M1: BOOTS/UNIFORM 분기로 무관 spec 조회 회피.
+        // CatalogItem 의 category 가 BOOTS 면 uniform_spec 조회는 항상 결과 없음 (UNIQUE 제약상 0행),
+        // UNIFORM 도 마찬가지이므로 단일 spec read 만 수행한다.
+        String siloNameKo = null;
+        String clubNameKo = null;
+        Category category = item.getCategory();
+        if (category == Category.BOOTS) {
+            siloNameKo = bootsSpecPort.findByCatalogItemId(catalogItemId)
+                    .map(BootsSpec::getSiloNameKo)
+                    .orElse(null);
+        } else if (category == Category.UNIFORM) {
+            clubNameKo = uniformSpecPort.findByCatalogItemId(catalogItemId)
+                    .map(UniformSpec::getClubNameKo)
+                    .orElse(null);
+        }
         return new CatalogSearchSource(
                 item.getFullNameKo(),
                 item.getFullNameEn(),

@@ -124,6 +124,9 @@ public class Showcase {
                 .primaryImageUrl(primaryImageUrl)
                 .contentHash(contentHash)
                 .has3dModel(false)
+                // ADR-018 §D4: create() 직후 searchText 는 null. application 의
+                // SearchTextSynchronizer 가 합성 후 changeSearchText 로 주입한다.
+                // 명시적 null 은 Builder default 변경에도 invariant 를 보호하기 위함.
                 .searchText(null)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
@@ -132,12 +135,17 @@ public class Showcase {
     }
 
     /**
-     * 검색 텍스트를 새로 주입한다 (ADR-018).
+     * 검색 텍스트를 새로 주입한다 (ADR-018 §D2).
      *
-     * <p>application 의 {@code SearchTextComposer} 가 catalog 의 한국어 alias 와
+     * <p>application 의 {@code SearchTextSynchronizer} 가 catalog 의 한국어 alias 와
      * 직접 입력값을 합성하여 호출한다. 도메인은 단순 보존만 담당.</p>
      *
-     * @param searchText 새 검색 텍스트 (nullable)
+     * <p><b>ADR-018 §D4 invariant</b>: 본 메서드 외에는 search_text 를 변경하지 않는다.
+     * 다른 changeXxx (changePrimaryImageUrl, changeHas3dModel, changeForSale) 와 상태 전이
+     * 메서드 (hide/activate/markAsSold/delete) 는 모두 {@code toBuilder()} 로 기존 search_text 를
+     * 보존한다. 이를 우회하면 search_text stale 위험 발생.</p>
+     *
+     * @param searchText 새 검색 텍스트 (nullable — 합성 누락 시 등록 자체는 차단하지 않음)
      * @return 변경된 쇼케이스
      */
     public Showcase changeSearchText(String searchText) {

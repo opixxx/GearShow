@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseCommand;
 import com.gearshow.backend.showcase.application.dto.CreateShowcaseOutcome;
-import com.gearshow.backend.showcase.application.dto.CatalogSearchSource;
 import com.gearshow.backend.showcase.application.exception.ShowcaseSpecSerializationException;
-import com.gearshow.backend.showcase.application.port.out.LoadCatalogForSearchPort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseImagePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcasePort;
 import com.gearshow.backend.showcase.application.port.out.ShowcaseSpecPort;
@@ -47,7 +45,7 @@ public class CreateShowcaseService {
     private final ShowcasePort showcasePort;
     private final ShowcaseImagePort showcaseImagePort;
     private final ShowcaseSpecPort showcaseSpecPort;
-    private final LoadCatalogForSearchPort loadCatalogForSearchPort;
+    private final SearchTextSynchronizer searchTextSynchronizer;
     private final ObjectMapper objectMapper;
 
     /**
@@ -61,6 +59,8 @@ public class CreateShowcaseService {
         if (existing.isPresent()) {
             log.info("content_hash 기반 중복 등록 감지 — 기존 쇼케이스 반환. ownerId={}, showcaseId={}",
                     command.ownerId(), existing.get().getId());
+            // ADR-018 §D4: dedup hit 시 기존 search_text 유지 — 재합성 안 함.
+            // 중복 등록을 update 로 변질시키지 않는다.
             return new CreateShowcaseOutcome.Deduped(existing.get());
         }
 
@@ -76,7 +76,7 @@ public class CreateShowcaseService {
                 command.contentHash()
         );
         // ADR-018: 등록 시점 1회 search_text 합성 후 영속.
-        Showcase withSearchText = showcase.changeSearchText(composeSearchText(showcase));
+        Showcase withSearchText = searchTextSynchronizer.synchronize(showcase);
         Showcase saved = showcasePort.save(withSearchText);
 
         saveImages(saved.getId(), imageUrls, command.primaryImageIndex());
@@ -93,17 +93,6 @@ public class CreateShowcaseService {
         Instant threshold = Instant.now().minus(CONTENT_HASH_DEDUP_WINDOW);
         return showcasePort.findRecentByOwnerAndContentHash(
                 command.ownerId(), contentHash, threshold);
-    }
-
-    /**
-     * ADR-018 §D3: catalog 의 한국어 alias + Showcase 직접 입력값을 합성하여 search_text 를 만든다.
-     * catalogItemId 가 없거나 catalog 조회 실패 시 직접 입력값만으로 합성.
-     */
-    private String composeSearchText(Showcase showcase) {
-        CatalogSearchSource source = showcase.getCatalogItemId() != null
-                ? loadCatalogForSearchPort.findCatalogSearchSource(showcase.getCatalogItemId()).orElse(null)
-                : null;
-        return SearchTextComposer.compose(showcase, source);
     }
 
     private void saveImages(Long showcaseId, List<String> imageUrls, int primaryImageIndex) {

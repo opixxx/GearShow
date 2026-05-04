@@ -137,6 +137,106 @@ class SearchTextComposerTest {
     }
 
     @Test
+    @DisplayName("code-reviewer M1: UTF-16 surrogate pair 가 1000번째 경계에 걸리면 한 char 앞당겨 절단 (invalid UTF-16 방지)")
+    void compose_overMaxLength_safeSubstring_doesNotSplitSurrogatePair() {
+        // Given — description 에 BMP 외 문자 (이모지) 가 1000자 경계에 걸리도록 배치.
+        // 본 테스트는 결정적: prefix=999 char, then "😀" (2 char surrogate pair) 시작.
+        // → 1000번째 char 가 high surrogate 가 되어 일반 substring(0, 1000) 시 invalid UTF-16.
+        String prefix = "가".repeat(999);                 // BMP, 1 char/code unit
+        String emojiTail = "😀".repeat(50);     // 각 이모지 = 2 chars (high+low surrogate)
+        String description = prefix + emojiTail;
+        Showcase showcase = newShowcase(null, "N", null, "T", description);
+
+        // When
+        String text = SearchTextComposer.compose(showcase, null);
+
+        // Then — 마지막 char 가 high surrogate 가 아니어야 함 (invalid UTF-16 차단)
+        assertThat(text).isNotNull();
+        // truncate 결과가 최대 MAX_LENGTH 이하 (high surrogate 만나면 한 char 앞당김)
+        assertThat(text.length()).isLessThanOrEqualTo(SearchTextComposer.MAX_LENGTH);
+        char lastChar = text.charAt(text.length() - 1);
+        assertThat(Character.isHighSurrogate(lastChar))
+                .as("마지막 char 가 high surrogate 면 invalid UTF-16 — 절단 보정 실패")
+                .isFalse();
+    }
+
+    // ===== 분기 명시 분리 (test-writer M1) =====
+
+    @Test
+    @DisplayName("ADR-018 §D3: BOOTS-only — siloNameKo 만 채워짐, clubNameKo=null 명시 검증")
+    void compose_bootsOnlySource_includesSiloOnly() {
+        Showcase showcase = newShowcase(100L, "Nike", "M1", "T", "D");
+        CatalogSearchSource source = new CatalogSearchSource(
+                "나이키 머큐리얼", "Nike Mercurial", "Nike",
+                "머큐리얼 슈퍼플라이",  // siloNameKo
+                null);                  // clubNameKo
+
+        String text = SearchTextComposer.compose(showcase, source);
+
+        assertThat(text)
+                .contains("머큐리얼 슈퍼플라이")
+                .contains("나이키 머큐리얼");
+    }
+
+    @Test
+    @DisplayName("ADR-018 §D3: UNIFORM-only — clubNameKo 만 채워짐, siloNameKo=null 명시 검증")
+    void compose_uniformOnlySource_includesClubOnly() {
+        Showcase showcase = newShowcase(200L, "Adidas", "M2", "T", "D");
+        CatalogSearchSource source = new CatalogSearchSource(
+                "맨유 24/25", "Manchester United 24/25", "Adidas",
+                null,                       // siloNameKo
+                "맨체스터 유나이티드");        // clubNameKo
+
+        String text = SearchTextComposer.compose(showcase, source);
+
+        assertThat(text)
+                .contains("맨체스터 유나이티드")
+                .contains("Manchester United");
+    }
+
+    @Test
+    @DisplayName("ADR-018 §D3: 제너릭 catalog — siloNameKo/clubNameKo 둘 다 null, fullNameKo/En 만 합성")
+    void compose_genericCatalogSource_includesOnlyFullNames() {
+        Showcase showcase = newShowcase(300L, "Generic", null, "Title", null);
+        CatalogSearchSource source = new CatalogSearchSource(
+                "한국어 풀네임", "English Full Name", "Generic",
+                null, null);
+
+        String text = SearchTextComposer.compose(showcase, source);
+
+        assertThat(text)
+                .contains("한국어 풀네임")
+                .contains("English Full Name")
+                .contains("Generic")
+                .contains("Title");
+    }
+
+    @Test
+    @DisplayName("ADR-018 §D3: 비포함 토큰 부정 검증 — userSize 는 합성 대상 외")
+    void compose_doesNotIncludeUserSize() {
+        // Given — userSize 에 unique marker 토큰을 두어 충돌 없이 부정 검증
+        Showcase showcase = Showcase.builder()
+                .ownerId(1L)
+                .category(com.gearshow.backend.catalog.domain.vo.Category.BOOTS)
+                .brand("Nike")
+                .modelCode("M1")
+                .title("Title")
+                .description("Description")
+                .userSize("USER-SIZE-MARKER-XYZ")    // 다른 토큰과 충돌 없는 unique
+                .conditionGrade(com.gearshow.backend.showcase.domain.vo.ConditionGrade.A)
+                .wearCount(123456789)                  // wearCount 는 String 으로 안 들어가지만 명시
+                .build();
+
+        // When
+        String text = SearchTextComposer.compose(showcase, null);
+
+        // Then — userSize / wearCount 는 합성 대상 외 (ADR-018 §D3 합성 토큰 목록 명시)
+        assertThat(text)
+                .doesNotContain("USER-SIZE-MARKER-XYZ")
+                .doesNotContain("123456789");
+    }
+
+    @Test
     @DisplayName("showcase 가 null 이면 IllegalArgumentException")
     void compose_nullShowcase_throws() {
         assertThatThrownBy(() -> SearchTextComposer.compose(null, null))

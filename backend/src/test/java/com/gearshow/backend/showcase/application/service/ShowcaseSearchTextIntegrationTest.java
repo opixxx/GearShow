@@ -135,9 +135,9 @@ class ShowcaseSearchTextIntegrationTest {
     }
 
     @Test
-    @DisplayName("ADR-018 §D3: 한국어 부분 매칭 LIKE — '머큐리얼' 키워드로 catalog 연결 Showcase 검색 가능")
+    @DisplayName("ADR-018 §D3: 한국어 부분 매칭 — '머큐리얼' 키워드로 catalog 연결 Showcase 만 search_text 에 포함")
     void searchText_supportsKoreanLikeMatching() {
-        // Given — catalog 등록 + Showcase 2건 (catalog 연결)
+        // Given — catalog 등록 + Showcase 2건 (catalog 연결 / 미연결)
         Long catalogItemId = createCatalogItemUseCase.create(new CreateCatalogItemCommand(
                 Category.BOOTS, "Nike",
                 "AT5889-MERC", null,
@@ -165,15 +165,60 @@ class ShowcaseSearchTextIntegrationTest {
                         null, null, null, UUID.randomUUID().toString()),
                 fakeImageKeys(1), List.of()).showcaseId();
 
-        // When — JpaRepository 직접 LIKE (PR-4 검색 API 가 사용할 패턴 시뮬레이션)
-        List<ShowcaseJpaEntity> all = showcaseJpaRepository.findAll();
-        List<Long> matchedIds = all.stream()
-                .filter(e -> e.getSearchText() != null && e.getSearchText().contains("머큐리얼"))
-                .map(ShowcaseJpaEntity::getId)
-                .toList();
+        // When/Then — code-reviewer M3: findAll() 의 cross-class 데이터 누적 위험 회피 위해
+        // findById 로 두 행만 직접 검증.
+        ShowcaseJpaEntity matching = showcaseJpaRepository.findById(matchingId).orElseThrow();
+        ShowcaseJpaEntity unrelated = showcaseJpaRepository.findById(unrelatedId).orElseThrow();
 
-        // Then — catalog 연결 Showcase 만 매칭
-        assertThat(matchedIds).contains(matchingId).doesNotContain(unrelatedId);
+        assertThat(matching.getSearchText())
+                .as("catalog 연결 Showcase 의 search_text 에 catalog 한국어 alias '머큐리얼' 포함")
+                .contains("머큐리얼");
+        assertThat(unrelated.getSearchText())
+                .as("catalog 미연결 Showcase 의 search_text 에 '머큐리얼' 미포함 (직접 입력에 없음)")
+                .doesNotContain("머큐리얼");
+    }
+
+    @Test
+    @DisplayName("ADR-018 §D4: content_hash dedup hit 시 기존 search_text 유지 — 재합성 X")
+    void dedup_keepsExistingSearchText() {
+        // Given — 동일 contentHash 로 두 번 등록 (10분 창 내 dedup hit)
+        String sharedContentHash = "a".repeat(64);    // SHA-256 hex 64자 더미
+        String idemKey1 = UUID.randomUUID().toString();
+        String idemKey2 = UUID.randomUUID().toString();
+
+        Long firstId = createShowcaseUseCase.create(
+                new CreateShowcaseCommand(
+                        1L, null, Category.BOOTS, "Nike", "DEDUP-1",
+                        "원래 제목", "원래 설명",
+                        "270", ConditionGrade.A, 5, false, 0, false,
+                        null, null,
+                        com.gearshow.backend.showcase.domain.vo.ContentHash.of(sharedContentHash),
+                        idemKey1),
+                fakeImageKeys(1), List.of()).showcaseId();
+
+        ShowcaseJpaEntity firstEntity = showcaseJpaRepository.findById(firstId).orElseThrow();
+        String originalSearchText = firstEntity.getSearchText();
+        assertThat(originalSearchText).contains("원래 제목");
+
+        // When — 같은 contentHash 로 다른 title/description 으로 재등록
+        Long dedupedId = createShowcaseUseCase.create(
+                new CreateShowcaseCommand(
+                        1L, null, Category.BOOTS, "Nike", "DEDUP-1",
+                        "변경된 제목 (dedup 으로 무시)", "변경된 설명",
+                        "270", ConditionGrade.A, 5, false, 0, false,
+                        null, null,
+                        com.gearshow.backend.showcase.domain.vo.ContentHash.of(sharedContentHash),
+                        idemKey2),
+                fakeImageKeys(1), List.of()).showcaseId();
+
+        // Then — dedup hit 으로 동일 ID 반환 + search_text 변경 없음 (재합성 미수행)
+        assertThat(dedupedId).isEqualTo(firstId);
+        ShowcaseJpaEntity dedupEntity = showcaseJpaRepository.findById(firstId).orElseThrow();
+        assertThat(dedupEntity.getSearchText())
+                .as("ADR-018 §D4: dedup hit 시 기존 search_text 유지 — 재합성 X")
+                .isEqualTo(originalSearchText)
+                .contains("원래 제목")
+                .doesNotContain("변경된 제목");
     }
 
     private List<String> fakeImageKeys(int count) {

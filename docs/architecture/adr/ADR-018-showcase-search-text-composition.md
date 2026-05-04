@@ -94,14 +94,20 @@ public final class SearchTextComposer {
 | 트리거 | search_text 재합성 |
 |---|---|
 | Showcase 등록 (`CreateShowcaseService.saveShowcaseWithSpec`) | ✅ 1회 |
-| Showcase 수정 (`UpdateShowcaseService.update`) | ✅ 매 update 시 재합성 (catalog source 재조회) |
+| Showcase 수정 — title/description/modelCode 변경 (`UpdateShowcaseService.update`) | ✅ 재합성 (catalog source 재조회) |
+| Showcase 수정 — 그 외 필드 (userSize/conditionGrade/wearCount/forSale) | ❌ search_text 무관 — catalog 재조회 회피 |
 | Showcase 상태 변경 (hide/activate/sold/delete) | ❌ search_text 무관 |
+| Showcase 대표 이미지 변경 (`changePrimaryImageUrl`) | ❌ search_text 무관 — 합성 토큰 외 |
+| Showcase 3D 모델 보유 변경 (`changeHas3dModel`) | ❌ search_text 무관 |
+| Showcase 판매 여부 변경 (`changeForSale`) | ❌ search_text 무관 |
 | Showcase content_hash dedup (기존 Showcase 반환) | ❌ 기존 search_text 유지 |
 | catalog 측 한국어 alias 정정 (PR #75 ADR-016 §B3) | ❌ Showcase 자동 갱신 안 함 — **별도 backfill 후속 PR** |
 
 **근거**:
-- 등록 + 수정 시점 1회 합성으로 일관성 보장. catalogItemId 가 update 흐름에서 변경되지 않으므로 동일 source 재조회 (단순화 — 캐싱은 본 PR 범위 밖).
+- 등록 + 직접 입력 토큰 변경 시점 1회 합성으로 일관성 보장. catalogItemId 가 update 흐름에서 변경되지 않으므로 동일 source 재조회.
+- 직접 입력 토큰이 변경되지 않은 update (예: userSize 만 변경) 에서는 catalog DB 재조회 자체를 생략 — read ≫ write 라 lazy 거부와 같은 논리로 불필요 cross-BC I/O 회피.
 - catalog alias 정정 시 Showcase 자동 갱신은 BC-cross side effect 가 발생 (UpdateCatalogItemService → ShowcasePort) — 의존 역전 + 트랜잭션 경계 모호 → 후속 PR 의 backfill 스크립트로 분리 (ADR-018 §후속 작업).
+- 도메인의 다른 changeXxx / 상태 전이 메서드는 모두 `toBuilder()` 로 기존 search_text 를 보존 — `Showcase.changeSearchText()` 만이 search_text 를 변경하는 유일한 메서드 (invariant).
 
 **비용**: catalog alias 정정 직후 기등록 Showcase.search_text 가 stale. 운영자가 catalog 정정 후 backfill 명시 트리거 필요.
 
@@ -124,16 +130,41 @@ SHOW COLUMNS FROM showcase;   -- search_text Null=YES 확인
 INSERT 1 신규 Showcase → SELECT search_text 가 채워졌는지 확인
 ```
 
-**기존 데이터 backfill** (선택):
+**기존 데이터 backfill — PR-4 prerequisite**:
+
+본 PR 머지 후 코드 배포 직후의 기등록 Showcase 는 `search_text=NULL` 상태. PR-4 의 LIKE 매칭에서 영구 제외되어 신규 등록만 검색되는 비대칭이 운영에 굳어지므로 **PR-4 머지 직전 backfill 1회 실행이 필수**.
+
+직접 입력 케이스 (catalog 미연결):
 ```sql
--- 기등록 Showcase 의 search_text 는 NULL 인 채로 남음 — 검색 결과에서 빠짐.
--- 운영자가 backfill 원하면 별도 스크립트 또는 admin endpoint:
-UPDATE showcase SET search_text = CONCAT_WS(' ', brand, model_code, title, description)
-WHERE search_text IS NULL AND catalog_item_id IS NULL;
--- catalog 연결 Showcase 는 catalog_item join 으로 한국어 alias 까지 합성 (별도 스크립트)
+UPDATE showcase
+SET search_text = CONCAT_WS(' ', brand, model_code, title, description)
+WHERE search_text IS NULL AND catalog_item_id IS NULL
+LIMIT 10000;     -- batch 분할 적용
 ```
 
-backfill 은 본 PR 범위 밖 — 운영 진행 후 결정.
+catalog 연결 케이스 (catalog 한국어 alias + 직접 입력값 모두 합성):
+```sql
+UPDATE showcase s
+LEFT JOIN catalog_item ci ON s.catalog_item_id = ci.catalog_item_id
+LEFT JOIN boots_spec bs ON ci.catalog_item_id = bs.catalog_item_id
+LEFT JOIN uniform_spec us ON ci.catalog_item_id = us.catalog_item_id
+SET s.search_text = LEFT(
+        CONCAT_WS(' ',
+                ci.full_name_ko, ci.full_name_en, ci.brand,
+                bs.silo_name_ko, us.club_name_ko,
+                s.brand, s.model_code, s.title, s.description),
+        1000)
+WHERE s.search_text IS NULL AND s.catalog_item_id IS NOT NULL
+LIMIT 10000;     -- batch 분할 적용
+```
+
+진행률 측정:
+```sql
+SELECT COUNT(*) AS pending FROM showcase WHERE search_text IS NULL;
+-- 0 도달 시 backfill 완료
+```
+
+**중요**: `LIMIT 10000` 으로 분할 실행하여 운영 lock time / replication lag 영향 최소화. 한 번에 끝내려면 운영 시간대 외 (새벽) 단일 실행.
 
 ## Consequences
 
@@ -152,18 +183,23 @@ backfill 은 본 PR 범위 밖 — 운영 진행 후 결정.
 
 ### 후속 작업 (별도 PR)
 
-- **PR-4**: `?keyword=` 검색 API + Cucumber 인수 + (조건부) FULLTEXT 인덱스. ADR-019 (검색 정규화 정책) 와 함께.
+- **PR-4**: `?keyword=` 검색 API + Cucumber 인수 + (조건부) FULLTEXT 인덱스. ADR-019 (검색 정규화 정책) 와 함께. **§D5 backfill 1회 선행 필수**.
 - **ADR-019** (TBD): 검색 정규화 (소문자/자모 분리/공백 처리) 정책. PR-4 시점.
-- **Showcase backfill 스크립트 또는 admin endpoint**: catalog alias 정정 후 기등록 Showcase 의 search_text 재합성.
-- **FULLTEXT 도입** (ADR-016 §후속 작업의 임계 N≥10,000 도달 시): MySQL `WITH PARSER ngram` + `ngram_token_size=2`. 본 컬럼에 `FULLTEXT INDEX` 추가.
+- **임계 모니터링** (PR-4 시점 또는 직전): `SHOW TABLE STATUS LIKE 'showcase'` 의 `Rows ≥ 10000` 도달 시 알람. Prometheus/Grafana actuator metric 으로 자동화. ADR-016 §후속 작업의 FULLTEXT 임계와 동일.
+- **catalog alias 정정 후 부분 backfill**: catalog `updated_at > last_backfill_at` 인 행만 골라 부분 합성. 전체 backfill 비용 회피. 또는 outbox 이벤트 + 비동기 consumer (BC 격리 유지) 옵션 검토.
+- **Showcase Projection (검색 path)**: PR-4 의 검색 결과 SELECT 가 `search_text` 자체를 select 하지 않도록 DTO Projection 사용 — row 페이지당 read 비용 절감. 행 크기가 큰 컬럼이라 hot read path 에서 제외.
+- **FULLTEXT 도입** (ADR-016 §후속 작업의 임계 N≥10,000 도달 시): MySQL `WITH PARSER ngram` + `ngram_token_size=2`. 본 컬럼에 `FULLTEXT INDEX` 추가. utf8mb4 row_format DYNAMIC=3072 bytes 키 길이 제약 확인.
 
 ### 운영 적용 체크리스트
 
-- [ ] `ALTER TABLE showcase ADD COLUMN search_text VARCHAR(1000) NULL, ALGORITHM=INSTANT, LOCK=NONE;`
-- [ ] `SHOW COLUMNS FROM showcase;` — `search_text` `Null=YES` 확인
+> ⚠️ **순서 엄수**: 수동 ALTER 가 Hibernate `ddl-auto: update` 자동 적용 _전에_ 들어가야 한다.
+> 코드 배포가 먼저 가면 Hibernate 가 자동 ALTER 를 시도해 (1) INSTANT 알고리즘 보장 못 받아 LOCK 발생 가능성, (2) 다중 인스턴스 동시 기동 시 race 위험. 본 ADR 의 명시된 ALTER 절차가 수동 우선이라는 의미.
+
+- [ ] **(코드 배포 전)** `ALTER TABLE showcase ADD COLUMN search_text VARCHAR(1000) NULL, ALGORITHM=INSTANT, LOCK=NONE;`
+- [ ] **(코드 배포 전)** `SHOW COLUMNS FROM showcase;` — `search_text` `Null=YES` 확인
 - [ ] 코드 배포
-- [ ] smoke: 신규 Showcase 등록 → DB 에서 `SELECT search_text` 가 합성 결과로 채워졌는지 확인
-- [ ] 기등록 데이터 backfill 결정 (선택) — 운영자 판단
+- [ ] **(코드 배포 직후)** smoke: 신규 Showcase 등록 → DB 에서 `SELECT search_text` 가 합성 결과로 채워졌는지 확인
+- [ ] **(PR-4 머지 직전)** 기등록 데이터 backfill — §D5 의 직접 입력 케이스 + catalog 연결 케이스 두 SQL 실행 + `pending` 카운트 0 도달 확인 (PR-4 prerequisite)
 
 ### 롤백
 
