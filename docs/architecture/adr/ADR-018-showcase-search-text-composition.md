@@ -5,6 +5,12 @@
 - **Deciders**: opix
 - **Related**: ADR-016 (catalog search foundation), ADR-017 (crawler 한국어 매칭 정책), PR #75, PR #76
 
+### 변경 이력
+
+| 날짜 | 변경 | 사유 |
+|------|------|------|
+| 2026-05-04 | §D5 catalog 미연결 SQL 에 `LEFT(..., 1000)` 보강 + Java SearchTextComposer 와의 결정성 차이 표 추가 | VARCHAR(1000) INSERT 실패 가능성 차단 + 운영 backfill 정합성 회복 |
+
 ## Context
 
 ADR-016 이 catalog 도메인에 한국어 alias 컬럼 (`fullNameKo/En`, `siloNameKo`, `clubNameKo`) 을 도입하고 ADR-017 의 crawler 가 이를 채우게 했다. 다음 단계는 **사용자 검색 진입점인 Showcase 가 한국어 키워드 ("머큐리얼", "맨유") 로 매칭 가능하도록** catalog 의 한국어 alias 와 Showcase 자체 입력값 (title, description, brand, modelCode) 을 단일 검색 source 로 합성하는 것이다.
@@ -137,10 +143,12 @@ INSERT 1 신규 Showcase → SELECT search_text 가 채워졌는지 확인
 직접 입력 케이스 (catalog 미연결):
 ```sql
 UPDATE showcase
-SET search_text = CONCAT_WS(' ', brand, model_code, title, description)
+SET search_text = LEFT(CONCAT_WS(' ', brand, model_code, title, description), 1000)
 WHERE search_text IS NULL AND catalog_item_id IS NULL
 LIMIT 10000;     -- batch 분할 적용
 ```
+
+> **2026-05-04 보강**: `LEFT(..., 1000)` 추가. `description` 등이 길어 합성 결과가 1000자를 초과하면 VARCHAR(1000) INSERT 실패로 batch 가 rollback 되므로 catalog 연결 케이스와 동일하게 truncate 강제. Java `SearchTextComposer.compose()` 의 `safeSubstring(joined, 1000)` 정책과 정합.
 
 catalog 연결 케이스 (catalog 한국어 alias + 직접 입력값 모두 합성):
 ```sql
@@ -165,6 +173,18 @@ SELECT COUNT(*) AS pending FROM showcase WHERE search_text IS NULL;
 ```
 
 **중요**: `LIMIT 10000` 으로 분할 실행하여 운영 lock time / replication lag 영향 최소화. 한 번에 끝내려면 운영 시간대 외 (새벽) 단일 실행.
+
+#### Java SearchTextComposer 와의 미세 결정성 차이 (의도된 허용 범위)
+
+본 SQL 은 Java `SearchTextComposer.compose()` 의 정책을 운영 SQL 로 근사화한 것이며, 다음 3건의 결정성 차이가 존재한다. LIKE 부분 문자열 매칭 결과에는 영향이 없으므로 SQL 측은 단순성을 우선해 그대로 유지하고, 신규 등록은 Java 결과로 점진적으로 수렴한다.
+
+| # | 항목 | Java | SQL | 매칭 영향 |
+|---|------|------|-----|-----------|
+| 1 | trim | 토큰별 `String::trim` 후 join | raw join | 없음 — 토큰 끝 공백이 separator 와 합쳐져도 LIKE 부분 매칭 동작 동일 |
+| 2 | 빈 문자열 토큰 | `String::isBlank` filter 제외 | `CONCAT_WS` 는 NULL 만 자동 제외, `''` 는 separator 중복 (`"a  c"`) | 없음 — 부분 매칭이라 무해 |
+| 3 | 모든 토큰 NULL/blank | `null` 반환 | 빈 문자열 `''` 반환 | 없음 — `ShowcaseJpaRepository.findByKeyword*` 의 `WHERE search_text IS NOT NULL` + `LIKE '%kw%'` 가드로 빈 문자열 행은 매칭 0 건 |
+
+결정성을 SQL 측에서도 엄격히 일치시키려면 `TRIM` / `NULLIF` 중첩이 필요하나, backfill 1 회성 + LIKE 부분 매칭이라는 특성상 비용 대비 효익이 낮다. 향후 catalog alias 정정 후 재 backfill 시점에 행 수가 충분히 작으면 (≤10,000) Java 측 합성 코드를 직접 호출하는 admin endpoint 도 옵션 (ADR-018 후속 작업).
 
 ## Consequences
 
