@@ -24,31 +24,50 @@ ADR-018 이 `showcase.search_text` 컬럼에 catalog 한국어 alias + 직접 �
 
 ## Decision
 
-### D1. 검색 정규화 — `LOWER()` 만 + 클라이언트 입력 그대로
+### D1. 검색 정규화 — collation case-insensitive + LIKE escape + Service 단 trim
 
 ```sql
-WHERE LOWER(search_text) LIKE LOWER(CONCAT('%', :keyword, '%'))
+WHERE search_text LIKE CONCAT('%', :keyword, '%') ESCAPE '\\'
 ```
 
 **적용 정규화**:
-- 대소문자 무시 (`LOWER`) — 영문 매칭률 향상. 한글은 `LOWER` 영향 없음.
+- **대소문자 무시**: `utf8mb4_0900_ai_ci` collation 의 자동 case-insensitive 동작에 의존. 양측 `LOWER()` 호출 제거 — 함수 호출 cost (VARCHAR(1000) × N 행 string lowercase 변환) 제거. 한글은 collation 영향 없음.
+- **LIKE 메타문자 escape**: `%` / `_` / `\\` 를 리터럴로 처리. `ShowcasePersistenceAdapter.escapeLike()` 가 입력을 변환하고 JPQL 의 `ESCAPE '\\'` 가 backslash escape 인식. 사용자가 `?keyword=%` 입력 시 amplification (모든 행 매칭) 차단.
+- **좌우 공백 trim**: `ListShowcasesService.list` 가 keyword 좌우 공백 제거. 빈 문자열 (`?keyword=`) 은 Controller `@Size(min=1)` 에서 거부, 공백 문자열 (`?keyword=   `) 은 Service trim 후 빈 → 전체 ACTIVE 목록 fallback (controller-service 비대칭 차단).
 
 **미적용 (본 PR)**:
-- 공백 정규화 (다중 공백 단일화, trim) — 사용자 입력 그대로
+- 다중 공백 단일화 (`"머   큐리얼"` → `"머 큐리얼"`)
 - 자모 분리 (한글 IME 중간 입력 검색)
 - 검색어 토큰화 (다중 키워드 AND/OR)
 - 동의어 / 형태소 분석
 
 **대안 검토**:
-- (B) `utf8mb4_0900_ai_ci` collation 의존 — DB 단에서 자동 case-insensitive 라 `LOWER()` 불필요. 다만 명시적 `LOWER()` 가 collation 변경 시에도 안전 (운영 변경 영향 차단). ❌ → 명시적 `LOWER()` 채택.
-- (C) 공백/자모 정규화 추가 — 매칭률 향상하나 `search_text` 합성 시점에도 동일 정규화 필요 (양측 일관). ADR-018 §D3 의 1000자 truncate 와 함께 정책 결정 + backfill 비용. **본 PR 시점은 단순화 우선 — 후속 ADR-020 에서 정규화 v2 도입**.
-- (D) Elasticsearch 등 외부 검색 엔진 — N=10,000 미만 가정에서 과대 비용. ❌
+- (B) 명시적 `LOWER()` 양측 호출 (이전 정책) — collation 변경 시 안전이라는 근거였으나 함수 호출 cost (database-optimizer Critical #1) 가 latency 30~60% 영향 추정. **collation 의존 + 운영 체크리스트에서 collation 검증 단계 추가** 가 더 합리. ❌ (이전 채택, 현 정책 변경)
+- (C) 공백/자모 정규화 추가 — `search_text` 합성 시점 (ADR-018 §D3) 과 양측 일관 필요. backfill 비용. ADR-020 후속.
+- (D) Elasticsearch — N=10,000 미만 가정에서 과대 비용. ❌
 
-### D2. FULLTEXT 도입 임계 — 행 수 N≥10,000
+### D2. FULLTEXT 도입 임계 — 행 수 N≥10,000 + p99 SLO + transition window
+
+**cost model 근거** (database-optimizer Critical #2):
+- VARCHAR(1000) 평균 200~600자 (ADR-018 §D3) × 10,000행 = 2~6MB scan size
+- InnoDB buffer pool default ≥128MB 에서 in-memory 풀스캔
+- `(showcase_status, created_at, id)` 인덱스 존재 시 옵티마이저는 인덱스 driven scan + LIKE filter + LIMIT early termination — 매칭률이 높은 키워드일수록 LIMIT 으로 조기 종료. 매칭률 매우 낮은 키워드 (예: 1/10000) 가 worst case.
+- 본 정책의 N=10,000 은 worst case (low-selectivity) 기준 보수적 임계
+
+**SLO target**:
+- `GET /api/v1/showcases?keyword=` p99 < 500ms, p95 < 200ms
+- LIKE 풀스캔 latency 가 target 초과 시 즉시 알람 — count 임계 도달 전이라도 SLO 위반은 자체로 트리거
 
 **N < 10,000 (현 시점)**:
-- LIKE 풀스캔 허용. 평균 latency 측정만 (모니터링 시작).
-- 인덱스 추가 없음 (PR #77 ADR-018 §D5 와 정합).
+- LIKE 풀스캔 (또는 인덱스 driven scan + filter) 허용
+- 인덱스 추가 없음 (ADR-018 §D5 와 정합)
+- 운영 검증: `EXPLAIN ANALYZE SELECT * FROM showcase WHERE search_text LIKE '%머큐리얼%' ORDER BY created_at DESC LIMIT 21` — `Using index condition` 또는 `Using filesort` 여부 확인. filesort 발생 시 인덱스 추가 우선순위 격상.
+
+**Transition window 가드** (N≥10,000 알람 시):
+- N≥10,000 도달 알람 → ADR-020 또는 ADR-019 v1.1 PR 시작 신호
+- N≥15,000 도달 시 keyword API rate limiter 강제 (per-user 1 req/sec) — 마이그레이션 PR 머지 전 임시 차단
+- 마이그레이션 SLA: 알람 후 7일 이내 머지. 초과 시 keyword API 503 fallback (degraded mode) — list 자체는 정상 동작
+- p99 SLO 위반이 N 임계 전에 발생하면 (예: low-selectivity 키워드 폭주) 즉시 ADR-020 우선 트리거
 
 **N ≥ 10,000 도달 시 (후속 ADR-020 또는 ADR-019 v1.1)**:
 ```sql

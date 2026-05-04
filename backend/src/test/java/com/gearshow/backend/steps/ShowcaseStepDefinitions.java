@@ -147,9 +147,10 @@ public class ShowcaseStepDefinitions {
 
     @When("등록된 쇼케이스의 title 키워드로 쇼케이스 목록을 검색한다")
     public void 등록된_쇼케이스_title_키워드_검색() {
-        // 직전 등록 시 사용한 title 의 일부 키워드를 사용해 LIKE 매칭 시도
-        // ShowcaseStepDefinitions 의 등록 헬퍼가 title 에 사용하는 prefix "테스트" 로 검색
-        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=테스트"));
+        // 등록 헬퍼의 실제 title ("머큐리얼 슈퍼플라이 착용 후기") 안의 부분 문자열로 LIKE 매칭.
+        // PR-4 보강 (test-writer Critical #1): 이전 keyword "테스트" 는 헬퍼 title 과 매칭 0건이라
+        // happy-path 회귀 차단 0 → "머큐리얼" 로 정정.
+        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=머큐리얼"));
     }
 
     @When("빈 키워드로 쇼케이스 목록을 검색한다")
@@ -160,6 +161,13 @@ public class ShowcaseStepDefinitions {
     @When("매칭되지 않는 키워드 {string} 로 쇼케이스 목록을 검색한다")
     public void 매칭되지_않는_키워드_검색(String keyword) {
         context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=" + keyword));
+    }
+
+    @When("와일드카드 키워드 {string} 로 쇼케이스 목록을 검색한다")
+    public void 와일드카드_키워드_검색(String keyword) throws java.io.UnsupportedEncodingException {
+        // "%" 같은 LIKE 메타문자는 URL encode 후 전송 — escapeLike 가 리터럴로 처리해야 amplification 차단
+        String encoded = java.net.URLEncoder.encode(keyword, "UTF-8");
+        context.setLastResponse(apiClient.get("/api/v1/showcases?keyword=" + encoded));
     }
 
     @When("내 쇼케이스 목록을 조회한다")

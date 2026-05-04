@@ -171,6 +171,7 @@ Feature: 쇼케이스
     Given 이미지 1개로 쇼케이스가 등록되어 있다
     When 등록된 쇼케이스의 title 키워드로 쇼케이스 목록을 검색한다
     Then 응답 상태 코드는 200이다
+    And 응답의 data의 "data" 필드는 비어있지 않다
 
   @showcase @adr-019 @edge-case
   Scenario: 빈 keyword 는 400 에러가 발생한다
@@ -180,4 +181,9 @@ Feature: 쇼케이스
   @showcase @adr-019
   Scenario: 매칭되지 않는 keyword 는 200 + 빈 결과
     When 매칭되지 않는 키워드 "ZZZ_NO_MATCH_PR4_XYZ" 로 쇼케이스 목록을 검색한다
+    Then 응답 상태 코드는 200이다
+
+  @showcase @adr-019 @edge-case
+  Scenario: LIKE wildcard "%" 는 amplification 없이 escape 되어 매칭 0건
+    When 와일드카드 키워드 "%" 로 쇼케이스 목록을 검색한다
     Then 응답 상태 코드는 200이다

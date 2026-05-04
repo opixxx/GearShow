@@ -181,6 +181,115 @@ class ShowcaseSearchKeywordIntegrationTest {
                 .contains(id);
     }
 
+    @Test
+    @DisplayName("PR-4 보강 (code-reviewer C1): keyword 검색 결과가 size 초과 시 hasNext=true + pageToken 발급 + 2페이지 정합성")
+    void search_paging_hasNextWhenOverSize() {
+        // Given — size=2, 매칭 3건 등록 (size + 1 = 3 이라 hasNext 판단 가능해야 함)
+        String unique = "PRB-PAGE-" + UUID.randomUUID().toString().substring(0, 8);
+        for (int i = 0; i < 3; i++) {
+            createShowcase(1L, null, "Nike", "PAGE-" + unique + "-" + i,
+                    unique + " 페이징 " + i, "설명");
+        }
+
+        // When — 첫 페이지 (size=2)
+        PageInfo<ShowcaseListResult> page1 = listShowcasesUseCase.list(unique, null, 2);
+
+        // Then — hasNext=true, pageToken 존재, data 2건
+        assertThat(page1.data()).hasSize(2);
+        assertThat(page1.hasNext()).isTrue();
+        assertThat(page1.pageToken()).isNotNull();
+
+        // When — 두 번째 페이지 (cursor)
+        PageInfo<ShowcaseListResult> page2 = listShowcasesUseCase.list(unique, page1.pageToken(), 2);
+
+        // Then — 1건 + hasNext=false
+        assertThat(page2.data()).hasSize(1);
+        assertThat(page2.hasNext()).isFalse();
+        // 두 페이지 합 = 3건 (중복/누락 0)
+        long combined = java.util.stream.Stream.concat(
+                page1.data().stream(), page2.data().stream()
+        ).map(ShowcaseListResult::showcaseId).distinct().count();
+        assertThat(combined).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("PR-4 보강 (code-reviewer M1 + database-optimizer M6 + test-writer C2): LIKE wildcard '%' / '_' escape — amplification 차단")
+    void search_likeWildcardsAreEscaped_noAmplification() {
+        // Given — 매칭되지 않는 상태에서 시작. 다른 테스트 데이터가 있어도 wildcard 가 escape 되어 매칭 0건이어야 함.
+        String unique = "PRB-WC-" + UUID.randomUUID().toString().substring(0, 8);
+        createShowcase(1L, null, "Nike", "WC-" + unique,
+                unique + " wildcard 테스트", "설명");
+
+        // When — '%' 자체를 키워드로. 정상 매칭이려면 search_text 에 리터럴 '%' 가 있어야 함 (없음).
+        PageInfo<ShowcaseListResult> percentResult = listShowcasesUseCase.list("%", null, 20);
+        // When — '_' 도 동일
+        PageInfo<ShowcaseListResult> underscoreResult = listShowcasesUseCase.list("_", null, 20);
+
+        // Then — 다른 시나리오의 누적 데이터에 '%' 또는 '_' 리터럴이 있을 가능성 거의 없으므로 unique 행은 매칭 X
+        Long uniqueId = createShowcase(1L, null, "Nike", "WC-" + unique + "-2",
+                unique + " 확인용", "설명").showcaseId();
+        PageInfo<ShowcaseListResult> percentResult2 = listShowcasesUseCase.list("%", null, 20);
+
+        // wildcard escape 가 제대로 동작하면 unique 행이 '%' 매칭 결과에 들어가지 않아야 함
+        assertThat(percentResult2.data())
+                .as("LIKE wildcard '%' 가 escape 되지 않으면 모든 행 매칭 (amplification)")
+                .extracting(ShowcaseListResult::showcaseId)
+                .doesNotContain(uniqueId);
+    }
+
+    @Test
+    @DisplayName("PR-4 보강 (test-writer M4): status 가드 — HIDDEN/SOLD/DELETED 검색 결과 제외")
+    void search_excludesNonActiveStatus() {
+        // Given — 매칭 키워드 보유 ACTIVE 1건 + HIDDEN 1건 (직접 갱신)
+        String unique = "PRB-STATUS-" + UUID.randomUUID().toString().substring(0, 8);
+        Long activeId = createShowcase(1L, null, "Nike", "ACTIVE-" + unique,
+                unique + " ACTIVE 행", "설명").showcaseId();
+        Long hiddenId = createShowcase(1L, null, "Nike", "HIDDEN-" + unique,
+                unique + " HIDDEN 행", "설명").showcaseId();
+
+        // HIDDEN 으로 status 직접 변경 (entity 직접 갱신)
+        ShowcaseJpaEntity hidden = showcaseJpaRepository.findById(hiddenId).orElseThrow();
+        showcaseJpaRepository.save(toEntityWithStatus(hidden,
+                com.gearshow.backend.showcase.domain.vo.ShowcaseStatus.HIDDEN));
+
+        // When
+        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(unique, null, 20);
+
+        // Then — ACTIVE 만 결과에 포함, HIDDEN 제외
+        List<Long> ids = result.data().stream().map(ShowcaseListResult::showcaseId).toList();
+        assertThat(ids).contains(activeId).doesNotContain(hiddenId);
+    }
+
+    @Test
+    @DisplayName("PR-4 보강 (test-writer M2): @Size 경계 — 100자 통과, 101자 거부는 controller 책임 (Service 레벨은 통과)")
+    void search_keywordLength100_passes() {
+        // Given — 100자 keyword (controller 가 거부 안 함, service 정상 처리)
+        String keyword100 = "가".repeat(100);
+
+        // When — 매칭 0건이어도 정상 PageInfo 반환
+        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list(keyword100, null, 20);
+
+        // Then — 예외 없이 정상 응답
+        assertThat(result.data()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PR-4 보강 (test-writer M3): keyword trim — 공백만 keyword 는 fallback (전체 ACTIVE 목록)")
+    void search_blankKeywordFallsBackToFullList() {
+        // Given
+        String unique = "PRB-BLANK-" + UUID.randomUUID().toString().substring(0, 8);
+        Long id = createShowcase(1L, null, "Nike", "BLANK-" + unique,
+                unique + " blank 테스트", "설명").showcaseId();
+
+        // When — 공백만 keyword 입력 (Controller @Size 통과 후 Service trim 분기)
+        PageInfo<ShowcaseListResult> result = listShowcasesUseCase.list("   ", null, 20);
+
+        // Then — 전체 ACTIVE 목록 (trim 후 빈 문자열 → fallback)
+        assertThat(result.data())
+                .extracting(ShowcaseListResult::showcaseId)
+                .contains(id);
+    }
+
     private CreateShowcaseResult createShowcase(Long ownerId, Long catalogItemId,
                                                   String brand, String modelCode,
                                                   String title, String description) {
@@ -217,6 +326,32 @@ class ShowcaseSearchKeywordIntegrationTest {
                 .has3dModel(entity.isHas3dModel())
                 .searchText(null)   // backfill 미실행 행 시뮬
                 .status(entity.getStatus())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    private ShowcaseJpaEntity toEntityWithStatus(
+            ShowcaseJpaEntity entity,
+            com.gearshow.backend.showcase.domain.vo.ShowcaseStatus newStatus) {
+        return ShowcaseJpaEntity.builder()
+                .id(entity.getId())
+                .ownerId(entity.getOwnerId())
+                .catalogItemId(entity.getCatalogItemId())
+                .category(entity.getCategory())
+                .brand(entity.getBrand())
+                .modelCode(entity.getModelCode())
+                .title(entity.getTitle())
+                .description(entity.getDescription())
+                .userSize(entity.getUserSize())
+                .conditionGrade(entity.getConditionGrade())
+                .wearCount(entity.getWearCount())
+                .forSale(entity.isForSale())
+                .primaryImageUrl(entity.getPrimaryImageUrl())
+                .contentHash(entity.getContentHash())
+                .has3dModel(entity.isHas3dModel())
+                .searchText(entity.getSearchText())
+                .status(newStatus)
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

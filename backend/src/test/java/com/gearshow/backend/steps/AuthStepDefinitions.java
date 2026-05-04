@@ -132,6 +132,20 @@ public class AuthStepDefinitions {
         }
     }
 
+    @And("응답의 data의 {string} 필드는 비어있지 않다")
+    public void 응답_data_필드_비어있지_않다(String fieldName) {
+        Map<String, Object> data = extractData(context.getLastResponse());
+        Object actual = resolveNestedPath(data, fieldName);
+        assertThat(actual)
+                .as("응답 data.%s 가 null/empty — 매칭 결과 비어있음 (검색 회귀)", fieldName)
+                .isNotNull();
+        if (actual instanceof java.util.Collection<?> col) {
+            assertThat(col).isNotEmpty();
+        } else if (actual instanceof Map<?, ?> map) {
+            assertThat(map).isNotEmpty();
+        }
+    }
+
     /**
      * 점(.)으로 구분된 nested path 를 따라 값을 조회한다.
      * 단순 키("brand")는 그대로 반환하고, nested path("bootsSpec.siloNameKo") 는 재귀 탐색.

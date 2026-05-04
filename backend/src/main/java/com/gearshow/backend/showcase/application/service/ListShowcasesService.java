@@ -40,21 +40,30 @@ public class ListShowcasesService implements ListShowcasesUseCase {
     @Override
     @Transactional(readOnly = true)
     public PageInfo<ShowcaseListResult> list(String keyword, String pageToken, int size) {
-        List<Showcase> showcases;
-        // ADR-019 §D1: keyword 가 non-blank 이면 search_text LIKE 분기, 그 외엔 기존 ACTIVE 전체 목록
-        boolean hasKeyword = keyword != null && !keyword.isBlank();
-        if (pageToken == null) {
-            showcases = hasKeyword
-                    ? showcasePort.findByKeywordFirstPage(keyword, size)
-                    : showcasePort.findAllFirstPage(size);
-        } else {
-            Pair<Instant, Long> cursor = PageTokenUtil.decode(pageToken, Instant.class, Long.class);
-            showcases = hasKeyword
-                    ? showcasePort.findByKeywordWithCursor(keyword, cursor.getLeft(), cursor.getRight(), size)
-                    : showcasePort.findAllWithCursor(cursor.getLeft(), cursor.getRight(), size);
-        }
+        // ADR-019 §D1: 사용자 입력 정규화 — 좌우 공백 제거 후 빈 문자열은 keyword 미사용으로 간주.
+        // Controller 의 @Size(min=1) 가 빈 문자열은 거부하지만, 공백 문자열 ("   ") 은 통과되므로
+        // Service 단에서 trim 으로 일관 처리 — keyword 비대칭 silent fallback 차단.
+        String normalized = (keyword == null) ? null : keyword.trim();
+        boolean hasKeyword = normalized != null && !normalized.isEmpty();
+
+        List<Showcase> showcases = (pageToken == null)
+                ? loadFirstPage(hasKeyword ? normalized : null, size)
+                : loadWithCursor(hasKeyword ? normalized : null, pageToken, size);
 
         return toPageInfo(showcases, size);
+    }
+
+    private List<Showcase> loadFirstPage(String keyword, int size) {
+        return keyword != null
+                ? showcasePort.findByKeywordFirstPage(keyword, size)
+                : showcasePort.findAllFirstPage(size);
+    }
+
+    private List<Showcase> loadWithCursor(String keyword, String pageToken, int size) {
+        Pair<Instant, Long> cursor = PageTokenUtil.decode(pageToken, Instant.class, Long.class);
+        return keyword != null
+                ? showcasePort.findByKeywordWithCursor(keyword, cursor.getLeft(), cursor.getRight(), size)
+                : showcasePort.findAllWithCursor(cursor.getLeft(), cursor.getRight(), size);
     }
 
     @Override
