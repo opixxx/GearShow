@@ -1,0 +1,138 @@
+# 클럽/국가대표 사전 — UNIFORM 카테고리의 한국어 alias 매칭 + 리그 정보 (ADR-017 §D2).
+# 국가대표 (league: null) 와 클럽 (league: ...) 을 한 파일에 통합.
+# 운영 후 누락은 본 파일 보강 → 재크롤링.
+
+# ===== EPL =====
+- canonical: "Manchester United"
+  aliases: ["맨체스터 유나이티드", "맨유"]
+  league: "EPL"
+
+- canonical: "Liverpool"
+  aliases: ["리버풀"]
+  league: "EPL"
+
+- canonical: "Manchester City"
+  aliases: ["맨체스터 시티", "맨시티"]
+  league: "EPL"
+
+- canonical: "Arsenal"
+  aliases: ["아스날", "아스널"]
+  league: "EPL"
+
+- canonical: "Chelsea"
+  aliases: ["첼시"]
+  league: "EPL"
+
+- canonical: "Tottenham"
+  aliases: ["토트넘", "토트넘 홋스퍼"]
+  league: "EPL"
+
+- canonical: "Newcastle United"
+  aliases: ["뉴캐슬"]
+  league: "EPL"
+
+# ===== LaLiga =====
+- canonical: "Real Madrid"
+  aliases: ["레알 마드리드", "레알"]
+  league: "LaLiga"
+
+- canonical: "Barcelona"
+  aliases: ["바르셀로나", "바르샤"]
+  league: "LaLiga"
+
+- canonical: "Atletico Madrid"
+  aliases: ["아틀레티코 마드리드", "아틀레티코"]
+  league: "LaLiga"
+
+# ===== Bundesliga =====
+- canonical: "Bayern Munich"
+  aliases: ["바이에른 뮌헨", "뮌헨"]
+  league: "Bundesliga"
+
+- canonical: "Borussia Dortmund"
+  aliases: ["도르트문트"]
+  league: "Bundesliga"
+
+- canonical: "Bayer Leverkusen"
+  aliases: ["레버쿠젠"]
+  league: "Bundesliga"
+
+# ===== Serie A =====
+- canonical: "Juventus"
+  aliases: ["유벤투스"]
+  league: "Serie A"
+
+- canonical: "AC Milan"
+  aliases: ["AC 밀란", "밀란"]
+  league: "Serie A"
+
+- canonical: "Inter Milan"
+  aliases: ["인터 밀란", "인테르"]
+  league: "Serie A"
+
+- canonical: "Napoli"
+  aliases: ["나폴리"]
+  league: "Serie A"
+
+# ===== Ligue 1 =====
+- canonical: "Paris Saint-Germain"
+  aliases: ["파리 생제르맹", "PSG"]
+  league: "Ligue 1"
+
+# ===== K League =====
+- canonical: "FC Seoul"
+  aliases: ["FC 서울", "서울"]
+  league: "K League"
+
+- canonical: "Ulsan HD"
+  aliases: ["울산"]
+  league: "K League"
+
+- canonical: "Jeonbuk Hyundai"
+  aliases: ["전북 현대", "전북"]
+  league: "K League"
+
+# ===== 국가대표 (league: null) =====
+- canonical: "Korea"
+  aliases: ["대한민국", "한국"]
+  league: null
+
+- canonical: "England"
+  aliases: ["잉글랜드"]
+  league: null
+
+- canonical: "Brazil"
+  aliases: ["브라질"]
+  league: null
+
+- canonical: "Argentina"
+  aliases: ["아르헨티나"]
+  league: null
+
+- canonical: "Germany"
+  aliases: ["독일"]
+  league: null
+
+- canonical: "France"
+  aliases: ["프랑스"]
+  league: null
+
+- canonical: "Spain"
+  aliases: ["스페인"]
+  league: null
+
+- canonical: "Portugal"
+  aliases: ["포르투갈"]
+  league: null
+
+- canonical: "Italy"
+  aliases: ["이탈리아"]
+  league: null
+
+- canonical: "Netherlands"
+  aliases: ["네덜란드"]
+  league: null
+
+- canonical: "Japan"
+  aliases: ["일본"]
+  league: null

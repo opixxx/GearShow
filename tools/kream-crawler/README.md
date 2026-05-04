@@ -1,6 +1,6 @@
 # Kream Crawler
 
-GearShow `POST /api/admin/catalog/bulk-import` 호환 JSON 을 생성하는 Python 크롤러.
+GearShow `POST /api/admin/catalog/bulk-import` 호환 JSON 을 생성하는 Python 크롤러. **boots / uniform** 두 카테고리 지원 (ADR-017).
 
 ## 약관 / 운영 정책 (반드시 읽을 것)
 
@@ -37,22 +37,52 @@ export GEARSHOW_ADMIN_TOKEN="$(cat /tmp/admin_token)"
 
 ### 2. 크롤링 → JSON export
 
+축구화:
 ```bash
-python -m kream_crawler --category boots --limit 30 --output output/2026-05-03.json
+python -m kream_crawler --category boots --limit 30 --output output/2026-05-04-boots.json
 ```
 
-stdout 예시:
+유니폼 (ADR-017):
+```bash
+python -m kream_crawler --category uniform --limit 30 --output output/2026-05-04-uniform.json
+```
+
+stdout 예시 (boots):
 
 ```
 [INFO] 로드한 사일로: 30
-[INFO] sitemap 으로 상품 URL 수집 중...
-[INFO] 후보 URL: 145
-[INFO] export 완료 → output/2026-05-03.json (items=30)
-[INFO] 매칭률: silo 24/30, studType 28/30
+[INFO] [BOOTS] 검색 endpoint 으로 상품 URL 수집 중...
+[INFO] [BOOTS] 후보 URL: 145
+[INFO] [BOOTS] export 완료 → output/2026-05-04-boots.json (items=30)
+[INFO] [BOOTS] 매칭률: silo=24/30, club=0/30, season=0/30, kitType=0/30, brand=29/30, koFullName=29/30
 [WARN] 사일로 매칭 실패 — silos.yaml 보강 가이드:
   - Asics Lethal Tigreor 9 IT FG
   - ...
 ```
+
+stdout 예시 (uniform):
+
+```
+[INFO] 로드한 사전: clubs=32, brands=8
+[INFO] [UNIFORM] 검색 endpoint 으로 상품 URL 수집 중...
+[INFO] [UNIFORM] export 완료 → output/2026-05-04-uniform.json (items=15)
+[INFO] [UNIFORM] 매칭률: silo=0/15, club=12/15, season=14/15, kitType=11/15, brand=15/15, koFullName=14/15
+[WARN] 클럽 매칭 실패 — clubs.yaml 보강 가이드:
+  - Some Lower-League Club Jersey 24/25
+  - ...
+```
+
+### 매칭률 기준 (ADR-017 §D4)
+
+| 지표 | 하한 | 미달 시 |
+|---|---|---|
+| `silo_matched / total` (BOOTS) | ≥ 70% | `silos.yaml` 보강 |
+| `club_matched / total` (UNIFORM) | ≥ 70% | `clubs.yaml` 보강 |
+| `season_extracted / total` (UNIFORM) | ≥ 80% | 시즌 정규식 보강 |
+| `brand_matched / total` | ≥ 95% | `brands.yaml` 보강 |
+| `korean_full_name_present / total` | ≥ 95% | Kream keywords 형식 변경 의심 — `parse_keywords()` 재검토 |
+
+`kit_type_inferred` 는 빈티지(정상 None)와 추출 실패 구분 불가라 명시 하한선 없음.
 
 ### 3. 운영자 검수
 
@@ -88,22 +118,53 @@ jq '{items}' output/2026-05-03.json | curl -X POST \
 }
 ```
 
-## 사일로 사전 보강
+## 사전 보강 가이드 (ADR-017 §D2)
 
-`kream_crawler/dictionaries/silos.yaml` 에 30개로 시작. 매칭 실패한 상품명이 stdout 으로 출력되면:
+세 yaml 사전 모두 `kream_crawler/dictionaries/` 에 위치. 매칭 실패 상품명이 stdout 에 출력되면 직접 편집 + 재크롤링.
 
+### `silos.yaml` (축구화 사일로)
 ```yaml
 - canonical: "<canonical 사일로명>"
   brand: "<브랜드>"
   aliases: ["<영문 alias>", "<한글 alias>", ...]
 ```
 
-형식으로 추가한 뒤 재크롤링.
+### `brands.yaml` (브랜드 + 한국어 alias)
+```yaml
+- canonical: "Nike"
+  aliases: ["나이키"]
+```
+
+### `clubs.yaml` (클럽 + 한국어 alias + league)
+```yaml
+- canonical: "Manchester United"
+  aliases: ["맨체스터 유나이티드", "맨유"]
+  league: "EPL"
+- canonical: "Korea"          # 국가대표
+  aliases: ["대한민국", "한국"]
+  league: null                # 국가대표는 league null
+```
+
+`aliases` 의 첫 한국어 항목이 `siloNameKo` / `clubNameKo` 로 채워지므로 한국어 alias 의 첫 위치는 의도된 표기를 둔다.
+
+## 매칭 알고리즘 (ADR-017 §D3)
+
+- Longest match wins (긴 alias 우선)
+- 동률 시 canonical 알파벳 정렬 (결정성 보장)
+- `match_brand`: 영문 canonical 우선, 실패 시 한국어 alias fallback
+- `match_club`: 영/한 양쪽 검색
+- `extract_kit_type`: 영문 우선, 실패 시 한국어 fallback (`홈`/`어웨이`/`원정`/`써드`/`서드`)
 
 ## 후속 PR 백로그
 
-- 유니폼 카테고리 (clubs.yaml + 시즌/킷타입 추출)
-- 사일로 사전 100+ 확장
+- crawler 안정성 (defusedxml / 부분 결과 partial.json / `except CrawlerBlockedError` re-raise) — PR-B
+- 사일로/클럽 사전 100+ 확장 (운영 매칭률 측정 후)
 - Playwright fallback (anti-bot 강화 시)
 - 자체 S3 이미지 미러링 (Kream CDN referer 차단 시)
 - 재크롤링 스케줄러 (cron + diff import)
+
+## 참조
+
+- ADR-016: catalog search foundation (한국어 alias 컬럼 + StudType MG/HG + kitType nullable)
+- ADR-017: crawler 한국어 매칭 정책 (본 도구의 사전 + 매칭 알고리즘 + 매칭률 기준)
+- 백엔드 contract: `BulkImportCatalogItemRequest.Item` (PR #71) + ADR-016 신규 필드 (PR #75)
