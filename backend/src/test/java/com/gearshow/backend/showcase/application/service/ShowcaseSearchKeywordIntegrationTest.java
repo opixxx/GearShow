@@ -230,11 +230,13 @@ class ShowcaseSearchKeywordIntegrationTest {
                 unique + " 확인용", "설명").showcaseId();
         PageInfo<ShowcaseListResult> percentResult2 = listShowcasesUseCase.list("%", null, 20);
 
-        // wildcard escape 가 제대로 동작하면 unique 행이 '%' 매칭 결과에 들어가지 않아야 함
+        // wildcard escape 가 제대로 동작하면 unique 행이 '%' 매칭 결과에 들어가지 않아야 함.
+        // (best-case 는 결과 0건 — filteredOn + isEmpty 로 unique 행 미포함을 직접 확인하여
+        //  Sonar S5841 vacuous-truth 룰 회피)
         assertThat(percentResult2.data())
-                .as("LIKE wildcard '%' 가 escape 되지 않으면 모든 행 매칭 (amplification)")
-                .extracting(ShowcaseListResult::showcaseId)
-                .doesNotContain(uniqueId);
+                .as("LIKE wildcard '%' 가 escape 되지 않으면 unique 행이 매칭됨 (amplification)")
+                .filteredOn(r -> r.showcaseId().equals(uniqueId))
+                .isEmpty();
     }
 
     @Test
