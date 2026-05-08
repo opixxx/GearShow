@@ -3,9 +3,11 @@
 - **Status**: Accepted
 - **Date**: 2026-05-04
 - **Deciders**: opix
-- **Related**: ADR-016 (catalog search foundation), PR #74 (Kream crawler), PR #75 (catalog search-foundation backend), ADR-021 (catalog image mirroring)
+- **Related**: ADR-016 (catalog search foundation), PR #74 (Kream crawler), PR #75 (catalog search-foundation backend), ADR-021 (catalog image mirroring), ADR-022 (silos 시리즈 통일)
 
 > 본 ADR 작성 시점의 도구 이름은 `kream-crawler` 였으나, ADR-021 결정에 따라 `catalog-crawler` 로 rename 됨. 외부 사이트 식별자(`KreamClient` 등) 와 운영 정책(약관 명시) 는 의도적으로 유지.
+
+> §D2 의 사일로 사전 단위(라인 단위 canonical) 결정은 ADR-022 (PR-Q3) 에서 시리즈 단위로 갱신됨. 결정 변경 사유는 ADR-022 §Context (PR #82 PoC 매칭 실패 8건) 참조.
 
 ## Context
 

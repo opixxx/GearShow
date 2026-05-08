@@ -1,13 +1,32 @@
--- ADR-016 §D1 의 결정(StudType enum 에 MG, HG 추가) 의 DB 스키마 마이그레이션 보강.
+-- ADR-022: silos.yaml 시리즈 통일에 따른 운영 catalog 의 silo_name backfill.
 --
--- 배경: ddl-auto: update 는 ENUM 컬럼의 enum 값 변경을 자동 반영하지 않으므로
--- Java 의 StudType enum 은 7개로 갱신됐지만 DB 의 boots_spec.stud_type 은
--- 이전 5개('AG','FG','IC','SG','TF') 정의로 남아있다. Hibernate 가 'MG'/'HG' 를
--- INSERT 시 'Data truncated for column' 으로 실패 (PR #82 PoC 검증에서 발견).
+-- 정책 변경 (2026-05-08): 라인 단위(`Phantom GX`, `Tiempo Legend`) → 시리즈 단위(`Phantom`, `Tiempo`).
+-- 본 SQL 은 schema.sql 의 일부로 부팅 시 자동 실행되며, 멱등 — 이미 시리즈 통일된 행은
+-- 빈 WHERE 결과로 0 rows affected (no-op).
 --
--- 정책: schema.sql 은 ddl-auto 직후 자동 실행된다 (spring.sql.init.mode=always).
--- ALTER MODIFY COLUMN 은 멱등 — 같은 enum 정의 재적용 시 no-op (MySQL 8 동작).
--- 기존 5개 enum 값 보존 + 2개 추가 → backward compatible (기존 행 영향 0).
+-- 운영자 수동 SQL 0 (spring.sql.init.mode=always 설정 + jpa.defer-datasource-initialization=true).
+-- 자세한 결정 근거는 ADR-022 §Decision 참조.
 
-ALTER TABLE boots_spec MODIFY COLUMN stud_type
-  ENUM('FG','SG','AG','TF','IC','MG','HG') NOT NULL;
+-- Nike: Mercurial Superfly + Mercurial Vapor → Mercurial
+UPDATE boots_spec SET silo_name = 'Mercurial', silo_name_ko = '머큐리얼'
+  WHERE silo_name IN ('Mercurial Superfly', 'Mercurial Vapor');
+
+-- Nike: Phantom GX + Phantom Luna (+ Phantom GT) → Phantom
+UPDATE boots_spec SET silo_name = 'Phantom', silo_name_ko = '팬텀'
+  WHERE silo_name IN ('Phantom GX', 'Phantom Luna', 'Phantom GT');
+
+-- Nike: Tiempo Legend → Tiempo
+UPDATE boots_spec SET silo_name = 'Tiempo', silo_name_ko = '티엠포'
+  WHERE silo_name = 'Tiempo Legend';
+
+-- Adidas: Copa Pure + Copa Mundial → Copa
+UPDATE boots_spec SET silo_name = 'Copa', silo_name_ko = '코파'
+  WHERE silo_name IN ('Copa Pure', 'Copa Mundial');
+
+-- Adidas: X Crazyfast + X Speedportal → Adidas X
+UPDATE boots_spec SET silo_name = 'Adidas X', silo_name_ko = '아디다스 X'
+  WHERE silo_name IN ('X Crazyfast', 'X Speedportal');
+
+-- Mizuno: Morelia Neo + Morelia II → Morelia
+UPDATE boots_spec SET silo_name = 'Morelia', silo_name_ko = '모렐리아'
+  WHERE silo_name IN ('Morelia Neo', 'Morelia II');

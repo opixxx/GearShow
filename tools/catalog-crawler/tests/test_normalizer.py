@@ -155,14 +155,88 @@ class TestExtractReleaseYear:
 
 
 class TestLoadSilos:
-    def test_loads_30_silos(self):
+    def test_loads_silo_dictionary_with_series_canonicals(self):
+        """ADR-022: silos.yaml 의 canonical 은 시리즈 단위. 핵심 시리즈 등록 검증."""
         silos = load_silos()
-        assert len(silos) >= 30
+        assert len(silos) >= 15
         canonicals = {s.canonical for s in silos}
-        # 핵심 사일로 필수
-        assert "Mercurial Superfly" in canonicals
-        assert "Predator" in canonicals
-        assert "Morelia Neo" in canonicals
+        # 시리즈 단위 통합 결과 (ADR-022 §D1)
+        assert "Mercurial" in canonicals      # Superfly + Vapor 통합
+        assert "Phantom" in canonicals        # GX + Luna + GT 통합
+        assert "Tiempo" in canonicals         # Legend 통합
+        assert "Predator" in canonicals       # 단일 라인 — 그대로
+        assert "Morelia" in canonicals        # Neo + II 통합
+        assert "Alpha" in canonicals          # 신규 (Mizuno)
+        assert "Adidas X" in canonicals       # Crazyfast + Speedportal 통합 (D3 brand prefix 예외)
+
+
+class TestSeriesUnificationRegression:
+    """ADR-022: 시리즈 단위 통일 정책의 회귀 가드.
+
+    PR #82 PoC 에서 발견된 매칭 실패 8건이 모두 시리즈 통일로 해소됨을 검증한다.
+    """
+
+    def setup_method(self):
+        self.silos = load_silos()
+
+    def test_phantom_series_unified(self):
+        """Phantom GX/GT/Luna 모두 'Phantom' canonical."""
+        for name in [
+            "Nike Phantom GX Elite FG",
+            "Nike Phantom GT Elite DF FG White Pink Blast",
+            "Nike Phantom Luna 2 Pro FG",
+        ]:
+            silo = match_silo(name, self.silos)
+            assert silo is not None, name
+            assert silo.canonical == "Phantom", f"{name} → {silo.canonical}"
+
+    def test_tiempo_series_handles_emerald_collaboration(self):
+        """'Tiempo Emerald Legend 10' 같은 가공 표기도 'Tiempo' 매칭 (PR #82 매칭 실패 fix)."""
+        for name in [
+            "Nike Tiempo Legend 10 Elite",
+            "Nike Tiempo Emerald Legend 10 Academy MG Dark Atomic Teal Sail",
+        ]:
+            silo = match_silo(name, self.silos)
+            assert silo is not None, name
+            assert silo.canonical == "Tiempo", f"{name} → {silo.canonical}"
+
+    def test_mercurial_series_unified(self):
+        """Mercurial Superfly + Vapor 모두 'Mercurial' canonical."""
+        for name in [
+            "Nike Mercurial Superfly 9 Elite FG",
+            "Nike Mercurial Vapor 15 Academy MG",
+        ]:
+            silo = match_silo(name, self.silos)
+            assert silo and silo.canonical == "Mercurial", f"{name} → {silo}"
+
+    def test_alpha_new_series(self):
+        """Mizuno Alpha 신규 시리즈 매칭 (PR #82 매칭 실패 fix)."""
+        for name in [
+            "Mizuno Alpha Select White Gold",
+            "Mizuno Alpha Japan White Gold",
+        ]:
+            silo = match_silo(name, self.silos)
+            assert silo and silo.canonical == "Alpha", f"{name} → {silo}"
+
+    def test_adidas_x_series_excludes_collaboration_prefix(self):
+        """ADR-022 §D4: 'adidas x bape f50' 의 collaboration 'x' 가 false positive 매칭되지 않음."""
+        # collaboration — F50 으로 잡혀야 함
+        silo = match_silo("Adidas x BAPE F50 Elite FG M2 Hemp Gold", self.silos)
+        assert silo and silo.canonical == "F50", f"collaboration → {silo}"
+
+        # 정상 시리즈 매칭
+        for name in [
+            "Adidas X Crazyfast.1 FG",
+            "Adidas X Speedportal+ FG",
+            "Adidas X Speedportal Leyenda.1 FG",
+        ]:
+            silo = match_silo(name, self.silos)
+            assert silo and silo.canonical == "Adidas X", f"{name} → {silo}"
+
+    def test_f50_alias_includes_standalone_token(self):
+        """ADR-022: F50 alias 에 'f50' 단독 추가로 prefix 의존성 제거."""
+        silo = match_silo("Adidas F50 Elite", self.silos)
+        assert silo and silo.canonical == "F50"
 
 
 class TestToBulkImportItem:
@@ -184,7 +258,7 @@ class TestToBulkImportItem:
         assert item["modelCode"] == "DJ4977-001"
         assert item["officialImageUrl"] == "https://kream-phinf.pstatic.net/sample.jpg"
         assert item["bootsSpec"]["studType"] == "FG"
-        assert item["bootsSpec"]["siloName"] == "Mercurial Superfly"
+        assert item["bootsSpec"]["siloName"] == "Mercurial"
         assert item["bootsSpec"]["releaseYear"] == "2024"
         assert item["bootsSpec"]["surfaceType"] == "천연잔디"
         assert item["uniformSpec"] is None
@@ -202,7 +276,7 @@ class TestToBulkImportItem:
         item = to_bulk_import_item(raw, self.silos)
         assert item["category"] == "BOOTS"
         assert item["bootsSpec"]["studType"] == "TF"
-        assert item["bootsSpec"]["siloName"] == "Morelia Neo"
+        assert item["bootsSpec"]["siloName"] == "Morelia"
         assert item["bootsSpec"]["surfaceType"] == "짧은 인조잔디"
 
     def test_silo_unmatched_returns_none_silo(self):
@@ -235,8 +309,9 @@ class TestToBulkImportItem:
         item = to_bulk_import_item(raw, self.silos)
         assert item["fullNameKo"] == "나이키 머큐리얼 슈퍼플라이 9 엘리트 FG"
         assert item["fullNameEn"] == "Nike Mercurial Superfly 9 Elite FG"
-        assert item["bootsSpec"]["siloName"] == "Mercurial Superfly"
-        assert item["bootsSpec"]["siloNameKo"] == "머큐리얼 슈퍼플라이"
+        # ADR-022: 시리즈 단위 통일 — Mercurial Superfly/Vapor 모두 'Mercurial' canonical.
+        assert item["bootsSpec"]["siloName"] == "Mercurial"
+        assert item["bootsSpec"]["siloNameKo"] == "머큐리얼"
 
 
 # ===== ADR-017 — 사전 (brands/clubs) 로드 + 매칭 =====
