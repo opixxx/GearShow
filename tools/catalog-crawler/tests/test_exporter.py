@@ -31,7 +31,7 @@ def test_export_creates_bulk_import_compatible_json(tmp_path: Path):
     export(items, output, stats={"items": 1})
 
     payload = json.loads(output.read_text(encoding="utf-8"))
-    assert payload["source"] == "kream"
+    assert payload["source"] == "external"
     assert "crawledAt" in payload
     assert payload["stats"] == {"items": 1}
     assert payload["items"] == items

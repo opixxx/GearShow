@@ -136,6 +136,16 @@ AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  ← 환경변수
 
 다중 출처 추상화 (`sources/<site>.py` 분리, 식별자 일반화) 는 별도 트랙. 본 PR 시점엔 단일 출처라 추상화 비용 > 이득.
 
+### D8. export JSON 메타필드 일관성 — 외부 brand 식별자 사용 금지
+
+`exporter.py` 가 export payload top-level 에 박는 `source` 등 메타필드도 외부 brand 식별자(`"kream"` 등) 를 사용하지 않는다. 일반 토큰 (`"external"`) 으로 통일. 이유:
+
+- 운영 catalog DB 에는 `jq '{items}'` 로 items 만 떼어 전달되므로 메타필드는 운영 데이터에 영향 0. 그러나 운영자 검수용 JSON 파일에는 잔존 → 사용자 정책 "외부 출처 흔적 0" 일관 적용 위해 일반화.
+- 출처 식별이 필요한 운영 절차 (takedown — §D5) 는 운영자 수동 절차로 처리. 자동화 시점에 별도 `originSite` 필드 신설 검토.
+- 다중 출처 추상화(상기 후속 트랙) 시점에 `originSite` 표준화 함께 진행.
+
+> 후속 발견 (PR #82 PoC 검증): `payload["source"] = "kream"` 잔존 1건 → 본 fix PR 에서 `"external"` 로 일반화.
+
 ## 트레이드오프
 
 | 영역 | 비용 | 이득 |
