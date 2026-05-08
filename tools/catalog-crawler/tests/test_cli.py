@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kream_crawler import cli
+from catalog_crawler import cli
 
 
 class _FakeResponse:
@@ -155,7 +155,7 @@ class TestRunUniformPipeline:
 class TestCrawlerBlockedExitCode:
     def test_blocked_returns_exit_code_2(self, tmp_path, mocker):
         """차단 시 exit code 2 반환 (운영자 검수 신호)."""
-        from kream_crawler.http_client import CrawlerBlockedError
+        from catalog_crawler.http_client import CrawlerBlockedError
 
         mocker.patch.object(
             cli, "_run_boots",
@@ -178,7 +178,7 @@ class TestCrawlerBlockedExitCode:
 
         과거 PR #74 에서 같은 패턴 (광범위 except Exception 이 CrawlerBlockedError 삼킴) 회귀 차단.
         """
-        from kream_crawler.http_client import CrawlerBlockedError
+        from catalog_crawler.http_client import CrawlerBlockedError
 
         mocker.patch.object(
             cli, "discover_boots_product_urls",
@@ -212,7 +212,7 @@ class TestCrawlerBlockedExitCode:
         는 unhandled 로 traceback + exit 1 이었으나, 둘 다 정책 위반의 운영 의미가 동등하므로
         main 이 두 예외 모두 잡아 exit 2 반환하도록 통합.
         """
-        from kream_crawler.http_client import ForbiddenPathError
+        from catalog_crawler.http_client import ForbiddenPathError
 
         mocker.patch.object(
             cli, "discover_boots_product_urls",
@@ -243,7 +243,7 @@ class TestPartialResultDump:
 
     def test_blocked_after_partial_progress_dumps_partial_json(self, tmp_path, mocker):
         """3개 URL 중 2개 fetch 후 차단 발생 → 그때까지 모은 items 가 .partial.json 으로 저장."""
-        from kream_crawler.http_client import CrawlerBlockedError
+        from catalog_crawler.http_client import CrawlerBlockedError
 
         urls = [
             "https://kream.co.kr/products/100",
@@ -289,7 +289,7 @@ class TestPartialResultDump:
 
     def test_blocked_before_any_progress_does_not_dump_partial_json(self, tmp_path, mocker):
         """첫 URL 에서 차단 시 모은 items 0건 — 빈 .partial.json 노이즈 회피."""
-        from kream_crawler.http_client import CrawlerBlockedError
+        from catalog_crawler.http_client import CrawlerBlockedError
 
         mocker.patch.object(
             cli, "discover_boots_product_urls",
@@ -320,7 +320,7 @@ class TestPartialResultDump:
         호출되던 결함의 회귀 차단점. outer 에서 (CrawlerBlockedError, ForbiddenPathError)
         를 명시 re-raise 하여 1회만 호출되어야 함.
         """
-        from kream_crawler.http_client import CrawlerBlockedError
+        from catalog_crawler.http_client import CrawlerBlockedError
 
         urls = [
             "https://kream.co.kr/products/100",

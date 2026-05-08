@@ -7,8 +7,8 @@ from urllib.parse import quote
 import pytest
 import requests_mock
 
-from kream_crawler.http_client import KreamClient
-from kream_crawler.sitemap import (
+from catalog_crawler.http_client import KreamClient
+from catalog_crawler.sitemap import (
     KREAM_BASE,
     discover_boots_product_urls_via_search,
     discover_uniform_product_urls,

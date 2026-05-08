@@ -7,7 +7,7 @@ from importlib import resources
 import pytest
 import yaml
 
-from kream_crawler.normalizer import (
+from catalog_crawler.normalizer import (
     Brand,
     Club,
     Silo,
@@ -29,11 +29,11 @@ from kream_crawler.normalizer import (
     to_bulk_import_item,
     to_uniform_item,
 )
-from kream_crawler.product_parser import RawProduct
+from catalog_crawler.product_parser import RawProduct
 
 
 def _load_yaml(name: str):
-    text = resources.files("kream_crawler.dictionaries").joinpath(name).read_text(encoding="utf-8")
+    text = resources.files("catalog_crawler.dictionaries").joinpath(name).read_text(encoding="utf-8")
     return yaml.safe_load(text) or []
 
 

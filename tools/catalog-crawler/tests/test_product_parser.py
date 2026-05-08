@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kream_crawler.product_parser import (
+from catalog_crawler.product_parser import (
     is_boots_product,
     parse_keywords,
     parse_product_html,

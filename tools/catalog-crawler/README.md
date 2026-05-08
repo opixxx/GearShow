@@ -1,4 +1,4 @@
-# Kream Crawler
+# Catalog Crawler
 
 GearShow `POST /api/admin/catalog/bulk-import` 호환 JSON 을 생성하는 Python 크롤러. **boots / uniform** 두 카테고리 지원 (ADR-017).
 
@@ -11,14 +11,33 @@ GearShow `POST /api/admin/catalog/bulk-import` 호환 JSON 을 생성하는 Pyth
 - **차단 경로**: `/my/**`, `/history/**` 는 client 단에서 거부 (robots.txt 명시 차단).
 - **User-Agent 명시**: `GearShow-Catalog-Bot/1.0 (+contact: opix0306@naver.com)` 로 운영자가 차단/문의 가능하게 한다.
 - **Anti-bot 우회 시도 금지**: 403/429 응답 시 즉시 중단 (`CrawlerBlockedError`).
+- **이미지 자체 미러링 의무 (운영 적재 시)**: 외부 CDN URL 을 catalog 에 영구 저장하지 않는다 (referer 차단 + 출처 흔적 0 정책). `--mirror-images` 옵션으로 자체 S3 미러링 후 자체 도메인 URL 만 적재. 상세는 ADR-021.
 
 ## 셋업
 
 ```bash
-cd tools/kream-crawler
+cd tools/catalog-crawler
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+```
+
+### AWS credential (운영 적재 시 — `--mirror-images` 사용)
+
+표준 AWS credential 위치만 사용한다 (ADR-021 §D6 — 코드 하드코딩 금지):
+
+```bash
+# 옵션 A — AWS CLI 표준 위치
+aws configure --profile gearshow            # ~/.aws/credentials
+export AWS_PROFILE=gearshow
+
+# 옵션 B — 환경변수 직접 지정
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=ap-northeast-2
+
+# 미러링 대상 bucket 도 환경변수로 (--s3-bucket 으로도 지정 가능)
+export AWS_S3_BUCKET=<gearshow-s3-bucket>
 ```
 
 ## 사용법
@@ -37,15 +56,40 @@ export GEARSHOW_ADMIN_TOKEN="$(cat /tmp/admin_token)"
 
 ### 2. 크롤링 → JSON export
 
+#### 로컬 검증 (외부 CDN URL 그대로 — 검색 사슬 동작 확인용)
+
 축구화:
 ```bash
-python -m kream_crawler --category boots --limit 30 --output output/2026-05-04-boots.json
+python -m catalog_crawler --category boots --limit 30 --output output/2026-05-04-boots.json
 ```
 
 유니폼 (ADR-017):
 ```bash
-python -m kream_crawler --category uniform --limit 30 --output output/2026-05-04-uniform.json
+python -m catalog_crawler --category uniform --limit 30 --output output/2026-05-04-uniform.json
 ```
+
+> 로컬에서는 referer 차단으로 화면에 이미지가 안 보일 수 있다 — 검색·필터링 동작만 검증할 때 사용.
+
+#### 운영 적재 (`--mirror-images` 필수, ADR-021)
+
+```bash
+python -m catalog_crawler --category boots --limit 30 \
+  --output output/2026-05-04-boots.json \
+  --mirror-images --s3-bucket "$AWS_S3_BUCKET"
+
+python -m catalog_crawler --category uniform --limit 30 \
+  --output output/2026-05-04-uniform.json \
+  --mirror-images --s3-bucket "$AWS_S3_BUCKET"
+```
+
+활성화 시 흐름: 외부 CDN 이미지를 다운로드 → 자체 S3 (`catalog-images/<category>/<modelCode>.<ext>`) 업로드 → JSON 의 `officialImageUrl` 을 자체 도메인 URL 로 교체. 결과 JSON 안에는 외부 도메인 흔적 0건.
+
+옵션:
+- `--s3-bucket <name>` (또는 `AWS_S3_BUCKET` 환경변수) — 필수
+- `--s3-region <region>` — 기본 `ap-northeast-2`
+- `--s3-prefix <prefix>` — 기본 `catalog-images`
+
+bucket 이 비어있으면 exit code 2 + 에러 메시지로 즉시 종료 (fail fast).
 
 stdout 예시 (boots):
 
@@ -120,7 +164,7 @@ jq '{items}' output/2026-05-03.json | curl -X POST \
 
 ## 사전 보강 가이드 (ADR-017 §D2)
 
-세 yaml 사전 모두 `kream_crawler/dictionaries/` 에 위치. 매칭 실패 상품명이 stdout 에 출력되면 직접 편집 + 재크롤링.
+세 yaml 사전 모두 `catalog_crawler/dictionaries/` 에 위치. 매칭 실패 상품명이 stdout 에 출력되면 직접 편집 + 재크롤링.
 
 ### `silos.yaml` (축구화 사일로)
 ```yaml
@@ -160,11 +204,14 @@ jq '{items}' output/2026-05-03.json | curl -X POST \
 - crawler 안정성 (defusedxml / 부분 결과 partial.json / `except CrawlerBlockedError` re-raise) — PR-B
 - 사일로/클럽 사전 100+ 확장 (운영 매칭률 측정 후)
 - Playwright fallback (anti-bot 강화 시)
-- 자체 S3 이미지 미러링 (Kream CDN referer 차단 시)
+- ✅ 자체 S3 이미지 미러링 — ADR-021 (본 PR 처리 완료)
 - 재크롤링 스케줄러 (cron + diff import)
+- 다중 출처 추상화 (`sources/<site>.py` 분리, `KreamClient` 일반화) — 신규 출처 등장 시
+- Takedown 자동화 (admin UI 또는 CLI command) — 운영 catalog 행 수 증가 시
 
 ## 참조
 
 - ADR-016: catalog search foundation (한국어 alias 컬럼 + StudType MG/HG + kitType nullable)
 - ADR-017: crawler 한국어 매칭 정책 (본 도구의 사전 + 매칭 알고리즘 + 매칭률 기준)
+- ADR-021: catalog 이미지 수집·저장 정책 (자체 S3 미러링 + opt-in + 도구 rename)
 - 백엔드 contract: `BulkImportCatalogItemRequest.Item` (PR #71) + ADR-016 신규 필드 (PR #75)
