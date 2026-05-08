@@ -13,6 +13,16 @@ spring:
 
   jpa:
     open-in-view: false
+    # ddl-auto 로 schema 가 먼저 생성된 뒤 schema.sql/data.sql 이 적용되도록 보장 (ADR-016 §D1 후속).
+    defer-datasource-initialization: true
+
+  # ddl-auto: update 가 ENUM 컬럼의 enum 값 변경을 자동 반영하지 못하므로
+  # schema.sql 로 boots_spec.stud_type 등의 ENUM 정의 정정을 강제 (ADR-016 §D1 후속, schema.sql 참조).
+  # mode=always: profile 무관 schema.sql 자동 실행. 멱등 ALTER 라 매 부팅 안전.
+  sql:
+    init:
+      mode: always
+      continue-on-error: false
 
   kafka:
     # default 값을 의도적으로 두지 않는다.

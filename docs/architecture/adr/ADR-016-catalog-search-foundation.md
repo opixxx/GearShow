@@ -5,6 +5,8 @@
 - **Deciders**: opix
 - **Related**: ADR-014 (admin RBAC), PR #71 (catalog bulk-import API), PR #74 (Kream crawler — OPEN), 후속 ADR-017 (crawler 매칭 정책 — TBD)
 
+> §D1 의 `StudType` MG/HG 추가 결정의 **DB 스키마 마이그레이션이 본 ADR 머지 PR 에서 누락**됨 — `ddl-auto: update` 가 ENUM 컬럼의 enum 값 변경을 자동 반영하지 않는다. PR #82 PoC 검증에서 `Data truncated for column 'stud_type'` 로 발견되어 후속 fix PR 에서 `backend/src/main/resources/schema.sql` (멱등 ALTER) + `spring.sql.init.mode=always` 설정으로 보강. 결정 자체는 유효 — 보강만 추가.
+
 ## Context
 
 향후 도입할 Showcase 검색 기능(키워드 검색)을 사용자 경험 관점에서 한국어 친화적으로 만들어야 한다. 사용자는 "머큐리얼", "맨유" 같은 한국어 키워드를 자연스럽게 입력하지만, 카탈로그 데이터(Kream 크롤러 수집 대상) 의 canonical 명칭은 영문(`Mercurial Superfly`, `Manchester United`) 이다. 검색 시점에 동적 매칭을 시도하면 비용이 크고 정확도도 낮다. 따라서 **카탈로그 등록 시점에 한국어 alias 를 함께 영속**하여 향후 검색에서 단순 LIKE 매칭으로도 80%+ 매칭률을 확보하는 것이 합리적이다.
