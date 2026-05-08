@@ -112,7 +112,8 @@ class TestRunBootsPipeline:
         assert payload["stats"]["category"] == "BOOTS"
         assert payload["stats"]["silo_matched"] == 1
         assert payload["stats"]["korean_full_name_present"] == 1
-        assert payload["items"][0]["bootsSpec"]["siloName"] == "Mercurial Superfly"
+        # ADR-022: 시리즈 단위 통일 — Mercurial Superfly/Vapor 모두 'Mercurial' canonical.
+        assert payload["items"][0]["bootsSpec"]["siloName"] == "Mercurial"
         assert payload["items"][0]["fullNameKo"].startswith("나이키")
 
 
