@@ -3,7 +3,9 @@
 - **Status**: Accepted
 - **Date**: 2026-05-04
 - **Deciders**: opix
-- **Related**: ADR-016 (catalog search foundation), PR #74 (Kream crawler), PR #75 (catalog search-foundation backend)
+- **Related**: ADR-016 (catalog search foundation), PR #74 (Kream crawler), PR #75 (catalog search-foundation backend), ADR-021 (catalog image mirroring)
+
+> 본 ADR 작성 시점의 도구 이름은 `kream-crawler` 였으나, ADR-021 결정에 따라 `catalog-crawler` 로 rename 됨. 외부 사이트 식별자(`KreamClient` 등) 와 운영 정책(약관 명시) 는 의도적으로 유지.
 
 ## Context
 

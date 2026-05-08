@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from kream_crawler.exporter import export
-from kream_crawler.normalizer import CatalogItem
+from catalog_crawler.exporter import export
+from catalog_crawler.normalizer import CatalogItem
 
 
 def test_export_creates_bulk_import_compatible_json(tmp_path: Path):

@@ -15,7 +15,7 @@ from urllib.parse import quote
 # stdlib xml.etree 는 entity expansion 에 취약하다고 알려져 있어 외부 입력 신뢰 영역엔 부적합.
 from defusedxml import ElementTree as ET
 
-from kream_crawler.http_client import KreamClient
+from catalog_crawler.http_client import KreamClient
 
 LOGGER = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ import time
 import pytest
 import requests_mock
 
-from kream_crawler.http_client import (
+from catalog_crawler.http_client import (
     CrawlerBlockedError,
     ForbiddenPathError,
     KreamClient,

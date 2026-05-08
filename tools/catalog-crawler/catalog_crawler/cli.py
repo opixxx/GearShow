@@ -2,23 +2,27 @@
 
 ADR-017: --category boots / uniform 두 카테고리 지원. 통계 집계는
 normalizer.compute_match_stats 에 위임하여 cli 가 dict 키 형태에 결합되지 않도록 분리.
+
+ADR-021: --mirror-images 활성화 시 normalize 직후 외부 CDN 이미지를 자체 S3 로 미러링하고
+JSON 의 officialImageUrl 을 자체 도메인 URL 로 교체. default off 로 로컬 검증 호환성 유지.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from kream_crawler.exporter import export
-from kream_crawler.http_client import (
+from catalog_crawler.exporter import export
+from catalog_crawler.http_client import (
     CrawlerBlockedError,
     ForbiddenPathError,
     KreamClient,
 )
-from kream_crawler.normalizer import (
+from catalog_crawler.normalizer import (
     CatalogItem,
     compute_match_stats,
     load_brands,
@@ -27,19 +31,20 @@ from kream_crawler.normalizer import (
     to_boots_item,
     to_uniform_item,
 )
-from kream_crawler.product_parser import parse_product_html
-from kream_crawler.sitemap import (
+from catalog_crawler.product_parser import parse_product_html
+from catalog_crawler.s3_mirror import S3Mirror, build_s3_key
+from catalog_crawler.sitemap import (
     discover_boots_product_urls,
     discover_uniform_product_urls,
 )
 
-LOGGER = logging.getLogger("kream_crawler")
+LOGGER = logging.getLogger("catalog_crawler")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="kream-crawler",
-        description="Kream 카탈로그 크롤러 — GearShow bulk-import 호환 JSON export",
+        prog="catalog-crawler",
+        description="Catalog 크롤러 — GearShow bulk-import 호환 JSON export",
     )
     parser.add_argument(
         "--category",
@@ -70,9 +75,37 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="DEBUG 로그 출력.",
     )
+    parser.add_argument(
+        "--mirror-images",
+        action="store_true",
+        default=False,
+        help="외부 CDN 이미지를 자체 S3 로 미러링한다 (ADR-021). 운영 적재 시 활성화 필수.",
+    )
+    parser.add_argument(
+        "--s3-bucket",
+        default=os.environ.get("AWS_S3_BUCKET"),
+        help="--mirror-images 사용 시 업로드 대상 S3 bucket. 미지정 시 AWS_S3_BUCKET 환경변수 사용.",
+    )
+    parser.add_argument(
+        "--s3-region",
+        default="ap-northeast-2",
+        help="S3 region (기본 ap-northeast-2).",
+    )
+    parser.add_argument(
+        "--s3-prefix",
+        default="catalog-images",
+        help="S3 객체 prefix (기본 catalog-images, ADR-021 §D2).",
+    )
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
+
+    # --mirror-images 활성화 시 bucket 필수 — fail fast (ADR-021 §D6).
+    if args.mirror_images and not args.s3_bucket:
+        LOGGER.error(
+            "--mirror-images 사용 시 --s3-bucket 또는 AWS_S3_BUCKET 환경변수가 필요합니다",
+        )
+        return 2
 
     try:
         if args.category == "uniform":
@@ -129,8 +162,13 @@ def _run_pipeline(
     unmatched_label: str,
     unmatched_predicate: Callable[[CatalogItem], bool],
 ) -> int:
-    """축구화/유니폼 공통 파이프라인 — discover → fetch → parse → normalize → export."""
+    """축구화/유니폼 공통 파이프라인 — discover → fetch → parse → normalize → [mirror] → export."""
     client = KreamClient(rate_limit_per_sec=args.rate_limit)
+    mirror = (
+        S3Mirror(bucket=args.s3_bucket, prefix=args.s3_prefix, region=args.s3_region)
+        if args.mirror_images
+        else None
+    )
 
     LOGGER.info("[%s] 검색 endpoint 으로 상품 URL 수집 중...", category)
     candidate_urls = discover(client, args.limit)
@@ -164,6 +202,12 @@ def _run_pipeline(
 
             raw = parse_product_html(response.text, source_url=url)
             item = normalize(raw)
+
+            # ADR-021 §D1: normalize 직후 미러링 — JSON export 시점엔 외부 CDN URL 흔적 0.
+            # 실패는 fatal — outer try 의 일반 Exception 분기가 partial dump 처리.
+            if mirror is not None:
+                _mirror_item_image(mirror, client.get, item, category)
+
             items.append(item)
 
             if unmatched_predicate(item):
@@ -173,7 +217,7 @@ def _run_pipeline(
         # (code-reviewer Major #1 + architecture-reviewer Major #1: outer except 중복 호출 차단)
         raise
     except Exception:
-        # inner 가 잡지 않는 예상치 못한 에러 (parse/normalize 등) 만 outer 가 부분 결과 보존
+        # inner 가 잡지 않는 예상치 못한 에러 (parse/normalize/mirror 등) 만 outer 가 부분 결과 보존
         _dump_partial(items, args.output, category)
         raise
 
@@ -205,6 +249,34 @@ def _run_pipeline(
             LOGGER.warning("  - %s", name)
 
     return 0
+
+
+def _mirror_item_image(
+    mirror: S3Mirror,
+    http_get: Callable,
+    item: CatalogItem,
+    category: str,
+) -> None:
+    """item 의 officialImageUrl 을 자체 S3 URL 로 교체. ADR-021 §D1.
+
+    - modelCode 없거나 imageUrl 없으면 미러링 skip + imageUrl null 처리 + warning log
+      (운영자가 부분 미러링 인지 가능, 식별자 없는 항목엔 자체 URL 부여 불가).
+    - 미러링 실패는 fatal — 호출자(_run_pipeline outer try)가 partial dump + raise.
+    """
+    src_url = item.get("officialImageUrl")
+    model_code = item.get("modelCode")
+    if not src_url:
+        return
+    if not model_code:
+        LOGGER.warning(
+            "model_code 없어 미러링 skip — imageUrl null 처리: %s", src_url,
+        )
+        item["officialImageUrl"] = None
+        return
+
+    key = build_s3_key(category, model_code, src_url)
+    new_url = mirror.upload(src_url, key, http_get=http_get)
+    item["officialImageUrl"] = new_url
 
 
 def _dump_partial(items: list[CatalogItem], output_path: Path, category: str) -> None:

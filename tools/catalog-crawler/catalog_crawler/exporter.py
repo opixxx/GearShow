@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from kream_crawler.normalizer import CatalogItem
+from catalog_crawler.normalizer import CatalogItem
 
 
 def export(

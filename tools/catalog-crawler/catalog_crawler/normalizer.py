@@ -17,7 +17,7 @@ from typing import NamedTuple, TypedDict
 
 import yaml
 
-from kream_crawler.product_parser import RawProduct
+from catalog_crawler.product_parser import RawProduct
 
 LOGGER = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class CatalogItem(TypedDict, total=False):
 
 def load_silos() -> list[Silo]:
     """패키지 내 silos.yaml 을 로드하여 Silo 리스트 반환."""
-    text = resources.files("kream_crawler.dictionaries").joinpath("silos.yaml").read_text(
+    text = resources.files("catalog_crawler.dictionaries").joinpath("silos.yaml").read_text(
         encoding="utf-8"
     )
     raw = yaml.safe_load(text) or []
@@ -125,7 +125,7 @@ def load_silos() -> list[Silo]:
 
 def load_brands() -> list[Brand]:
     """패키지 내 brands.yaml 을 로드하여 Brand 리스트 반환 (ADR-017 §D2)."""
-    text = resources.files("kream_crawler.dictionaries").joinpath("brands.yaml").read_text(
+    text = resources.files("catalog_crawler.dictionaries").joinpath("brands.yaml").read_text(
         encoding="utf-8"
     )
     raw = yaml.safe_load(text) or []
@@ -140,7 +140,7 @@ def load_brands() -> list[Brand]:
 
 def load_clubs() -> list[Club]:
     """패키지 내 clubs.yaml 을 로드하여 Club 리스트 반환 (ADR-017 §D2)."""
-    text = resources.files("kream_crawler.dictionaries").joinpath("clubs.yaml").read_text(
+    text = resources.files("catalog_crawler.dictionaries").joinpath("clubs.yaml").read_text(
         encoding="utf-8"
     )
     raw = yaml.safe_load(text) or []
