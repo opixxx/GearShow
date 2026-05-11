@@ -84,6 +84,32 @@ class TestExtractStudType:
         """
         assert extract_stud_type(name) is None
 
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("Adidas Predator Accuracy.3 Firm Ground Cleats", "FG"),
+            ("Some Boot Soft Ground", "SG"),
+            ("Generic Artificial Ground", "AG"),
+            ("Hard Ground Edition", "HG"),
+            ("Predator All Surface Pro", "TF"),    # Q1: All Surface → TF
+            ("Indoor Court Boot", "IC"),
+            ("Multi Ground Pro", "MG"),
+        ],
+    )
+    def test_full_text_mapping_fallback(self, name, expected):
+        """본 PR: 약어가 없으면 풀텍스트 ("Firm Ground", "All Surface" 등) 매핑 fallback."""
+        assert extract_stud_type(name) == expected
+
+    def test_as_token_maps_to_tf(self):
+        """본 PR Q1: Mizuno 'AS' (All Surface) 단독 토큰 → TF (풋살화)."""
+        assert extract_stud_type("Mizuno Alpha Elite AS White Gold") == "TF"
+        assert extract_stud_type("Mizuno Monarcida Neo III Select AS Red") == "TF"
+
+    def test_abbreviated_takes_precedence_over_full_text(self):
+        """약어 매칭이 풀텍스트보다 우선 — 모델명에 둘 다 있을 때 약어 채택."""
+        # "MG" 약어 + "Firm Ground" 풀텍스트 동시 등장 — 약어가 이김
+        assert extract_stud_type("Custom Boot Firm Ground MG variant") == "MG"
+
 
 class TestInferSurfaceType:
     @pytest.mark.parametrize(
@@ -485,6 +511,35 @@ class TestExtractSeason:
     )
     def test_extracts_real_season_when_model_code_coexists(self, text, expected):
         assert extract_season(text) == expected
+
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ("Adidas Spain 2026 Away Jersey", "2026"),
+            ("Nike Korea 2025 Stadium Home", "2025"),
+            ("Argentina 2024 Home Jersey", "2024"),
+        ],
+    )
+    def test_single_4digit_year_fallback(self, text, expected):
+        """본 PR: 시즌 쌍 패턴 매칭 실패 시 단일 4-digit 연도 (2024-2099) fallback."""
+        assert extract_season(text) == expected
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Manchester United 91 Away Long Sleeve",   # 2-digit 단독은 미지원 (false positive 위험)
+            "FC Barcelona Retro Short Sleeve",          # 시즌 표기 없음
+            "IB9007-436 some text",                     # modelCode 4-digit false positive 차단
+        ],
+    )
+    def test_single_year_false_positive_blocked(self, text):
+        """본 PR: 단일 4-digit 연도 fallback 의 false positive 차단."""
+        assert extract_season(text) is None
+
+    def test_existing_season_pair_takes_precedence_over_single_year(self):
+        """본 PR: '24/25' 같은 시즌 쌍이 있으면 우선 매칭 — 단일 연도 fallback 안 함."""
+        # 'Nike 2024 Tiempo 24/25' 같은 케이스 — 시즌 쌍이 우선
+        assert extract_season("Nike 2024 Tiempo 24/25 Legend") == "24/25"
 
 
 class TestExtractKitType:

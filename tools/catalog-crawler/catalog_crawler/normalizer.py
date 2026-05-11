@@ -38,6 +38,23 @@ _KIT_TYPE_KO_MAP = {
 # StudType 정규식 — ADR-016 의 7개 enum (FG/SG/AG/TF/IC/MG/HG) 모두 매칭.
 STUD_PATTERN = re.compile(r"\b(FG|SG|AG|TF|IC|MG|HG)\b", re.IGNORECASE)
 
+# 풀텍스트 → StudType 매핑 — Adidas/Mizuno 가 약어 대신 풀텍스트로 표기하는 케이스 보강.
+# "AS" (All Surface) 는 Mizuno 풋살화 표기 — Q1 결정으로 TF 로 매핑 (ENUM 변경 없이 매핑 정책 만 추가).
+# 순서 중요: 긴 매칭 우선 (예: "soft ground" 가 "ground" 보다 먼저 시도되도록 dict insertion order 의존 + .startswith 가 아닌 substring 검색).
+_STUD_FULL_TEXT_MAP = {
+    "firm ground": "FG",
+    "soft ground": "SG",
+    "artificial ground": "AG",
+    "hard ground": "HG",
+    "multi ground": "MG",
+    "all surface": "TF",   # Mizuno 풋살화 → TF
+    "indoor": "IC",
+    "turf": "TF",
+}
+
+# AS 단독 토큰 (Mizuno 모델명의 " AS " 같은 표기) — TF 로 매핑.
+_STUD_AS_PATTERN = re.compile(r"\bAS\b")
+
 # StudType → 한국어 surface 추론. 풋살화는 PR #71 사용자 결정에 따라 BOOTS+TF 로 매핑.
 SURFACE_BY_STUD = {
     "FG": "천연잔디",
@@ -247,10 +264,34 @@ def match_club(
 
 
 def extract_stud_type(name: str | None) -> str | None:
+    """모델명에서 StudType 추출.
+
+    우선순위:
+    1. 약어 매칭 (STUD_PATTERN) — `\b(FG|SG|AG|TF|IC|MG|HG)\b`. 기존 정책 유지.
+    2. 풀텍스트 매핑 (`_STUD_FULL_TEXT_MAP`) — "Firm Ground"/"All Surface" 등.
+    3. AS 단독 토큰 — Mizuno 풋살화 표기 → TF.
+
+    약어 우선순위는 의도적 — 모델명이 약어를 박는 경우가 표준이고, 풀텍스트는 fallback.
+    """
     if not name:
         return None
+
+    # 1. 약어 매칭 우선 (기존 동작 보존).
     match = STUD_PATTERN.search(name)
-    return match.group(1).upper() if match else None
+    if match:
+        return match.group(1).upper()
+
+    # 2. 풀텍스트 매핑 (case-insensitive).
+    lower = name.lower()
+    for full_text, stud in _STUD_FULL_TEXT_MAP.items():
+        if full_text in lower:
+            return stud
+
+    # 3. AS 단독 토큰 → TF (Mizuno 풋살화, Q1 결정).
+    if _STUD_AS_PATTERN.search(name):
+        return "TF"
+
+    return None
 
 
 def infer_surface_type(stud_type: str | None) -> str | None:
@@ -267,22 +308,37 @@ def extract_release_year(release_date: str | None) -> str | None:
 
 
 def extract_season(text: str | None) -> str | None:
-    """ADR-017 §D3: '24/25', '24-25', '1988/90' 등에서 시즌 추출. 매칭 시 'a/b' 형식.
+    """ADR-017 §D3 + 본 PR 보강: '24/25', '24-25', '1988/90' 또는 단일 4-digit 연도에서 시즌 추출.
 
-    빈티지 4-digit 도 그대로 보존 ('1988/90' → '1988/90').
+    우선순위:
+    1. SEASON_PATTERN (시즌 쌍, '24/25') — 기존 정책 유지, 가장 구체적.
+    2. 단일 4-digit 연도 ('2026', '2024') fallback — 본 PR 보강.
+       modelCode dash 패턴 (예: IB9007-436 의 9007) false positive 회피.
+       1980 <= year <= 2099 범위만 허용 — 다른 4-digit 숫자 (모델번호 등) 차단.
 
-    SEASON_PATTERN 의 lookaround 로 modelCode dash (예: AT5889-174) 1차 차단 후,
-    추출된 두 토큰의 year 범위를 검증하여 false positive 추가 차단.
+    빈티지 4-digit 쌍은 그대로 보존 ('1988/90' → '1988/90').
+    빈티지 2-digit 단독 ('91') 은 false positive 위험으로 미지원 — 운영자 수동 backfill 정책.
     """
     if not text:
         return None
     match = SEASON_PATTERN.search(text)
-    if not match:
-        return None
-    a, b = match.group(1), match.group(2)
-    if not _is_plausible_season_token(a) or not _is_plausible_season_token(b):
-        return None
-    return f"{a}/{b}"
+    if match:
+        a, b = match.group(1), match.group(2)
+        if _is_plausible_season_token(a) and _is_plausible_season_token(b):
+            return f"{a}/{b}"
+
+    # Fallback: 단일 4-digit 연도. modelCode 패턴 (대문자/숫자 인접) 회피.
+    single_match = _SINGLE_YEAR_PATTERN.search(text)
+    if single_match:
+        year = int(single_match.group(1))
+        if 1980 <= year <= 2099:
+            return single_match.group(1)
+    return None
+
+
+# 단일 4-digit 연도 추출 정규식 — modelCode (예: IB9007-436) 의 4-digit 부분과
+# 충돌 회피를 위해 양옆에 영문자/숫자/dash 가 인접하지 않은 경우만 매칭.
+_SINGLE_YEAR_PATTERN = re.compile(r"(?<![A-Za-z0-9-])(\d{4})(?![\w-])")
 
 
 def _is_plausible_season_token(token: str) -> bool:
