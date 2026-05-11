@@ -246,8 +246,9 @@ class CatalogItemServiceIntegrationTest {
             PageInfo<CatalogItemListResult> result =
                     listCatalogItemsUseCase.list(Category.BOOTS, null, null, 50);
 
-            // Then — BOOTS 만 반환
+            // Then — BOOTS 만 반환 (Sonar S5841: 빈 리스트에서 allMatch 가 vacuously true 인 점 차단)
             assertThat(result.data())
+                    .isNotEmpty()
                     .allMatch(item -> item.category() == Category.BOOTS);
         }
 
