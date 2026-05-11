@@ -74,3 +74,21 @@ Feature: 카탈로그 아이템
     Then 응답 상태 코드는 200이다
     And 응답의 data의 "fullNameKo" 필드는 "나이키 프리미어 3 FG 화이트"이다
     And 응답의 data의 "fullNameEn" 필드는 "Nike Mercurial Superfly"이다
+
+  # 목록 필터링 (category / keyword)
+  @catalog @filter
+  Scenario: 카탈로그 목록을 BOOTS 카테고리로 필터링하여 조회한다
+    Given 카카오 인가 코드 "valid-code-catalog-filter-cat"로 가입한 사용자가 존재한다
+    And 축구화 카탈로그 아이템을 등록한다
+    When 카탈로그 아이템 목록을 카테고리 "BOOTS"로 조회한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data에 "data" 필드가 존재한다
+
+  @catalog @filter
+  Scenario: 카탈로그 목록을 키워드로 필터링하여 조회한다
+    Given 카카오 인가 코드 "valid-code-catalog-filter-kw"로 가입한 사용자가 존재한다
+    And 축구화 카탈로그 아이템을 등록한다
+    When 카탈로그 아이템 목록을 키워드 "Nike"로 조회한다
+    Then 응답 상태 코드는 200이다
+    And 응답의 data에 "data" 필드가 존재한다
+

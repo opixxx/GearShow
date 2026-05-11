@@ -217,18 +217,143 @@ class CatalogItemServiceIntegrationTest {
     class ListItems {
 
         @Test
-        @DisplayName("커서 페이징으로 목록을 조회한다")
+        @DisplayName("커서 페이징으로 목록을 조회한다 (필터 없음)")
         void list_returnsPaginatedResult() {
             // Given
             createCatalogItemUseCase.create(createBootsCommand("LIST-001"));
             createCatalogItemUseCase.create(createBootsCommand("LIST-002"));
 
             // When
-            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(null, 20);
+            PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(null, null, null, 20);
 
             // Then
             assertThat(result.data()).hasSizeGreaterThanOrEqualTo(2);
             assertThat(result.hasNext()).isFalse();
+        }
+
+        @Test
+        @DisplayName("category=BOOTS 필터 시 BOOTS 아이템만 반환한다")
+        void list_byCategoryBoots_returnsOnlyBoots() {
+            // Given — BOOTS 1건 + UNIFORM 1건 등록
+            createCatalogItemUseCase.create(createBootsCommand("FILTER-CAT-BOOTS-001"));
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.UNIFORM, "Nike",
+                    "FILTER-CAT-UNI-001", null, null, null, null,
+                    new CreateCatalogItemCommand.UniformSpecCommand(
+                            "Liverpool", null, "2024-25", "EPL", KitType.HOME, null)));
+
+            // When
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(Category.BOOTS, null, null, 50);
+
+            // Then — BOOTS 만 반환 (Sonar S5841: 빈 리스트에서 allMatch 가 vacuously true 인 점 차단)
+            assertThat(result.data())
+                    .isNotEmpty()
+                    .allMatch(item -> item.category() == Category.BOOTS);
+        }
+
+        @Test
+        @DisplayName("keyword 가 brand 에 부분일치하는 아이템만 반환한다")
+        void list_byKeywordBrand_matches() {
+            // Given — 고유한 brand 로 아이템 등록
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.BOOTS, "PumaUnique-FILTER-KW-BRAND",
+                    "FILTER-KW-BRAND-001", null, null, null,
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.FG, "King", null, "2024", "FG", null),
+                    null));
+
+            // When
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(null, "PumaUnique-FILTER-KW-BRAND", null, 50);
+
+            // Then
+            assertThat(result.data()).hasSize(1);
+            assertThat(result.data().get(0).brand()).isEqualTo("PumaUnique-FILTER-KW-BRAND");
+        }
+
+        @Test
+        @DisplayName("keyword 가 fullNameKo 에 한국어 부분일치하는 아이템을 반환한다")
+        void list_byKeywordFullNameKo_matches() {
+            // Given
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.BOOTS, "Nike",
+                    "FILTER-KW-KO-001", null,
+                    "나이키 머큐리얼슈퍼플라이FILTERKO 화이트",
+                    "Nike Mercurial Superfly White",
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.MG, "Mercurial Superfly", "머큐리얼 슈퍼플라이",
+                            "2024", "MG", null),
+                    null));
+
+            // When
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(null, "머큐리얼슈퍼플라이FILTERKO", null, 50);
+
+            // Then
+            assertThat(result.data()).hasSize(1);
+            assertThat(result.data().get(0).modelCode()).isEqualTo("FILTER-KW-KO-001");
+        }
+
+        @Test
+        @DisplayName("category + keyword 동시 적용 시 두 조건을 모두 만족하는 아이템만 반환한다")
+        void list_byCategoryAndKeyword_combined() {
+            // Given — 같은 키워드를 가지는 BOOTS / UNIFORM 등록
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.BOOTS, "FILTER-COMBO-BRAND",
+                    "FILTER-COMBO-BOOTS-001", null, null, null,
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.FG, "Silo", null, "2024", "FG", null),
+                    null));
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.UNIFORM, "FILTER-COMBO-BRAND",
+                    "FILTER-COMBO-UNI-001", null, null, null, null,
+                    new CreateCatalogItemCommand.UniformSpecCommand(
+                            "Liverpool", null, "2024-25", "EPL", KitType.HOME, null)));
+
+            // When
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(Category.BOOTS, "FILTER-COMBO-BRAND", null, 50);
+
+            // Then — BOOTS + brand 일치 1건만
+            assertThat(result.data()).hasSize(1);
+            assertThat(result.data().get(0).category()).isEqualTo(Category.BOOTS);
+            assertThat(result.data().get(0).modelCode()).isEqualTo("FILTER-COMBO-BOOTS-001");
+        }
+
+        @Test
+        @DisplayName("keyword 공백 입력 시 전체 반환 (blank trim)")
+        void list_keywordBlank_returnsAll() {
+            // Given
+            createCatalogItemUseCase.create(createBootsCommand("FILTER-BLANK-001"));
+
+            // When — 공백만 입력
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(null, "   ", null, 20);
+
+            // Then — 필터 없이 전체와 동일하게 동작
+            assertThat(result.data()).hasSizeGreaterThanOrEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("LIKE 메타문자(%, _)는 리터럴로 escape 되어 매칭된다 (ADR-019 §D1 일관화)")
+        void list_keywordWithLikeMetachar_isEscapedToLiteral() {
+            // Given — modelCode 에 % 가 포함된 아이템과 일반 아이템 등록
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.BOOTS, "Nike",
+                    "ESC-LITERAL-100%MATCH", null, null, null,
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.FG, "Premier", null, "2024", "FG", null),
+                    null));
+            createCatalogItemUseCase.create(createBootsCommand("ESC-OTHER-001"));
+
+            // When — '%' 를 그대로 입력. escape 미적용 시 와일드카드로 동작하여 모든 행 매칭
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(null, "100%MATCH", null, 50);
+
+            // Then — escape 적용 → '100%MATCH' 리터럴 매칭으로 1건만
+            assertThat(result.data()).hasSize(1);
+            assertThat(result.data().get(0).modelCode()).isEqualTo("ESC-LITERAL-100%MATCH");
         }
     }
 

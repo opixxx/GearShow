@@ -6,6 +6,8 @@ import com.gearshow.backend.support.TestResponse;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.When;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -72,6 +74,17 @@ public class CatalogStepDefinitions {
     @When("카탈로그 아이템 목록을 조회한다")
     public void 카탈로그_목록_조회() {
         context.setLastResponse(apiClient.get("/api/v1/catalogs"));
+    }
+
+    @When("카탈로그 아이템 목록을 카테고리 {string}로 조회한다")
+    public void 카탈로그_목록_카테고리_조회(String category) {
+        context.setLastResponse(apiClient.get("/api/v1/catalogs?category=" + category));
+    }
+
+    @When("카탈로그 아이템 목록을 키워드 {string}로 조회한다")
+    public void 카탈로그_목록_키워드_조회(String keyword) {
+        context.setLastResponse(apiClient.get(
+                "/api/v1/catalogs?keyword=" + URLEncoder.encode(keyword, StandardCharsets.UTF_8)));
     }
 
     @When("등록된 카탈로그 아이템의 브랜드를 {string}로 수정한다")
