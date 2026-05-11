@@ -5,6 +5,8 @@
 - **Deciders**: opix
 - **Related**: ADR-017 (Kream crawler 한국어 매칭 정책), ADR-021 §D7 (외부 사이트 식별자 유지), ADR-022 (silos 시리즈 통일), PR #82 PoC, PR #86 fix
 
+> §D1 의 crazy11 카테고리 매핑은 메인 nav (홈페이지 상단 탭) 기준으로 한정 — 시즌오프/베스트셀러는 별도 view 옵션이라 같은 상품 중복 + 사이드 link 오염 위험. PR #90 PoC (limit=20) 에서 카테고리 오염 50% (12 중 6건 = 가방/축구공/의류/슬리퍼) 발견 → 후속 fix PR 에서 매핑 단순화 (BOOTS 8→2개, UNIFORM 2 유지) + discover 의 URL xcode 후처리 필터 추가로 보강.
+
 ## Context
 
 PR #82~#86 시점까지 catalog 크롤러는 **Kream 단일 출처** 만 지원했다. 운영 적재 100건 검증 후 다음 한계가 명확해짐:
