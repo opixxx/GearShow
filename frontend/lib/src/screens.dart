@@ -590,7 +590,7 @@ class CatalogScreen extends StatefulWidget {
 
 class _CatalogScreenState extends State<CatalogScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _category = 'BOOTS';
+  String? _category;
 
   @override
   void dispose() {
@@ -642,6 +642,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
+                    Expanded(
+                      child: _TabButton(
+                        label: '전체',
+                        selected: _category == null,
+                        onTap: () => setState(() => _category = null),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: _TabButton(
                         label: '축구화',

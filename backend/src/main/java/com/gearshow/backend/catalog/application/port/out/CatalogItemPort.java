@@ -39,19 +39,26 @@ public interface CatalogItemPort {
     /**
      * 첫 페이지 카탈로그 아이템 목록을 조회한다.
      *
-     * @param size 조회 개수 (hasNext 판단을 위해 size + 1 조회)
+     * @param category 카테고리 필터 (null이면 전체)
+     * @param keyword  부분일치 키워드 (null이면 전체). brand/modelCode/fullNameKo/fullNameEn 컬럼에 OR LIKE 매칭.
+     *                 양쪽 와일드카드(%)는 어댑터 구현이 부여한다.
+     * @param size     조회 개수 (hasNext 판단을 위해 size + 1 조회)
      * @return 조회된 카탈로그 아이템 목록
      */
-    List<CatalogItem> findAllFirstPage(int size);
+    List<CatalogItem> findAllFirstPage(Category category, String keyword, int size);
 
     /**
      * 커서 기반으로 카탈로그 아이템 목록을 조회한다 (Keyset Pagination).
      * 정렬: createdAt DESC, id DESC.
      *
+     * @param category        카테고리 필터 (null이면 전체)
+     * @param keyword         부분일치 키워드 (null이면 전체). brand/modelCode/fullNameKo/fullNameEn 컬럼에 OR LIKE 매칭.
+     *                        양쪽 와일드카드(%)는 어댑터 구현이 부여한다.
      * @param cursorCreatedAt 커서 생성 시각
      * @param cursorId        커서 ID
      * @param size            조회 개수 (hasNext 판단을 위해 size + 1 조회)
      * @return 조회된 카탈로그 아이템 목록
      */
-    List<CatalogItem> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size);
+    List<CatalogItem> findAllWithCursor(Category category, String keyword,
+                                        Instant cursorCreatedAt, Long cursorId, int size);
 }

@@ -10,11 +10,13 @@ import com.gearshow.backend.catalog.application.port.in.CreateCatalogItemUseCase
 import com.gearshow.backend.catalog.application.port.in.GetCatalogItemUseCase;
 import com.gearshow.backend.catalog.application.port.in.ListCatalogItemsUseCase;
 import com.gearshow.backend.catalog.application.port.in.UpdateCatalogItemUseCase;
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.ApiResponse;
 import com.gearshow.backend.common.dto.PageInfo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -38,21 +40,28 @@ public class CatalogController {
 
     /**
      * 카탈로그 아이템 목록을 조회한다.
-     * 커서 기반 페이징을 지원한다.
+     * 카테고리·키워드 필터와 커서 기반 페이징을 지원한다.
      *
+     * @param category  카테고리 필터 (생략 시 전체)
+     * @param keyword   부분일치 키워드 (생략 또는 공백 시 전체).
+     *                  brand/modelCode/fullNameKo/fullNameEn 컬럼에 OR LIKE 매칭
      * @param pageToken 페이지 토큰 (첫 페이지는 생략)
      * @param size      페이지 크기 (기본값 20)
      * @return 카탈로그 아이템 목록
      */
     @GetMapping
     public ApiResponse<PageInfo<CatalogItemListResult>> list(
+            @RequestParam(required = false) Category category,
+            @RequestParam(required = false)
+            @Size(max = 64, message = "키워드는 64자 이하여야 합니다")
+            String keyword,
             @RequestParam(required = false) String pageToken,
             @RequestParam(defaultValue = "20")
             @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다")
             @Max(value = 100, message = "페이지 크기는 100 이하여야 합니다")
             int size) {
 
-        PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(pageToken, size);
+        PageInfo<CatalogItemListResult> result = listCatalogItemsUseCase.list(category, keyword, pageToken, size);
 
         return ApiResponse.of(200, "카탈로그 아이템 목록 조회 성공", result);
     }

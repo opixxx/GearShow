@@ -4,6 +4,7 @@ import com.gearshow.backend.catalog.application.dto.CatalogItemListResult;
 import com.gearshow.backend.catalog.application.port.in.ListCatalogItemsUseCase;
 import com.gearshow.backend.catalog.application.port.out.CatalogItemPort;
 import com.gearshow.backend.catalog.domain.model.CatalogItem;
+import com.gearshow.backend.catalog.domain.vo.Category;
 import com.gearshow.backend.common.dto.PageInfo;
 import com.gearshow.backend.common.util.PageTokenUtil;
 import lombok.RequiredArgsConstructor;
@@ -25,13 +26,13 @@ public class ListCatalogItemsService implements ListCatalogItemsUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public PageInfo<CatalogItemListResult> list(String pageToken, int size) {
+    public PageInfo<CatalogItemListResult> list(Category category, String keyword, String pageToken, int size) {
         List<CatalogItem> items;
         if (pageToken == null) {
-            items = catalogItemPort.findAllFirstPage(size);
+            items = catalogItemPort.findAllFirstPage(category, keyword, size);
         } else {
             Pair<Instant, Long> cursor = PageTokenUtil.decode(pageToken, Instant.class, Long.class);
-            items = catalogItemPort.findAllWithCursor(cursor.getLeft(), cursor.getRight(), size);
+            items = catalogItemPort.findAllWithCursor(category, keyword, cursor.getLeft(), cursor.getRight(), size);
         }
 
         List<CatalogItemListResult> results = items.stream()

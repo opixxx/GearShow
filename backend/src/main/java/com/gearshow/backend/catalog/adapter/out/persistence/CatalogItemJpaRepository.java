@@ -32,29 +32,49 @@ public interface CatalogItemJpaRepository extends JpaRepository<CatalogItemJpaEn
 
     /**
      * 첫 페이지 카탈로그 아이템 목록 조회 (커서 없음).
+     * 카테고리·키워드 조건이 null이면 해당 조건은 생략된다.
+     * 키워드는 어댑터가 escape + {@code %keyword%} 형태로 와일드카드를 부여하여 전달하며,
+     * LIKE는 {@code ESCAPE '\\'}와 짝을 이뤄 메타문자(% / _ / \\)를 리터럴로 매칭한다.
      */
     @Query("""
             SELECT c FROM CatalogItemJpaEntity c
             WHERE c.status = :status
+              AND (:category IS NULL OR c.category = :category)
+              AND (:keyword IS NULL
+                   OR c.brand LIKE :keyword ESCAPE '\\'
+                   OR c.modelCode LIKE :keyword ESCAPE '\\'
+                   OR c.fullNameKo LIKE :keyword ESCAPE '\\'
+                   OR c.fullNameEn LIKE :keyword ESCAPE '\\')
             ORDER BY c.createdAt DESC, c.id DESC
             """)
     List<CatalogItemJpaEntity> findAllFirstPage(
             @Param("status") CatalogStatus status,
+            @Param("category") Category category,
+            @Param("keyword") String keyword,
             Pageable pageable);
 
     /**
      * 커서 기반 카탈로그 아이템 목록 조회 (Keyset Pagination).
      * 정렬: createdAt DESC, id DESC.
+     * 카테고리·키워드 조건이 null이면 해당 조건은 생략된다.
      */
     @Query("""
             SELECT c FROM CatalogItemJpaEntity c
             WHERE c.status = :status
+              AND (:category IS NULL OR c.category = :category)
+              AND (:keyword IS NULL
+                   OR c.brand LIKE :keyword ESCAPE '\\'
+                   OR c.modelCode LIKE :keyword ESCAPE '\\'
+                   OR c.fullNameKo LIKE :keyword ESCAPE '\\'
+                   OR c.fullNameEn LIKE :keyword ESCAPE '\\')
               AND (c.createdAt < :cursorCreatedAt OR
                   (c.createdAt = :cursorCreatedAt AND c.id < :cursorId))
             ORDER BY c.createdAt DESC, c.id DESC
             """)
     List<CatalogItemJpaEntity> findAllWithCursor(
             @Param("status") CatalogStatus status,
+            @Param("category") Category category,
+            @Param("keyword") String keyword,
             @Param("cursorCreatedAt") Instant cursorCreatedAt,
             @Param("cursorId") Long cursorId,
             Pageable pageable);

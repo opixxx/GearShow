@@ -46,20 +46,44 @@ public class CatalogItemPersistenceAdapter implements CatalogItemPort {
     }
 
     @Override
-    public List<CatalogItem> findAllFirstPage(int size) {
+    public List<CatalogItem> findAllFirstPage(Category category, String keyword, int size) {
         return catalogItemJpaRepository.findAllFirstPage(
-                        CatalogStatus.ACTIVE, PageRequest.of(0, size + 1))
+                        CatalogStatus.ACTIVE, category, toLikePattern(keyword), PageRequest.of(0, size + 1))
                 .stream()
                 .map(catalogItemMapper::toDomain)
                 .toList();
     }
 
     @Override
-    public List<CatalogItem> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size) {
+    public List<CatalogItem> findAllWithCursor(Category category, String keyword,
+                                               Instant cursorCreatedAt, Long cursorId, int size) {
         return catalogItemJpaRepository.findAllWithCursor(
-                        CatalogStatus.ACTIVE, cursorCreatedAt, cursorId, PageRequest.of(0, size + 1))
+                        CatalogStatus.ACTIVE, category, toLikePattern(keyword),
+                        cursorCreatedAt, cursorId, PageRequest.of(0, size + 1))
                 .stream()
                 .map(catalogItemMapper::toDomain)
                 .toList();
+    }
+
+    /**
+     * 사용자 키워드를 LIKE 패턴으로 변환한다.
+     * 공백 trim 후 비어 있으면 null (필터 미적용).
+     * LIKE 메타문자({@code %}, {@code _}, {@code \})는 리터럴로 escape하여 의도 외 매칭과
+     * {@code ?keyword=%} 형태의 amplification을 차단한다 (ADR-019 §D1 정책 일관화).
+     * JPQL의 {@code ESCAPE '\\'}와 짝을 이뤄 동작.
+     */
+    private String toLikePattern(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        String escaped = trimmed
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 }
