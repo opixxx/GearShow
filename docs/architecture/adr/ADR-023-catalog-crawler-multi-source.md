@@ -7,6 +7,8 @@
 
 > §D1 의 crazy11 카테고리 매핑은 메인 nav (홈페이지 상단 탭) 기준으로 한정 — 시즌오프/베스트셀러는 별도 view 옵션이라 같은 상품 중복 + 사이드 link 오염 위험. PR #90 PoC (limit=20) 에서 카테고리 오염 50% (12 중 6건 = 가방/축구공/의류/슬리퍼) 발견 → 후속 fix PR 에서 매핑 단순화 (BOOTS 8→2개, UNIFORM 2 유지) + discover 의 URL xcode 후처리 필터 추가로 보강.
 
+> **crazy11 rate-limit 권장: `--rate-limit 0.5` (1 req/2sec)**. 1 req/sec 도 서버가 첫 N 요청을 `Connection aborted` 로 적극 차단 (PR #91 PoC: 12/20 fetch 성공). 1 req/2sec 로 완화 시 20/20 fetch 성공 검증됨. User-Agent 위장 등 우회 시도 금지 (ADR-017 정합) — 정중한 rate-limit 완화가 정책 부합. README "운영 적재" 섹션 참조.
+
 ## Context
 
 PR #82~#86 시점까지 catalog 크롤러는 **Kream 단일 출처** 만 지원했다. 운영 적재 100건 검증 후 다음 한계가 명확해짐:

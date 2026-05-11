@@ -72,6 +72,7 @@ python -m catalog_crawler --category uniform --limit 30 --output output/2026-05-
 
 #### 운영 적재 (`--mirror-images` 필수, ADR-021)
 
+##### Kream (기본 출처)
 ```bash
 python -m catalog_crawler --category boots --limit 30 \
   --output output/2026-05-04-boots.json \
@@ -82,12 +83,24 @@ python -m catalog_crawler --category uniform --limit 30 \
   --mirror-images --s3-bucket "$AWS_S3_BUCKET"
 ```
 
+##### crazy11 (ADR-023) — `--rate-limit 0.5` 권장
+```bash
+python -m catalog_crawler --source crazy11 --category boots --limit 30 \
+  --output output/2026-05-11-crazy11-boots.json \
+  --mirror-images --s3-bucket "$AWS_S3_BUCKET" \
+  --rate-limit 0.5
+```
+
+> ⚠️ **`--rate-limit 0.5` (1 req/2sec) 권장**: crazy11 서버가 1 req/sec 도 적극 차단 (첫 N 요청에 `Connection aborted` 응답). 1 req/2sec 로 완화 시 fetch 성공률 60% → 100% 검증됨 (PR #91 PoC). User-Agent 위장 등 우회 시도 금지 (ADR-017 정합), 정중한 rate-limit 완화로 해결.
+
 활성화 시 흐름: 외부 CDN 이미지를 다운로드 → 자체 S3 (`catalog-images/<category>/<modelCode>.<ext>`) 업로드 → JSON 의 `officialImageUrl` 을 자체 도메인 URL 로 교체. 결과 JSON 안에는 외부 도메인 흔적 0건.
 
 옵션:
-- `--s3-bucket <name>` (또는 `AWS_S3_BUCKET` 환경변수) — 필수
+- `--source <kream|crazy11>` — 출처 (기본 kream, ADR-023)
+- `--s3-bucket <name>` (또는 `AWS_S3_BUCKET` 환경변수) — `--mirror-images` 시 필수
 - `--s3-region <region>` — 기본 `ap-northeast-2`
 - `--s3-prefix <prefix>` — 기본 `catalog-images`
+- `--rate-limit <req/sec>` — 기본 `1.0`. **crazy11 은 `0.5` 권장.**
 
 bucket 이 비어있으면 exit code 2 + 에러 메시지로 즉시 종료 (fail fast).
 
