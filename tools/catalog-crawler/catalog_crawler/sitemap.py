@@ -80,29 +80,14 @@ def discover_boots_product_urls_via_search(
     limit: int,
     keyword: str = "축구화",
 ) -> list[str]:
-    """검색 페이지 SSR HTML 에서 `/products/{id}` 를 추출한다.
+    """검색 페이지 SSR HTML 에서 ``/products/{id}`` 를 추출한다 — sources/kream.py 의 shim.
 
-    Kream URL: `/search?keyword=<keyword>&tab=products`. 단일 응답에 검색 결과 상품 ID 가 포함됨.
-    중복 제거 + 등장 순서(검색 관련도 순) 유지. limit 도달 시 즉시 종료.
+    ADR-023 §D8 의 backward-compat 정책: sitemap.py 의 기존 함수는 sources/kream.py 의
+    구현 (페이지네이션 포함) 으로 위임. 본 PR (kream-search-pagination) 의 페이지네이션
+    효과를 기존 import 경로에도 적용.
     """
-    encoded = quote(keyword, safe="")
-    url = f"{KREAM_BASE}/search?keyword={encoded}&tab=products"
-    response = client.get(url)
-    response.raise_for_status()
-
-    seen: set[str] = set()
-    product_urls: list[str] = []
-    for match in PRODUCT_ID_PATTERN.finditer(response.text):
-        product_id = match.group(1)
-        if product_id in seen:
-            continue
-        seen.add(product_id)
-        product_urls.append(f"{KREAM_BASE}/products/{product_id}")
-        if len(product_urls) >= limit:
-            break
-
-    LOGGER.info("검색 결과 상품 URL: %d (keyword=%s)", len(product_urls), keyword)
-    return product_urls
+    from catalog_crawler.sources.kream import _discover_via_search
+    return _discover_via_search(client, limit=limit, keyword=keyword)
 
 
 def discover_boots_product_urls(
