@@ -11,7 +11,7 @@ import com.gearshow.backend.showcase.domain.vo.ContentHash;
  *
  * @param catalogItemId 카탈로그 아이템 ID (선택, null 허용)
  * @param category      카테고리 (필수)
- * @param brand         브랜드명 (필수)
+ * @param brand         브랜드명 (선택, null/blank 허용 — ADR-024 §D3)
  * @param modelCode     모델 코드 (선택)
  */
 public record CreateShowcaseCommand(

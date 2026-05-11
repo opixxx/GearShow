@@ -1957,136 +1957,46 @@ class ShowcaseCreateScreen extends StatefulWidget {
 }
 
 class _ShowcaseCreateScreenState extends State<ShowcaseCreateScreen> {
-  Future<PageInfo<CatalogItemSummary>> _loadRecent() {
-    return widget.controller.api.listCatalogs(
-      baseUrl: widget.controller.baseUrl,
-      size: 6,
-    );
-  }
-
+  // ADR-024: 카탈로그 진입을 일시 차단. 등록 진입은 곧장 /create/info 직접 입력 모드로.
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<PageInfo<CatalogItemSummary>>(
-        future: _loadRecent(),
-        builder: (context, snapshot) {
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const Text(
-                '쇼케이스 등록',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '등록할 장비를 선택해주세요',
-                style: TextStyle(color: Color(0xFFA1A1AA)),
-              ),
-              const SizedBox(height: 20),
-              InkWell(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            '쇼케이스 등록',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '등록할 장비 정보를 입력해주세요',
+            style: TextStyle(color: Color(0xFFA1A1AA)),
+          ),
+          const SizedBox(height: 20),
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => Navigator.of(context).pushNamed(
+              '/create/info',
+              arguments: const CreateInfoArgs(),
+            ),
+            child: Ink(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF111111),
                 borderRadius: BorderRadius.circular(20),
-                onTap: () => Navigator.of(context).pushNamed('/catalog/search'),
-                child: Ink(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF3F3F46)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.search, color: Color(0xFF71717A)),
-                      SizedBox(width: 12),
-                      Text('카탈로그에서 검색', style: TextStyle(color: Color(0xFFA1A1AA))),
-                    ],
-                  ),
-                ),
+                border: Border.all(color: const Color(0xFF19C37D)),
               ),
-              const SizedBox(height: 12),
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => Navigator.of(context).pushNamed(
-                  '/create/info',
-                  arguments: const CreateInfoArgs(),
-                ),
-                child: Ink(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF19C37D)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.edit_outlined, color: Color(0xFF19C37D)),
-                      SizedBox(width: 12),
-                      Text('카탈로그에 없는 제품 직접 입력', style: TextStyle(color: Color(0xFF19C37D))),
-                    ],
-                  ),
-                ),
+              child: const Row(
+                children: [
+                  Icon(Icons.edit_outlined, color: Color(0xFF19C37D)),
+                  SizedBox(width: 12),
+                  Text('쇼케이스 등록하기', style: TextStyle(color: Color(0xFF19C37D))),
+                ],
               ),
-              const SizedBox(height: 24),
-              const Text(
-                '최근 카탈로그',
-                style: TextStyle(color: Color(0xFFA1A1AA), fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              if (snapshot.connectionState != ConnectionState.done)
-                const Padding(
-                  padding: EdgeInsets.only(top: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (snapshot.hasError)
-                _ErrorState(
-                  message: _errorText(snapshot.error),
-                  onRetry: () => setState(() {}),
-                )
-              else
-                ...snapshot.data!.items.map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () => Navigator.of(context).pushNamed(
-                        '/create/info',
-                        arguments: CreateInfoArgs(catalogItem: item),
-                      ),
-                      child: Ink(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF111111),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Row(
-                          children: [
-                            _ImageFrame(
-                              imageUrl: item.officialImageUrl,
-                              size: 64,
-                              emoji: item.category == 'BOOTS' ? '🥾' : '👕',
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.brand,
-                                    style: const TextStyle(color: Color(0xFF34D399), fontSize: 12, fontWeight: FontWeight.w700),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(item.brand, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2110,7 +2020,7 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _wearCountController = TextEditingController(text: '0');
-  final _brandController = TextEditingController();
+  // ADR-024 §D3: brand 필드 폼에서 제거. 컨트롤러도 사용처 0 이라 정리.
   String _category = 'BOOTS';
   String _grade = 'S';
   bool _isForSale = false;
@@ -2119,9 +2029,7 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   // 카탈로그 모드 SPEC 칩에서만 사용. 직접 입력 모드에서는 폼 단순화 정책에 따라 미노출.
   String _studType = 'FG';
   String _bootsSize = '260';
-  String? _bootsBrand;
   String? _releaseYear;
-  final _bootsBrandCustomController = TextEditingController();
 
   // 유니폼 전용
   // 카탈로그 모드 SPEC 칩에서만 사용. 직접 입력 모드에서는 폼 단순화 정책에 따라 미노출.
@@ -2141,10 +2049,6 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   ];
   static const _uniformSizes = ['S', 'M', 'L', 'XL', '2XL', '3XL'];
 
-  // 축구화 브랜드 (직접 입력 모드 칩에서 사용)
-  static const _bootsBrands = [
-    'Nike', 'Adidas', 'Puma', 'Mizuno', 'Asics', 'New Balance', '기타',
-  ];
   // 출시 연도
   static const _releaseYears = [
     '2026', '2025', '2024', '2023', '2022', '2021', '2020', '직접 입력',
@@ -2171,14 +2075,6 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
   static const _seasons = [
     '25-26', '24-25', '23-24', '22-23', '21-22', '20-21', '직접 입력',
   ];
-  // 유니폼 브랜드
-  static const _uniformBrands = [
-    'Nike', 'Adidas', 'Puma', 'New Balance', 'Umbro', 'Kappa',
-    'Joma', 'Hummel', '직접 입력',
-  ];
-  String? _uniformBrand;
-  final _uniformBrandCustomController = TextEditingController();
-
   /// 카탈로그 선택 없이 직접 입력 모드인지 여부
   bool get _isManualEntry => widget.args.catalogItem == null;
 
@@ -2265,13 +2161,10 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _wearCountController.dispose();
-    _brandController.dispose();
-    _bootsBrandCustomController.dispose();
     _releaseYearCustomController.dispose();
     _leagueCustomController.dispose();
     _clubCustomController.dispose();
     _seasonCustomController.dispose();
-    _uniformBrandCustomController.dispose();
     super.dispose();
   }
 
@@ -2327,96 +2220,9 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                     ],
                     onChanged: (v) => setState(() {
                       _category = v ?? 'BOOTS';
-                      // 축구화 초기화
-                      _bootsBrand = null;
-                      _bootsBrandCustomController.clear();
-                      // 유니폼 초기화
-                      _uniformBrand = null;
-                      _uniformBrandCustomController.clear();
                     }),
                   ),
-                  const SizedBox(height: 16),
-                  // 축구화: 브랜드→사일로 계층 선택
-                  if (_resolvedCategory == 'BOOTS') ...[
-                    const Text('브랜드', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 44,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _bootsBrands.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final brand = _bootsBrands[index];
-                          final selected = _bootsBrand == brand;
-                          return GestureDetector(
-                            onTap: () => setState(() {
-                              _bootsBrand = brand;
-                              _bootsBrandCustomController.clear();
-                            }),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: selected ? const Color(0xFF19C37D) : const Color(0xFF111111),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: selected ? const Color(0xFF19C37D) : const Color(0xFF3F3F46)),
-                              ),
-                              child: Text(brand, style: TextStyle(color: selected ? Colors.white : const Color(0xFFA1A1AA), fontWeight: FontWeight.w700)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    // 기타 브랜드: 직접 입력
-                    if (_bootsBrand == '기타') ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _bootsBrandCustomController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: '브랜드명 직접 입력'),
-                      ),
-                    ],
-                  ],
-                  // 유니폼: 브랜드 칩 선택
-                  if (_resolvedCategory == 'UNIFORM') ...[
-                    const Text('브랜드', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 44,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _uniformBrands.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          final brand = _uniformBrands[index];
-                          final selected = _uniformBrand == brand;
-                          return GestureDetector(
-                            onTap: () => setState(() {
-                              _uniformBrand = brand;
-                              _uniformBrandCustomController.clear();
-                            }),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: selected ? const Color(0xFF19C37D) : const Color(0xFF111111),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: selected ? const Color(0xFF19C37D) : const Color(0xFF3F3F46)),
-                              ),
-                              child: Text(brand, style: TextStyle(color: selected ? Colors.white : const Color(0xFFA1A1AA), fontWeight: FontWeight.w700)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    if (_uniformBrand == '직접 입력') ...[
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _uniformBrandCustomController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: '브랜드명 직접 입력'),
-                      ),
-                    ],
-                  ],
+                  // ADR-024 §D3: 직접 입력 폼에서 brand 칩/입력 제거. brand 는 백엔드에서 nullable.
                 ],
                 const SizedBox(height: 20),
                 // ── 축구화 SPEC (카탈로그 모드 전용) ──
@@ -2542,46 +2348,12 @@ class _ShowcaseCreateInfoScreenState extends State<ShowcaseCreateInfoScreen> {
                 _showSnack(context, '제목은 필수입니다.');
                 return;
               }
-              // 직접 입력 검증 — 카테고리/브랜드만 필수 (memory: feedback_form_simplicity).
-              // 사일로/스터드/사이즈/클럽/시즌/킷타입 등 카탈로그성 메타는 catalog 책임이므로
-              // 직접 입력 모드에서는 더 이상 강제하지 않는다.
-              if (_isManualEntry && _resolvedCategory == 'BOOTS') {
-                if (_bootsBrand == null) {
-                  _showSnack(context, '브랜드를 선택해주세요.');
-                  return;
-                }
-                if (_bootsBrand == '기타' && _bootsBrandCustomController.text.trim().isEmpty) {
-                  _showSnack(context, '브랜드명을 입력해주세요.');
-                  return;
-                }
-              }
-              if (_isManualEntry && _resolvedCategory == 'UNIFORM') {
-                if (_uniformBrand == null) {
-                  _showSnack(context, '브랜드를 선택해주세요.');
-                  return;
-                }
-                if (_uniformBrand == '직접 입력' && _uniformBrandCustomController.text.trim().isEmpty) {
-                  _showSnack(context, '브랜드명을 입력해주세요.');
-                  return;
-                }
-              }
-              // 직접 입력인 경우 임시 카탈로그 생성 (catalog_item_id=0, modelCode 미수집)
-              String resolvedBrand;
-              if (_isManualEntry && _resolvedCategory == 'BOOTS') {
-                resolvedBrand = _bootsBrand == '기타'
-                    ? _bootsBrandCustomController.text.trim()
-                    : _bootsBrand!;
-              } else if (_isManualEntry && _resolvedCategory == 'UNIFORM') {
-                resolvedBrand = _uniformBrand == '직접 입력'
-                    ? _uniformBrandCustomController.text.trim()
-                    : _uniformBrand!;
-              } else {
-                resolvedBrand = _brandController.text.trim();
-              }
+              // ADR-024 §D3: 직접 입력 폼에서 brand 필드 제거. 카탈로그 모드는 일시 차단된 상태라
+              // 실제로 도달하지 않으나 호환을 위해 임시 catalog summary 의 brand 는 빈 문자열로 채운다.
               final resolvedItem = item ?? CatalogItemSummary(
                 catalogItemId: 0,
                 category: _category,
-                brand: resolvedBrand,
+                brand: '',
                 modelCode: '',
                 officialImageUrl: null,
               );
