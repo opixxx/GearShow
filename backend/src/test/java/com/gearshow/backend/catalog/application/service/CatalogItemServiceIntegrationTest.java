@@ -336,6 +336,34 @@ class CatalogItemServiceIntegrationTest {
         }
 
         @Test
+        @DisplayName("list 응답에 fullNameKo 가 노출된다")
+        void list_response_exposesFullNameKo() {
+            // Given
+            createCatalogItemUseCase.create(new CreateCatalogItemCommand(
+                    Category.BOOTS, "Nike",
+                    "LIST-FNK-001", null,
+                    "나이키 머큐리얼 슈퍼플라이 LIST-FNK",
+                    "Nike Mercurial Superfly",
+                    new CreateCatalogItemCommand.BootsSpecCommand(
+                            StudType.MG, "Mercurial Superfly", "머큐리얼 슈퍼플라이",
+                            "2024", "MG", null),
+                    null));
+
+            // When — 고유 키워드로 필터링하여 격리
+            PageInfo<CatalogItemListResult> result =
+                    listCatalogItemsUseCase.list(null, "LIST-FNK", null, 20);
+
+            // Then — fullNameKo 노출 검증
+            assertThat(result.data())
+                    .hasSize(1)
+                    .first()
+                    .satisfies(item -> {
+                        assertThat(item.fullNameKo()).isEqualTo("나이키 머큐리얼 슈퍼플라이 LIST-FNK");
+                        assertThat(item.modelCode()).isEqualTo("LIST-FNK-001");
+                    });
+        }
+
+        @Test
         @DisplayName("LIKE 메타문자(%, _)는 리터럴로 escape 되어 매칭된다 (ADR-019 §D1 일관화)")
         void list_keywordWithLikeMetachar_isEscapedToLiteral() {
             // Given — modelCode 에 % 가 포함된 아이템과 일반 아이템 등록

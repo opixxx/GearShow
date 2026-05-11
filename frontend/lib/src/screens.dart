@@ -589,22 +589,81 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
+  static const int _pageSize = 30;
+  static const double _loadMoreThreshold = 240.0;
+
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String? _category;
+
+  final List<CatalogItemSummary> _items = [];
+  String? _nextPageToken;
+  bool _hasNext = true;
+  bool _isLoading = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _resetAndLoad();
+  }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<PageInfo<CatalogItemSummary>> _loadCatalogs() {
-    return widget.controller.api.listCatalogs(
-      baseUrl: widget.controller.baseUrl,
-      category: _category,
-      keyword: _searchController.text.trim().isEmpty ? null : _searchController.text.trim(),
-      size: 30,
-    );
+  void _onScroll() {
+    if (!_hasNext || _isLoading) return;
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - _loadMoreThreshold) {
+      _loadMore();
+    }
+  }
+
+  void _resetAndLoad() {
+    setState(() {
+      _items.clear();
+      _nextPageToken = null;
+      _hasNext = true;
+      _error = null;
+    });
+    _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoading || !_hasNext) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final keyword = _searchController.text.trim();
+      final page = await widget.controller.api.listCatalogs(
+        baseUrl: widget.controller.baseUrl,
+        category: _category,
+        keyword: keyword.isEmpty ? null : keyword,
+        pageToken: _nextPageToken,
+        size: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _nextPageToken = page.pageToken;
+        _hasNext = page.hasNext;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -612,116 +671,143 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF111111),
       body: SafeArea(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF111111),
-              border: Border(bottom: BorderSide(color: Color(0xFF27272A))),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '카탈로그',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: '브랜드, 모델명 검색',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() {}),
-                      icon: const Icon(Icons.arrow_forward),
-                    ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF111111),
+                border: Border(bottom: BorderSide(color: Color(0xFF27272A))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '카탈로그',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
                   ),
-                  onSubmitted: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _TabButton(
-                        label: '전체',
-                        selected: _category == null,
-                        onTap: () => setState(() => _category = null),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: '브랜드, 모델명 검색',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        onPressed: _resetAndLoad,
+                        icon: const Icon(Icons.arrow_forward),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _TabButton(
-                        label: '축구화',
-                        selected: _category == 'BOOTS',
-                        onTap: () => setState(() => _category = 'BOOTS'),
+                    onSubmitted: (_) => _resetAndLoad(),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TabButton(
+                          label: '전체',
+                          selected: _category == null,
+                          onTap: () {
+                            setState(() => _category = null);
+                            _resetAndLoad();
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _TabButton(
-                        label: '유니폼',
-                        selected: _category == 'UNIFORM',
-                        onTap: () => setState(() => _category = 'UNIFORM'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _TabButton(
+                          label: '축구화',
+                          selected: _category == 'BOOTS',
+                          onTap: () {
+                            setState(() => _category = 'BOOTS');
+                            _resetAndLoad();
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _TabButton(
+                          label: '유니폼',
+                          selected: _category == 'UNIFORM',
+                          onTap: () {
+                            setState(() => _category = 'UNIFORM');
+                            _resetAndLoad();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<PageInfo<CatalogItemSummary>>(
-              future: _loadCatalogs(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return _ErrorState(
-                    message: _errorText(snapshot.error),
-                    onRetry: () => setState(() {}),
-                  );
-                }
-                final items = snapshot.data?.items ?? const <CatalogItemSummary>[];
-                if (items.isEmpty) {
-                  return const _EmptyState(
-                    icon: Icons.search_off,
-                    message: '검색 결과가 없습니다.',
-                  );
-                }
-                return ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFF27272A)),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: _ImageFrame(
-                        imageUrl: item.officialImageUrl,
-                        size: 64,
-                        emoji: item.category == 'BOOTS' ? '🥾' : '👕',
-                      ),
-                      title: Text(item.brand, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                      subtitle: Text(
-                        '${item.brand} · ${item.modelCode}',
-                        style: const TextStyle(color: Color(0xFFA1A1AA)),
-                      ),
-                      onTap: () => Navigator.of(context).pushNamed(
-                        '/catalog/detail',
-                        arguments: CatalogDetailArgs(item),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+            Expanded(child: _buildList()),
+          ],
+        ),
       ),
-      ),
+    );
+  }
+
+  Widget _buildList() {
+    if (_items.isEmpty && _isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_items.isEmpty && _error != null) {
+      return _ErrorState(
+        message: _errorText(_error),
+        onRetry: _resetAndLoad,
+      );
+    }
+    if (_items.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.search_off,
+        message: '검색 결과가 없습니다.',
+      );
+    }
+
+    final showFooter = _hasNext || _error != null;
+    return ListView.separated(
+      controller: _scrollController,
+      itemCount: _items.length + (showFooter ? 1 : 0),
+      separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFF27272A)),
+      itemBuilder: (context, index) {
+        if (index >= _items.length) {
+          if (_error != null) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: _loadMore,
+                  icon: const Icon(Icons.refresh),
+                  label: Text('다시 시도 (${_errorText(_error)})'),
+                ),
+              ),
+            );
+          }
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final item = _items[index];
+        final title = item.fullNameKo ?? item.brand;
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: _ImageFrame(
+            imageUrl: item.officialImageUrl,
+            size: 64,
+            emoji: item.category == 'BOOTS' ? '🥾' : '👕',
+          ),
+          title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          subtitle: Text(
+            item.modelCode,
+            style: const TextStyle(color: Color(0xFFA1A1AA)),
+          ),
+          onTap: () => Navigator.of(context).pushNamed(
+            '/catalog/detail',
+            arguments: CatalogDetailArgs(item),
+          ),
+        );
+      },
     );
   }
 }

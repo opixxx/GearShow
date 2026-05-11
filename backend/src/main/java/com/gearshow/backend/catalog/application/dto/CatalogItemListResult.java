@@ -14,6 +14,7 @@ public record CatalogItemListResult(
         String brand,
         String modelCode,
         String officialImageUrl,
+        String fullNameKo,
         Instant createdAt
 ) {
 
@@ -24,6 +25,7 @@ public record CatalogItemListResult(
                 item.getBrand(),
                 item.getModelCode(),
                 item.getOfficialImageUrl(),
+                item.getFullNameKo(),
                 item.getCreatedAt()
         );
     }

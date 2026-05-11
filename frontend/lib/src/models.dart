@@ -84,6 +84,7 @@ class CatalogItemSummary {
     required this.brand,
     required this.modelCode,
     required this.officialImageUrl,
+    this.fullNameKo,
   });
 
   final int catalogItemId;
@@ -91,6 +92,7 @@ class CatalogItemSummary {
   final String brand;
   final String modelCode;
   final String? officialImageUrl;
+  final String? fullNameKo;
 
   factory CatalogItemSummary.fromJson(Map<String, dynamic> json) {
     return CatalogItemSummary(
@@ -99,6 +101,7 @@ class CatalogItemSummary {
       brand: json['brand'] as String? ?? '',
       modelCode: json['modelCode'] as String? ?? '',
       officialImageUrl: json['officialImageUrl'] as String?,
+      fullNameKo: json['fullNameKo'] as String?,
     );
   }
 }
