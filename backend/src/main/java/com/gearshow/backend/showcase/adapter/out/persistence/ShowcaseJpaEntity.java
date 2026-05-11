@@ -50,7 +50,9 @@ public class ShowcaseJpaEntity {
     @Column(name = "category", nullable = false)
     private Category category;
 
-    @Column(name = "brand", nullable = false)
+    // ADR-024 §D3: 카탈로그 일시 제외에 따라 brand 는 선택 필드. 컬럼은 카탈로그 복귀 시
+    // 재활용을 위해 보존하되 NULL 허용. schema.sql 의 멱등 MODIFY 가 운영 DB 도 함께 완화한다.
+    @Column(name = "brand")
     private String brand;
 
     @Column(name = "model_code")
@@ -94,17 +96,6 @@ public class ShowcaseJpaEntity {
     @Column(name = "has_3d_model", nullable = false)
     private boolean has3dModel;
 
-    /**
-     * 검색 보강 합성 텍스트 (ADR-018).
-     *
-     * <p>catalog 의 한국어/영문 풀네임 + 한국어 alias + 직접 입력값 (brand/modelCode/title/description)
-     * 을 application 의 {@code SearchTextComposer} 가 합성한 결과. 후속 PR-4 의 {@code ?keyword=}
-     * 검색 API 가 LIKE '%keyword%' 로 사용. nullable — 합성 누락 시 등록은 정상이며
-     * 검색 결과에서만 빠진다.</p>
-     */
-    @Column(name = "search_text", length = 1000)
-    private String searchText;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "showcase_status", nullable = false)
     private ShowcaseStatus status;
@@ -121,7 +112,6 @@ public class ShowcaseJpaEntity {
                               String title, String description, String userSize,
                               ConditionGrade conditionGrade, int wearCount, boolean forSale,
                               String primaryImageUrl, String contentHash, boolean has3dModel,
-                              String searchText,
                               ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -138,7 +128,6 @@ public class ShowcaseJpaEntity {
         this.primaryImageUrl = primaryImageUrl;
         this.contentHash = contentHash;
         this.has3dModel = has3dModel;
-        this.searchText = searchText;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

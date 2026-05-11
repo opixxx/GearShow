@@ -61,8 +61,8 @@ public class ShowcaseController {
     /**
      * 쇼케이스 목록을 조회한다 (최신순).
      *
-     * <p>ADR-019: {@code keyword} 가 제공되면 {@code search_text} LIKE 매칭 결과만 반환.
-     * 한국어/영문 풀네임 + brand + spec 한국어 alias + 직접 입력값 모두에서 부분 문자열 매칭.</p>
+     * <p>ADR-024 §D2: {@code keyword} 가 제공되면 {@code title} 또는 {@code description}
+     * LIKE 매칭 결과만 반환. collation 의 case-insensitive 동작에 의존.</p>
      */
     @GetMapping
     public ApiResponse<PageInfo<ShowcaseListResult>> list(

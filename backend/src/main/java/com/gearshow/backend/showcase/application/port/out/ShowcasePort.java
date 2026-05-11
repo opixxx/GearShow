@@ -40,14 +40,10 @@ public interface ShowcasePort {
      */
     List<Showcase> findAllWithCursor(Instant cursorCreatedAt, Long cursorId, int size);
 
-    // ── 키워드 검색 (ADR-019) ──
+    // ── 키워드 검색 (ADR-024) ──
 
     /**
-     * 키워드 LIKE 매칭 첫 페이지 (ACTIVE, search_text NOT NULL, 최신순).
-     *
-     * <p>ADR-019 §D1: 대소문자 무시 (LOWER), search_text 합성 결과(catalog 한국어/영문 풀네임 +
-     * spec 한국어 alias + 직접 입력값) 안에서 부분 문자열 매칭. backfill 안 된 기등록 행
-     * (search_text IS NULL) 은 결과에서 제외된다.</p>
+     * 키워드 부분 매칭 첫 페이지 (ACTIVE, 최신순). case-insensitive.
      */
     List<Showcase> findByKeywordFirstPage(String keyword, int size);
 

@@ -12,8 +12,8 @@ public interface ListShowcasesUseCase {
     /**
      * 쇼케이스 목록을 조회한다 (최신순, 공개 목록).
      *
-     * <p>ADR-019: {@code keyword} 가 non-null/non-blank 이면 {@code search_text} LIKE 매칭
-     * (대소문자 무시) 결과만 반환. {@code null} 이면 전체 ACTIVE 목록 (기존 동작).</p>
+     * <p>ADR-024 §D2: {@code keyword} 가 non-null/non-blank 이면 {@code title} 또는 {@code description}
+     * LIKE 매칭 (대소문자 무시) 결과만 반환. {@code null} 또는 blank 이면 전체 ACTIVE 목록 (기존 동작).</p>
      *
      * @param keyword   검색어 (nullable, 빈 문자열은 호출자 책임)
      * @param pageToken cursor 페이지 토큰

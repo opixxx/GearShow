@@ -63,3 +63,43 @@ UPDATE boots_spec SET silo_name = 'Adidas X', silo_name_ko = '아디다스 X'
 -- Mizuno: Morelia Neo + Morelia II → Morelia
 UPDATE boots_spec SET silo_name = 'Morelia', silo_name_ko = '모렐리아'
   WHERE silo_name IN ('Morelia Neo', 'Morelia II');
+
+-- -----------------------------------------------------------------------------
+-- ADR-024 §D1: showcase.search_text 컬럼 제거.
+--
+-- 배경: 카탈로그 기능 일시 제외에 따라 search_text 합성 인프라(SearchTextComposer/
+-- SearchTextSynchronizer/LoadCatalogForSearchPort)를 폐기. 검색 대상이 title + description
+-- 직접 LIKE OR 로 전환됨 (ADR-024 §D2). search_text 컬럼은 더 이상 채워지지 않는다.
+--
+-- 운영 행 수 = 0 가정 (PR 머지 직전 SELECT COUNT(*) FROM showcase 로 검증) → 데이터 손실 없음.
+-- ddl-auto: update 는 컬럼 DROP 을 자동 수행하지 않으므로 명시적 ALTER 가 필요.
+-- 멱등성: information_schema 체크 후 동적 SQL 로 DROP. 두 번째 부팅에서는 컬럼 부재 → no-op.
+-- -----------------------------------------------------------------------------
+SET @col_exists := (
+  SELECT COUNT(*) FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name = 'showcase'
+     AND column_name = 'search_text'
+);
+SET @stmt := IF(@col_exists > 0,
+                'ALTER TABLE showcase DROP COLUMN search_text',
+                'DO 0');
+PREPARE s FROM @stmt; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- -----------------------------------------------------------------------------
+-- ADR-024 §D3: showcase.brand 컬럼 NULL 허용.
+--
+-- 배경: 직접 입력 폼에서 brand 필드를 제거. 백엔드 도메인 invariant 도 완화 — brand 는 선택.
+-- 컬럼 자체는 카탈로그 복귀 + 검색 인덱싱 부활 시 재활용을 위해 보존하되 nullable 로만 완화.
+-- 멱등성: 이미 NULL 인 두 번째 부팅에서는 ALTER 를 건너뛰어 metadata lock 회피.
+-- -----------------------------------------------------------------------------
+SET @brand_nullable := (
+  SELECT IS_NULLABLE FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name = 'showcase'
+     AND column_name = 'brand'
+);
+SET @stmt2 := IF(@brand_nullable = 'NO',
+                 'ALTER TABLE showcase MODIFY COLUMN brand VARCHAR(255) NULL',
+                 'DO 0');
+PREPARE s2 FROM @stmt2; EXECUTE s2; DEALLOCATE PREPARE s2;

@@ -24,7 +24,7 @@ public record CreateShowcaseRequest(
         @NotNull(message = "카테고리는 필수입니다")
         Category category,
 
-        @NotBlank(message = "브랜드는 필수입니다")
+        // ADR-024 §D3: brand 는 카탈로그 일시 제외에 따라 선택 필드로 완화. null/blank 허용.
         String brand,
 
         String modelCode,

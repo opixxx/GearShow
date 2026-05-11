@@ -37,17 +37,6 @@ public class Showcase {
     /** 이미지 조합의 SHA-256 해시. 10분 창 내 중복 등록 감지용. null 허용 (기존 데이터 보호). */
     private final ContentHash contentHash;
     private final boolean has3dModel;
-    /**
-     * 검색 보강용 합성 텍스트 (ADR-018).
-     *
-     * <p>catalog 의 fullNameKo/En + brand + siloNameKo/clubNameKo 와 직접 입력값
-     * (brand, modelCode, title, description) 을 공백 join 한 결과. application 의
-     * {@code SearchTextComposer} 가 합성하여 도메인에 주입한다 (도메인은 합성 책임 X).</p>
-     *
-     * <p>nullable — 합성 누락 시 등록 자체는 차단하지 않는다. 후속 PR-4 의 LIKE 검색이
-     * 누락된 행을 검색 결과에서 제외할 뿐.</p>
-     */
-    private final String searchText;
     private final ShowcaseStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
@@ -58,7 +47,6 @@ public class Showcase {
                      String title, String description, String userSize,
                      ConditionGrade conditionGrade, int wearCount, boolean forSale,
                      String primaryImageUrl, ContentHash contentHash, boolean has3dModel,
-                     String searchText,
                      ShowcaseStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.ownerId = ownerId;
@@ -75,7 +63,6 @@ public class Showcase {
         this.primaryImageUrl = primaryImageUrl;
         this.contentHash = contentHash;
         this.has3dModel = has3dModel;
-        this.searchText = searchText;
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -84,12 +71,12 @@ public class Showcase {
     /**
      * 새로운 쇼케이스를 생성한다.
      * 최초 상태는 ACTIVE이다.
-     * 카탈로그 아이템 연결은 선택사항이며, category와 brand는 필수이다.
+     * 카탈로그 아이템 연결은 선택사항이다. category 와 title 은 필수, brand 는 선택 (ADR-024 §D3).
      *
      * @param ownerId        소유자 ID
      * @param catalogItemId  카탈로그 아이템 ID (선택, null 허용)
      * @param category       카테고리
-     * @param brand          브랜드명
+     * @param brand          브랜드명 (선택, null/blank 허용 — ADR-024 §D3)
      * @param modelCode      모델 코드 (선택)
      * @param title          제목
      * @param description    설명
@@ -106,14 +93,17 @@ public class Showcase {
                                   int wearCount, boolean forSale,
                                   String primaryImageUrl,
                                   ContentHash contentHash) {
-        validate(ownerId, category, brand, title, conditionGrade);
+        validate(ownerId, category, title, conditionGrade);
+
+        // ADR-024 §D3: brand null/blank 통일. 검색/표시 분기에서 null 만 체크하면 되도록 정규화.
+        String normalizedBrand = (brand == null || brand.isBlank()) ? null : brand.trim();
 
         Instant now = Instant.now();
         return Showcase.builder()
                 .ownerId(ownerId)
                 .catalogItemId(catalogItemId)
                 .category(category)
-                .brand(brand)
+                .brand(normalizedBrand)
                 .modelCode(modelCode)
                 .title(title)
                 .description(description)
@@ -124,33 +114,9 @@ public class Showcase {
                 .primaryImageUrl(primaryImageUrl)
                 .contentHash(contentHash)
                 .has3dModel(false)
-                // ADR-018 §D4: create() 직후 searchText 는 null. application 의
-                // SearchTextSynchronizer 가 합성 후 changeSearchText 로 주입한다.
-                // 명시적 null 은 Builder default 변경에도 invariant 를 보호하기 위함.
-                .searchText(null)
                 .status(ShowcaseStatus.ACTIVE)
                 .createdAt(now)
                 .updatedAt(now)
-                .build();
-    }
-
-    /**
-     * 검색 텍스트를 새로 주입한다 (ADR-018 §D2).
-     *
-     * <p>application 의 {@code SearchTextSynchronizer} 가 catalog 의 한국어 alias 와
-     * 직접 입력값을 합성하여 호출한다. 도메인은 단순 보존만 담당.</p>
-     *
-     * <p><b>ADR-018 §D4 invariant</b>: 본 메서드 외에는 search_text 를 변경하지 않는다.
-     * 다른 changeXxx (changePrimaryImageUrl, changeHas3dModel, changeForSale) 와 상태 전이
-     * 메서드 (hide/activate/markAsSold/delete) 는 모두 {@code toBuilder()} 로 기존 search_text 를
-     * 보존한다. 이를 우회하면 search_text stale 위험 발생.</p>
-     *
-     * @param searchText 새 검색 텍스트 (nullable — 합성 누락 시 등록 자체는 차단하지 않음)
-     * @return 변경된 쇼케이스
-     */
-    public Showcase changeSearchText(String searchText) {
-        return toBuilder()
-                .searchText(searchText)
                 .build();
     }
 
@@ -307,20 +273,18 @@ public class Showcase {
                 .primaryImageUrl(this.primaryImageUrl)
                 .contentHash(this.contentHash)
                 .has3dModel(this.has3dModel)
-                .searchText(this.searchText)
                 .status(this.status)
                 .createdAt(this.createdAt)
                 .updatedAt(Instant.now());
     }
 
     /**
-     * 쇼케이스 생성 시 필수 필드를 검증한다.
-     * category와 brand는 필수, catalogItemId는 선택이다.
+     * 쇼케이스 생성 시 필수 필드를 검증한다 (ADR-024 §D3).
+     * ownerId/category/title/conditionGrade 는 필수, brand/catalogItemId 는 선택.
      */
-    private static void validate(Long ownerId, Category category, String brand,
+    private static void validate(Long ownerId, Category category,
                                  String title, ConditionGrade conditionGrade) {
         if (ownerId == null || category == null
-                || brand == null || brand.isBlank()
                 || title == null || title.isBlank()
                 || conditionGrade == null) {
             throw new InvalidShowcaseException();

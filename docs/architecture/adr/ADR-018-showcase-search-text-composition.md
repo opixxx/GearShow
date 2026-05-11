@@ -1,9 +1,11 @@
 # ADR-018: Showcase 검색 텍스트 합성 정책
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-024](./ADR-024-showcase-search-simplification.md) (2026-05-12)
 - **Date**: 2026-05-04
 - **Deciders**: opix
-- **Related**: ADR-016 (catalog search foundation), ADR-017 (crawler 한국어 매칭 정책), PR #75, PR #76
+- **Related**: ADR-016 (catalog search foundation), ADR-017 (crawler 한국어 매칭 정책), ADR-024 (검색 단순화 — 폐기 결정), PR #75, PR #76
+
+> ⚠️ **2026-05-12 supersede**: 카탈로그 기능 일시 제외 결정으로 `search_text` 컬럼/합성기(`SearchTextComposer`)/동기화기(`SearchTextSynchronizer`)/outbound port(`LoadCatalogForSearchPort`) 가 폐기됨. 검색 대상이 `title` + `description` 직접 LIKE 로 전환. 본 ADR 의 D1~D5 는 카탈로그 복귀 시 신규 ADR 로 재논의. 본문은 컨텍스트 보존을 위해 그대로 유지.
 
 ### 변경 이력
 

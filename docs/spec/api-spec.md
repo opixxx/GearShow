@@ -558,10 +558,10 @@ POST /api/v1/showcases
 
 | 필드 | 타입 | 필수 | 설명 |
 |:----|:-----|:----|:-----|
-| catalogItemId | long | N | 카탈로그 아이템 ID (선택, 연결 시 category/brand/modelCode 자동 복사) |
-| category | string | Y | 카테고리 (`BOOTS`, `UNIFORM`) — catalogItemId 제공 시 자동 설정 |
-| brand | string | Y | 브랜드명 — catalogItemId 제공 시 자동 설정 |
-| modelCode | string | N | 모델 코드 — catalogItemId 제공 시 자동 설정 |
+| catalogItemId | long | N | 카탈로그 아이템 ID (선택). ADR-024 적용 시점 기준 Flutter 에서 진입 차단됨 — 백엔드는 호환성을 위해 수용. |
+| category | string | Y | 카테고리 (`BOOTS`, `UNIFORM`) |
+| brand | string | N | 브랜드명 (선택, ADR-024 §D3 — 카탈로그 일시 제외에 따라 필드 자체가 폼에서 제거됨) |
+| modelCode | string | N | 모델 코드 |
 | title | string | Y | 제목 |
 | description | string | N | 상세 설명 |
 | userSize | string | N | 사용자 사이즈 |

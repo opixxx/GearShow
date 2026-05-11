@@ -16,7 +16,8 @@ import java.time.Instant;
  *
  * <p>한국어 검색 UX 를 위해 {@code fullNameKo} (한국어 풀네임) / {@code fullNameEn} (영문 풀네임) 을
  * 함께 보유한다. crawler 가 Kream 의 {@code <meta name="keywords">} 에서 추출하여 채우며,
- * 사용자가 직접 입력 시에는 nullable. 이 두 필드는 향후 Showcase 검색의 search_text 합성 소스가 된다 (ADR-016).</p>
+ * 사용자가 직접 입력 시에는 nullable. 카탈로그 검색 자체의 한국어 매칭 기반 (ADR-016).
+ * ADR-024 이후 Showcase 검색은 title/description 직접 LIKE 로 전환되어 본 컬럼을 합성 소스로 사용하지 않는다.</p>
  */
 @Getter
 public class CatalogItem {

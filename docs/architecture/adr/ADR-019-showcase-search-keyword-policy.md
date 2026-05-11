@@ -1,9 +1,11 @@
 # ADR-019: Showcase 검색 키워드 정책 — `?keyword=` API + 정규화 + 임계
 
-- **Status**: Accepted
+- **Status**: Superseded by [ADR-024](./ADR-024-showcase-search-simplification.md) (2026-05-12)
 - **Date**: 2026-05-04
 - **Deciders**: opix
-- **Related**: ADR-016 (catalog search foundation), ADR-017 (crawler 한국어 매칭), ADR-018 (showcase.search_text 합성), PR #75/#76/#77/#78
+- **Related**: ADR-016 (catalog search foundation), ADR-017 (crawler 한국어 매칭), ADR-018 (showcase.search_text 합성, **superseded**), ADR-024 (검색 단순화 — title/description 직접 검색), PR #75/#76/#77/#78
+
+> ⚠️ **2026-05-12 supersede**: 검색 대상이 `search_text` 합성 컬럼에서 `title` + `description` 직접 LIKE 로 전환. `?keyword=` API 자체는 유지되며 `@Size(min=1, max=100)`, escape, trim, keyset 페이징 정책은 ADR-024 §D2 에서 그대로 승계. FULLTEXT 임계 모니터링(D2)은 카탈로그 복귀 시 재검토. 본문은 컨텍스트 보존을 위해 그대로 유지.
 
 ## Context
 
