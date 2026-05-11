@@ -1,7 +1,8 @@
-"""상품 URL 발견 단위 테스트 — search endpoint 기반."""
+"""상품 URL 발견 단위 테스트 — search endpoint 기반 + 페이지네이션."""
 
 from __future__ import annotations
 
+import re
 from urllib.parse import quote
 
 import pytest
@@ -15,6 +16,10 @@ from catalog_crawler.sitemap import (
     fetch_sitemap_index,
 )
 
+# 검색 URL regex — query string 의 page 파라미터 무관 매칭.
+# 페이지네이션 도입으로 호출 URL 이 `?page=1`, `?page=2` ... 가변이라 정확 URL 매칭 어려움.
+_SEARCH_URL_RE = re.compile(re.escape(f"{KREAM_BASE}/search?") + r".*tab=products")
+
 
 def test_discover_via_search_extracts_unique_product_ids():
     html = """
@@ -27,10 +32,8 @@ def test_discover_via_search_extracts_unique_product_ids():
     """
     client = KreamClient()
     with requests_mock.Mocker() as m:
-        m.get(
-            f"{KREAM_BASE}/search?keyword=%EC%B6%95%EA%B5%AC%ED%99%94&tab=products",
-            text=html,
-        )
+        # page=1 응답 (3건). page=2 도 같은 응답 → new_count=0 → 페이지네이션 종료.
+        m.get(_SEARCH_URL_RE, text=html)
         urls = discover_boots_product_urls_via_search(client, limit=10)
 
     assert urls == [
@@ -44,10 +47,7 @@ def test_discover_via_search_respects_limit():
     html = "".join(f'<a href="/products/{i}">x</a>' for i in range(100, 200))
     client = KreamClient()
     with requests_mock.Mocker() as m:
-        m.get(
-            f"{KREAM_BASE}/search?keyword=%EC%B6%95%EA%B5%AC%ED%99%94&tab=products",
-            text=html,
-        )
+        m.get(_SEARCH_URL_RE, text=html)
         urls = discover_boots_product_urls_via_search(client, limit=5)
 
     assert len(urls) == 5
@@ -57,13 +57,68 @@ def test_discover_via_search_respects_limit():
 def test_discover_via_search_custom_keyword():
     client = KreamClient()
     with requests_mock.Mocker() as m:
-        m.get(
-            f"{KREAM_BASE}/search?keyword=%EC%9C%A0%EB%8B%88%ED%8F%BC&tab=products",
-            text='<a href="/products/999">x</a>',
-        )
+        m.get(_SEARCH_URL_RE, text='<a href="/products/999">x</a>')
         urls = discover_boots_product_urls_via_search(client, limit=1, keyword="유니폼")
 
     assert urls == [f"{KREAM_BASE}/products/999"]
+
+
+# ===== 페이지네이션 회귀 가드 =====
+
+
+def test_pagination_fetches_multiple_pages_to_reach_limit():
+    """page=1 (50건) → page=2 (50건) 순회로 limit 80 도달."""
+    client = KreamClient(rate_limit_per_sec=1000)   # rate-limit 무시 (test 속도)
+
+    def _response(request, context):
+        # page 파라미터 별 다른 결과 — 페이지네이션 동작 검증.
+        page = request.qs.get("page", ["1"])[0]
+        if page == "1":
+            return "".join(f'<a href="/products/{i}">x</a>' for i in range(1, 51))      # 1~50
+        if page == "2":
+            return "".join(f'<a href="/products/{i}">x</a>' for i in range(51, 101))    # 51~100
+        return ""   # 그 이상은 빈 응답 → 종료
+
+    with requests_mock.Mocker() as m:
+        m.get(_SEARCH_URL_RE, text=_response)
+        urls = discover_boots_product_urls_via_search(client, limit=80)
+
+    assert len(urls) == 80
+    assert urls[0] == f"{KREAM_BASE}/products/1"
+    assert urls[79] == f"{KREAM_BASE}/products/80"   # page=2 의 30번째 = id 80
+
+
+def test_pagination_stops_when_no_new_products():
+    """page=1 의 응답이 page=2 와 100% 동일 → new_count=0 → 즉시 종료."""
+    client = KreamClient(rate_limit_per_sec=1000)
+    html = "".join(f'<a href="/products/{i}">x</a>' for i in range(1, 51))   # 항상 같은 50건
+
+    with requests_mock.Mocker() as m:
+        m.get(_SEARCH_URL_RE, text=html)
+        urls = discover_boots_product_urls_via_search(client, limit=200)
+
+    # 모든 페이지가 같은 50건 → page=1 결과만 반환 (page=2 가 new=0 으로 break).
+    assert len(urls) == 50
+
+
+def test_pagination_respects_max_pages_safety_guard():
+    """_MAX_PAGES=20 가드 — 매 페이지에 새 ID 1건씩만 줘도 무한 fetch 방지."""
+    client = KreamClient(rate_limit_per_sec=1000)
+
+    counter = {"page": 0}
+
+    def _response(request, context):
+        counter["page"] += 1
+        return f'<a href="/products/{counter["page"]}">x</a>'   # 매 페이지 1건 신규
+
+    with requests_mock.Mocker() as m:
+        m.get(_SEARCH_URL_RE, text=_response)
+        urls = discover_boots_product_urls_via_search(client, limit=10_000)
+
+    # _MAX_PAGES=20 가드 도달 → 최대 20건만 추출 (limit 10_000 미달).
+    from catalog_crawler.sources.kream import _MAX_PAGES
+    assert _MAX_PAGES == 20
+    assert len(urls) == _MAX_PAGES
 
 
 # ===== ADR-017 — discover_uniform_product_urls 회귀 보호 =====

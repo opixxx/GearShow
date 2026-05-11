@@ -38,6 +38,10 @@ DISALLOWED_PATH_PREFIXES = ("/my", "/history")
 
 PRODUCT_ID_PATTERN = re.compile(r"/products/(\d+)")
 
+# 검색 페이지네이션 안전 가드 — 50건/page × 20 = 1000건 한계.
+# 운영자가 limit=10_000 같은 큰 값을 줘도 무한 fetch 방지.
+_MAX_PAGES = 20
+
 
 class KreamClient(SourceClient):
     """Kream HTTP 호출 client. 1 req/sec rate limit + UA + 금지 경로 가드.
@@ -116,28 +120,51 @@ class KreamClient(SourceClient):
 def _discover_via_search(
     client: KreamClient, limit: int, keyword: str
 ) -> list[str]:
-    """검색 페이지 SSR HTML 에서 ``/products/{id}`` 를 추출한다.
+    """검색 페이지 SSR HTML 에서 ``/products/{id}`` 를 추출 — 페이지네이션 지원.
 
-    Kream URL: ``/search?keyword=<keyword>&tab=products``. 단일 응답에 검색 결과
-    상품 ID 가 포함됨. 중복 제거 + 등장 순서(검색 관련도 순) 유지. limit 도달 시 즉시 종료.
+    Kream URL: ``/search?keyword=<keyword>&tab=products&page=<N>``.
+    실측: 1페이지 = 50건, ``?page=2`` 부터 추가 50건 (page=1 과 일부 중복).
+
+    종료 조건 (3개):
+    1. ``len(product_urls) >= limit`` 도달
+    2. 페이지 응답에 새 product ID 0건 (검색 결과 끝 또는 페이지네이션 종점)
+    3. ``_MAX_PAGES`` 도달 (안전 가드)
+
+    rate-limit: ``client.get(url)`` 가 KreamClient 의 1 req/sec 가드 통과 — 페이지 N개 = N초 추가 fetch.
     """
     encoded = quote(keyword, safe="")
-    url = f"{KREAM_BASE}/search?keyword={encoded}&tab=products"
-    response = client.get(url)
-    response.raise_for_status()
-
     seen: set[str] = set()
     product_urls: list[str] = []
-    for match in PRODUCT_ID_PATTERN.finditer(response.text):
-        product_id = match.group(1)
-        if product_id in seen:
-            continue
-        seen.add(product_id)
-        product_urls.append(f"{KREAM_BASE}/products/{product_id}")
+    page = 0
+
+    for page in range(1, _MAX_PAGES + 1):
         if len(product_urls) >= limit:
             break
 
-    LOGGER.info("검색 결과 상품 URL: %d (keyword=%s)", len(product_urls), keyword)
+        url = f"{KREAM_BASE}/search?keyword={encoded}&tab=products&page={page}"
+        response = client.get(url)
+        response.raise_for_status()
+
+        page_new_count = 0
+        for match in PRODUCT_ID_PATTERN.finditer(response.text):
+            product_id = match.group(1)
+            if product_id in seen:
+                continue
+            seen.add(product_id)
+            product_urls.append(f"{KREAM_BASE}/products/{product_id}")
+            page_new_count += 1
+            if len(product_urls) >= limit:
+                break
+
+        # 페이지에 새 ID 0건 = 검색 결과 끝 (또는 페이지네이션 종점). 무한 loop 방지.
+        if page_new_count == 0:
+            LOGGER.info("페이지 %d 에 새 product 없음 — 페이지네이션 종료", page)
+            break
+
+    LOGGER.info(
+        "검색 결과 상품 URL: %d (keyword=%s, pages=%d)",
+        len(product_urls), keyword, page,
+    )
     return product_urls
 
 

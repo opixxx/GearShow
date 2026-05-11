@@ -11,6 +11,8 @@
 
 > §D2 의 silos/brands/clubs 사전은 출처 무관 — Kream 및 crazy11 (ADR-023) 모두 동일 사전 사용. 신규 출처 추가 시 사전 재사용 가능.
 
+> **Kream 검색 페이지네이션** (후속 PR `kream-search-pagination`): §D1 검색 endpoint 기반 discover 가 첫 페이지(50건) 만 fetch 하던 한계를 `?page=<N>` 순회로 해소. 종료 조건 3개 — limit 도달 / 페이지 새 ID 0건 / `_MAX_PAGES=20` 가드. 1 keyword 로 최대 ~1000건 추출 가능 (UNIFORM 50건 → 수백건 효과 기대).
+
 ## Context
 
 ADR-016 이 catalog 도메인에 한국어 alias 컬럼 (`fullNameKo/En`, `siloNameKo`, `clubNameKo`) 과 StudType `MG/HG`, `kitType` nullable 화를 도입했다. 이 결정은 **crawler 가 Kream 페이지에서 한국어 데이터를 추출해 채워주는 것**을 전제로 한다. PR #74 는 crawler 의 boots 흐름을 main 에 들여놨지만 다음 사항이 미정인 채로 머지됐다:
