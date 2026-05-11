@@ -9,6 +9,8 @@
 
 > §D2 의 사일로 사전 단위(라인 단위 canonical) 결정은 ADR-022 (PR-Q3) 에서 시리즈 단위로 갱신됨. 결정 변경 사유는 ADR-022 §Context (PR #82 PoC 매칭 실패 8건) 참조.
 
+> §D2 의 silos/brands/clubs 사전은 출처 무관 — Kream 및 crazy11 (ADR-023) 모두 동일 사전 사용. 신규 출처 추가 시 사전 재사용 가능.
+
 ## Context
 
 ADR-016 이 catalog 도메인에 한국어 alias 컬럼 (`fullNameKo/En`, `siloNameKo`, `clubNameKo`) 과 StudType `MG/HG`, `kitType` nullable 화를 도입했다. 이 결정은 **crawler 가 Kream 페이지에서 한국어 데이터를 추출해 채워주는 것**을 전제로 한다. PR #74 는 crawler 의 boots 흐름을 main 에 들여놨지만 다음 사항이 미정인 채로 머지됐다:

@@ -21,16 +21,9 @@ from bs4 import BeautifulSoup
 LOGGER = logging.getLogger(__name__)
 
 
-class RawProduct(TypedDict, total=False):
-    name: str | None
-    name_ko: str | None
-    name_en: str | None
-    brand: str | None
-    style_code: str | None
-    release_date: str | None
-    image_url: str | None
-    category_path: str | None
-    source_url: str | None
+# RawProduct 는 ADR-023 의 다중 출처 정책에 따라 sources/__init__ 에 통합 정의됨.
+# 기존 import path (`from catalog_crawler.product_parser import RawProduct`) 호환을 위해 re-export.
+from catalog_crawler.sources import RawProduct  # noqa: F401
 
 
 def parse_keywords(
