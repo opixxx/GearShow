@@ -55,6 +55,11 @@ _PRODUCT_LINK_PATTERN = re.compile(
     r"/shop/shopdetail\.html\?[^\"'\s]*branduid=\d+[^\"'\s]*"
 )
 
+# 상품명 안 괄호 안의 제조사 modelCode 추출 패턴 — `(JS4243)`, `(IO8217-008)`, `(P1GA262664)` 등.
+# 영문 대문자 시작 강제 — 한국어 in 괄호 (예: "전용쌕") + 순수 숫자 (예: Puma 의 "10830302" — 사이트 내부 코드와 구분 어려움) 차단.
+# 길이 3~20자 — 너무 짧은 false positive 회피.
+_MODEL_CODE_PATTERN = re.compile(r'\(([A-Z][A-Z0-9-]{2,19})\)')
+
 
 class Crazy11Client(SourceClient):
     """crazy11 HTTP 호출 client. 1 req/sec rate limit + UA + 차단 xcode 가드.
@@ -134,8 +139,10 @@ class Crazy11Client(SourceClient):
 
         # JSON-LD 의 name 이 한글 풀네임 — 가장 권위 있는 source
         name_ko = (jsonld or {}).get("name") or _extract_title(soup)
-        # sku 가 modelCode — sku 없으면 page 본문 fallback (현 시점 미지원)
-        style_code = (jsonld or {}).get("sku")
+        # 제조사 modelCode 는 상품명 안 괄호 (예: '(JS4243)', '(IO8217-008)').
+        # JSON-LD sku 는 사이트 내부 SKU (예: '001005003335') 라 신뢰 X — fallback 안 함.
+        # 운영자 검수 신호로 추출 실패 시 None.
+        style_code = _extract_model_code_from_name(name_ko)
         # image 는 첫 번째 array element
         image_url = _first_image(jsonld)
 
@@ -206,6 +213,26 @@ def _extract_xcode(url: str) -> str | None:
     qs = parse_qs(parsed.query)
     values = qs.get("xcode") or []
     return values[0] if values else None
+
+
+def _extract_model_code_from_name(name: str | None) -> str | None:
+    """상품명 안 괄호 안의 제조사 modelCode 추출.
+
+    crazy11 의 JSON-LD ``Product.sku`` 는 사이트 내부 SKU (예: '001005003335') 라
+    제조사 모델코드가 아님 — 신뢰 X. 진짜 제조사 코드는 상품명 안 괄호
+    (예: 'JS4243', 'IO8217-008', 'P1GA262664').
+
+    패턴: 영문 대문자 시작 + 영문/숫자/하이픈 + 3~20자.
+    - 한국어 in 괄호 ('전용쌕', '국내이월') 차단 (영문 시작 강제).
+    - 순수 숫자 in 괄호 (Puma 의 '10830302' 같은 모델코드) 도 차단 — 사이트 내부 SKU 와 구분 어려움.
+      운영자 검수 또는 후속 PR 에서 brand 별 분기 처리.
+
+    PR #91 PoC 발견: BOOTS 125건 중 79건 (63%) 이 사이트 SKU 로 잘못 들어감 — 본 fix 로 차단.
+    """
+    if not name:
+        return None
+    match = _MODEL_CODE_PATTERN.search(name)
+    return match.group(1) if match else None
 
 
 def _extract_jsonld_product(soup: BeautifulSoup) -> dict | None:
