@@ -609,7 +609,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    return Scaffold(
+      backgroundColor: const Color(0xFF111111),
+      body: SafeArea(
       child: Column(
         children: [
           Container(
@@ -718,6 +720,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
