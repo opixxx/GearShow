@@ -39,12 +39,12 @@ CRAZY11_BASE = "http://www.crazy11.co.kr"
 
 DEFAULT_USER_AGENT = "GearShow-Catalog-Bot/1.0 (+contact: opix0306@naver.com)"
 
-# 카테고리 xcode 매핑 (Step 1 정찰 결과 — 사이트의 카테고리 title 기반).
-# BOOTS: 축구화 / 풋살화 / 시즌오프 + 베스트 변형
-# UNIFORM: 단체/유니폼 + 클럽 팀 샵 (의류 카테고리는 일반 의류 혼재라 제외)
+# 카테고리 xcode 매핑 — 메인 nav (홈페이지 상단 탭) 기준 (사용자 정찰 + 메인 페이지 HTML 분석).
+# 시즌오프/베스트셀러 카테고리는 별도 view 옵션이라 매핑에서 제외 — 같은 상품 중복 +
+# 카테고리 페이지 사이드 link 오염 위험 (PR #90 PoC limit=20 에서 50% 오염 발견).
 _CATEGORY_XCODES: dict[Category, tuple[str, ...]] = {
-    Category.BOOTS: ("001", "002", "138", "211", "232", "237", "243", "257"),
-    Category.UNIFORM: ("175", "292"),
+    Category.BOOTS: ("257", "243"),       # 축구화 + 풋살화
+    Category.UNIFORM: ("175", "292"),     # 단체/유니폼 + 프리미어 리그
 }
 
 # robots.txt 가 명시적으로 차단한 xcode. 검색·sitemap 결과에서도 후처리 필터.
@@ -98,6 +98,12 @@ class Crazy11Client(SourceClient):
                 raw_path = match.group(0)
                 # 상대 경로 → 절대 URL
                 url = f"{CRAZY11_BASE}{raw_path}" if raw_path.startswith("/") else raw_path
+                # URL 의 xcode 후처리 필터 — 카테고리 매핑된 xcode 와 일치만 채택.
+                # 카테고리 페이지의 사이드/추천 영역 link (다른 카테고리 상품) 차단.
+                # PR #90 PoC 의 카테고리 오염 50% fix.
+                url_xcode = _extract_xcode(url)
+                if url_xcode not in xcodes:
+                    continue
                 # branduid 기반 중복 제거 (xcode 다른 같은 상품 재등장 회피)
                 branduid = _extract_branduid(url)
                 if not branduid or branduid in seen:
@@ -191,6 +197,14 @@ def _extract_branduid(url: str) -> str | None:
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
     values = qs.get("branduid") or []
+    return values[0] if values else None
+
+
+def _extract_xcode(url: str) -> str | None:
+    """URL query string 의 xcode 파라미터 추출 — 카테고리 필터 키."""
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    values = qs.get("xcode") or []
     return values[0] if values else None
 
 

@@ -15,6 +15,7 @@ from catalog_crawler.sources.crazy11 import (
     _CATEGORY_XCODES,
     _DISALLOWED_XCODES,
     _extract_branduid,
+    _extract_xcode,
 )
 
 
@@ -45,15 +46,24 @@ class TestCrazy11ClientInterface:
 
 
 class TestCategoryMapping:
-    def test_boots_xcode_includes_main_categories(self):
-        boots = _CATEGORY_XCODES[Category.BOOTS]
-        assert "001" in boots   # 축구화
-        assert "002" in boots   # 풋살화
-        assert "257" in boots   # 축구화 (메인)
-        assert len(boots) >= 3
+    """ADR-023 카테고리 매핑은 메인 nav (홈페이지 상단 탭) 기준.
 
-    def test_uniform_xcode_mapped(self):
-        assert "175" in _CATEGORY_XCODES[Category.UNIFORM]   # 단체/유니폼
+    시즌오프/베스트는 별도 view 옵션이라 매핑에서 제외 — 같은 상품 중복 + 사이드 link 오염 위험.
+    """
+
+    def test_boots_mapped_to_main_nav_xcodes_only(self):
+        """BOOTS 는 메인 nav 의 축구화(257) + 풋살화(243) 2개 만."""
+        assert _CATEGORY_XCODES[Category.BOOTS] == ("257", "243")
+
+    def test_uniform_mapped_to_main_nav_xcodes_only(self):
+        """UNIFORM 은 메인 nav 의 단체/유니폼(175) + 프리미어 리그(292) 만."""
+        assert _CATEGORY_XCODES[Category.UNIFORM] == ("175", "292")
+
+    def test_seasonoff_and_bestseller_excluded(self):
+        """시즌오프(211, 138) / 베스트셀러(232, 237) view 옵션은 매핑에서 제외."""
+        boots = _CATEGORY_XCODES[Category.BOOTS]
+        for excluded in ("001", "002", "138", "211", "232", "237"):
+            assert excluded not in boots, f"제외돼야 할 view xcode 가 매핑됨: {excluded}"
 
     def test_disallowed_xcodes_not_in_any_category(self):
         """robots.txt 가 차단한 xcode 가 어느 카테고리 매핑에도 포함되지 않아야 함."""
@@ -126,6 +136,52 @@ class TestExtractBranduid:
     def test_returns_none_when_branduid_absent(self):
         url = "http://www.crazy11.co.kr/shop/shopbrand.html?xcode=257"
         assert _extract_branduid(url) is None
+
+
+class TestExtractXcode:
+    """xcode 추출 — discover 시점의 URL 후처리 필터 키 (PR #90 PoC 오염 fix)."""
+
+    def test_extracts_xcode_from_query_string(self):
+        url = "http://www.crazy11.co.kr/shop/shopdetail.html?branduid=773971&xcode=257"
+        assert _extract_xcode(url) == "257"
+
+    def test_returns_none_when_xcode_absent(self):
+        url = "http://www.crazy11.co.kr/shop/page.html"
+        assert _extract_xcode(url) is None
+
+
+class TestDiscoverUrlFilter:
+    """ADR-023 §D1 후속 — discover 시 URL 의 xcode 후처리 필터 검증.
+
+    카테고리 페이지의 사이드/추천 영역 link (다른 카테고리 상품) 차단.
+    """
+
+    def test_filter_rejects_sidebar_link_with_other_xcode(self, mocker):
+        """xcode=001 같은 매핑 외 link 는 discover 결과에서 제외 (BOOTS=257/243 만)."""
+        client = Crazy11Client(rate_limit_per_sec=10.0)
+
+        # carrier HTML — 메인 카테고리 link 1개 + 사이드 link 2개 (다른 카테고리)
+        fake_html = """
+        <a href="/shop/shopdetail.html?branduid=100&xcode=257&type=Y">메인 축구화</a>
+        <a href="/shop/shopdetail.html?branduid=200&xcode=001&type=Y">사이드 (001, 매핑 외)</a>
+        <a href="/shop/shopdetail.html?branduid=300&xcode=127&type=Y">사이드 (127 용품)</a>
+        """
+
+        class _Resp:
+            text = fake_html
+            encoding = "euc-kr"
+
+            def raise_for_status(self):
+                pass
+
+        mocker.patch.object(client, "_get", return_value=_Resp())
+
+        urls = client.discover_product_urls(Category.BOOTS, limit=10)
+
+        # 매핑된 xcode (257, 243) 의 link 만 채택. 001/127 link 는 제외.
+        assert any("branduid=100" in u for u in urls), "메인 카테고리 link 누락"
+        assert not any("branduid=200" in u for u in urls), "사이드 xcode=001 link 가 차단되지 않음"
+        assert not any("branduid=300" in u for u in urls), "사이드 xcode=127 link 가 차단되지 않음"
 
 
 class TestEncodingHandling:
