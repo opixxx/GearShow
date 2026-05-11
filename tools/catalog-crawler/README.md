@@ -104,6 +104,32 @@ python -m catalog_crawler --source crazy11 --category boots --limit 30 \
 
 bucket 이 비어있으면 exit code 2 + 에러 메시지로 즉시 종료 (fail fast).
 
+##### crazy11 modelCode 추출 정책 (ADR-023 후속)
+
+crazy11 의 JSON-LD `Product.sku` 는 **사이트 내부 SKU** (예: `001005003335`) 라 제조사 모델코드가 아님. 진짜 제조사 코드는 상품명 안 괄호 (예: `(JS4243)`, `(IO8217-008)`, `(P1GA262664)`). crawler 가 영문 시작 정규식 (`\(([A-Z][A-Z0-9-]{2,19})\)`) 으로 추출. 추출 실패 시 `style_code=None` — 운영자 검수 신호 (사이트 SKU 로 fallback 안 함).
+
+⚠️ **순수 숫자 모델코드 (예: Puma `10830302`) 는 추출 안 됨** — 사이트 내부 SKU 와 구분 어려움. 후속 PR 또는 운영자 수동 입력.
+
+##### 운영 catalog backfill (PR #91 PoC 잘못 적재 정정)
+
+PR #91 PoC 적재 중 잘못된 modelCode (사이트 SKU 12자리 숫자) 가 운영 catalog 에 들어간 경우 — 운영자 수동 SQL 로 정정:
+
+```sql
+-- 1. 잘못된 modelCode (BOOTS + 순수 숫자) 행 확인
+SELECT category, model_code, brand, full_name_ko FROM catalog_item
+  WHERE category='BOOTS' AND model_code REGEXP '^[0-9]+$' LIMIT 10;
+
+-- 2. 삭제 (자식 행: boots_spec 도 cascade 또는 별도 삭제 필요 — 운영자 schema 확인)
+DELETE FROM boots_spec WHERE catalog_item_id IN (
+  SELECT catalog_item_id FROM catalog_item WHERE category='BOOTS' AND model_code REGEXP '^[0-9]+$'
+);
+DELETE FROM catalog_item WHERE category='BOOTS' AND model_code REGEXP '^[0-9]+$';
+
+-- 3. fix 된 crawler 로 재크롤 + 재 bulk-import
+```
+
+> ⚠️ **schema.sql 자동 실행 안 함** — 일회성 정정이라 매 부팅 시 실행 부적절. 운영자가 의도적으로 한 번 실행.
+
 stdout 예시 (boots):
 
 ```

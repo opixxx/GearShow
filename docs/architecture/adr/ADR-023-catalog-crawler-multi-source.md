@@ -9,6 +9,8 @@
 
 > **crazy11 rate-limit 권장: `--rate-limit 0.5` (1 req/2sec)**. 1 req/sec 도 서버가 첫 N 요청을 `Connection aborted` 로 적극 차단 (PR #91 PoC: 12/20 fetch 성공). 1 req/2sec 로 완화 시 20/20 fetch 성공 검증됨. User-Agent 위장 등 우회 시도 금지 (ADR-017 정합) — 정중한 rate-limit 완화가 정책 부합. README "운영 적재" 섹션 참조.
 
+> **crazy11 modelCode 추출 정책 (§D7 brand 와 동일 원칙)**: JSON-LD `Product.sku` 는 사이트 내부 SKU (예: 12자리 숫자 `001005003335`) 라 제조사 모델코드가 아님 — 신뢰 X. 진짜 제조사 코드는 상품명 안 괄호 (예: `(JS4243)`, `(IO8217-008)`, `(P1GA262664)`). 후속 fix PR 에서 영문 시작 정규식 (`\(([A-Z][A-Z0-9-]{2,19})\)`) 으로 추출. PR #91 PoC 적재에서 BOOTS 125건 중 79건 (63%) 이 사이트 SKU 로 잘못 들어간 발견의 fix. 추출 실패 시 None — sku fallback 안 함 (운영자 검수 신호). 운영 catalog 의 기존 79건 backfill 은 운영자 수동 SQL (README 가이드).
+
 ## Context
 
 PR #82~#86 시점까지 catalog 크롤러는 **Kream 단일 출처** 만 지원했다. 운영 적재 100건 검증 후 다음 한계가 명확해짐:

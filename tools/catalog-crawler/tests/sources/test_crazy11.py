@@ -15,6 +15,7 @@ from catalog_crawler.sources.crazy11 import (
     _CATEGORY_XCODES,
     _DISALLOWED_XCODES,
     _extract_branduid,
+    _extract_model_code_from_name,
     _extract_xcode,
 )
 
@@ -101,10 +102,20 @@ class TestParseProduct:
         assert raw["name_ko"] is not None
         assert "스타킹" in raw["name_ko"] or "UT704" in raw["name_ko"]
 
-    def test_extracts_style_code_from_sku(self):
+    def test_style_code_from_product_name_bracket_not_jsonld_sku(self):
+        """ADR-023 후속 fix: style_code 는 상품명 안 괄호의 제조사 코드 추출 — JSON-LD sku 신뢰 X.
+
+        fixture 의 상품명: '언더테크 액티브 쿨 튜브 스타킹 UT704 [파랑] #'
+        - JSON-LD sku = '069005000037' (사이트 내부 SKU — 사용 안 함)
+        - 상품명에 영문 시작 괄호 코드 없음 (UT704 는 괄호 없이 노출) → None
+        """
         raw = self.client.parse_product(self.response, "http://www.crazy11.co.kr/x")
-        assert raw["style_code"] is not None
-        assert raw["style_code"].isdigit() or "-" in raw["style_code"]
+        # fixture 의 상품명에 `(...)` 안 영문 코드 없음 → style_code None
+        # 사이트 SKU 가 fallback 으로 들어오면 회귀 — 명시적 None 검증.
+        assert raw["style_code"] is None, (
+            f"fixture 의 상품명에 괄호 안 영문 코드 없음 — None 이어야 하나 {raw['style_code']!r} 추출됨. "
+            "JSON-LD sku fallback 회귀 의심."
+        )
 
     def test_extracts_image_url_from_jsonld(self):
         raw = self.client.parse_product(self.response, "http://www.crazy11.co.kr/x")
@@ -148,6 +159,48 @@ class TestExtractXcode:
     def test_returns_none_when_xcode_absent(self):
         url = "http://www.crazy11.co.kr/shop/page.html"
         assert _extract_xcode(url) is None
+
+
+class TestExtractModelCodeFromName:
+    """ADR-023 후속 fix: 상품명 안 괄호의 제조사 modelCode 추출.
+
+    crazy11 의 JSON-LD ``Product.sku`` 는 사이트 내부 SKU — 진짜 제조사 코드는 상품명 안 괄호.
+    PR #91 PoC 에서 BOOTS 79/125 (63%) 가 사이트 SKU 로 잘못 들어간 발견의 후속 fix.
+    """
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("아디다스 코파 퓨어 4 엘리트 FG (JS4243) 전용쌕/주걱/양말 #", "JS4243"),
+            ("나이키 팬텀 VI 로우 엘리트 LV8 FG (IO8217-008) 전용쌕/주걱/양말 #", "IO8217-008"),
+            ("미즈노 모나르시다 네오 셀렉트 III AG 와이드 (P1GA262664) #", "P1GA262664"),
+            ("아디다스 프레데터 엘리트 FT FG (JS0378) 전용쌕/주걱/양말 #", "JS0378"),
+        ],
+    )
+    def test_extracts_manufacturer_model_code(self, name, expected):
+        assert _extract_model_code_from_name(name) == expected
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "푸마 킹 얼티메이트 FG/AG (10830302) 전용쌕/주걱 #",   # 순수 숫자 — 사이트 내부 SKU 와 구분 어려움
+            "상품명 (전용쌕)",                                       # 한국어 in 괄호
+            "상품명 (국내이월)",                                     # 한국어 in 괄호
+            "상품명만 있음",                                         # 괄호 없음
+            "",                                                       # 빈 문자열
+        ],
+    )
+    def test_returns_none_for_unreliable_or_missing_code(self, name):
+        """순수 숫자 / 한국어 in 괄호 / 괄호 없음 → None — 운영자 검수 신호."""
+        assert _extract_model_code_from_name(name) is None
+
+    def test_returns_none_for_none_input(self):
+        assert _extract_model_code_from_name(None) is None
+
+    def test_extracts_first_match_when_multiple_brackets(self):
+        """여러 괄호 중 첫 번째 영문 시작 매칭 채택."""
+        name = "상품명 (JS4243) 추가 (다른괄호) (KR0001)"
+        assert _extract_model_code_from_name(name) == "JS4243"
 
 
 class TestDiscoverUrlFilter:
