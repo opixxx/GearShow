@@ -176,8 +176,8 @@ CREATE TABLE processed_message (
 |---|---|---|---|
 | `workflow:lock:{workflowId}` | 상태 전이 TX 보호 (분산 락) | 10s (watchdog) | ✅ P1-D-α+β |
 | `tripo:semaphore` | 10 슬롯 rate limit | 영구 | ✅ P1-E |
-| `tripo:queue` | ZSET, score=enqueuedAt (피크 시 대기열) | 영구 | ⏳ 보류 (DelayedQueue 로 충분 시 제거) |
-| `poll:delayed-queue:main` | Redisson DelayedQueue (적응형 폴링) | 영구 | ✅ P1-E |
+| `tripo:queue` | ZSET, score=enqueuedAt — 동시 생성 cap 초과 시 입장 대기 (admission). `poll:delayed-queue` 와 **별개 키·별개 목적** | 영구 | ✅ ADR-025 |
+| `poll:delayed-queue:main` | Redisson DelayedQueue (GENERATING 적응형 폴링 — admission 과 무관) | 영구 | ✅ P1-E |
 
 ### 3.5 Kafka 토픽
 
@@ -297,6 +297,8 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
 
 같은 `workflow:lock:{workflowId}` 공유 → Worker 가 쥐고 있으면 Reconcile 이 자연스럽게 대기/skip.
 
+**admission(ADR-025) ↔ drainer ↔ Reconcile 협조**: 입장 게이트가 cap 초과로 워크플로우를 `tripo:queue` 에 park 하면 `markProcessed` 로 Kafka 재전송이 끊긴다. 따라서 parked 워크플로우의 재개 경로는 (1) 주기 drainer(`countActive < cap` 시 최오래 항목 pop → prepare 재투입), (2) Reconcile 의 REQUESTED-stranded 복구(ZSET/drainer 유실 대비, `warnRequested` 를 확장해 REQUESTED stuck ∧ ZSET 미포함 → `parkIfAbsent` 재-park) 둘뿐이다. (2)는 안전망이 아니라 정확성 필수 요소다. 게이트·drainer·재-park 은 모두 락-free(DB COUNT + ZSET 원자 연산), `current_step==REQUESTED` 조건 확인으로 drainer↔Reconcile 이중 처리를 방어한다.
+
 ---
 
 ## 7. 시퀀스 — Happy Path
@@ -342,8 +344,10 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
     (주기적 heartbeat UPDATE)
     Tripo `POST /upload` × 4 (multipart) → file_token × 4
        # STS 방식(`POST /upload/sts/token`) 은 Phase 2 최적화로 보류
-    tripo:semaphore 획득 (10 permits, Redisson RSemaphore)
-       # tripo:queue ZSET 대기 (트래픽 피크 전용) — ⏳ Phase 2 도입 예정 (현재는 미구현)
+    tripo:semaphore 획득 (10 permits, Redisson RSemaphore — per-call API rate-limit)
+       # 입장 게이트(ADR-025): 이 단계 이전, PrepareWorkflowService 의 validateSourceImages 후
+       #   ∧ transitionToPreparingUnderLock 전(락 밖)에서 countActive(PREPARING+GENERATING) 검사.
+       #   cap 초과 시 tripo:queue ZSET park + 정상 return(markProcessed → Kafka 컷). 여기 도달 X.
     POST /task
        Body: {
          type: 'multiview_to_model',
@@ -632,3 +636,4 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | 2026-04-23 | v1.0 | 초안 — 4-state 머신 (`tripo_succeeded_at` 컬럼) + 폴링 락 제거 방향 확정 |
 | 2026-04-23 | v1.1 | Tripo API 조사 반영 — Idempotency-Key 미지원 확인 후 **사후 cancel 전략** 으로 ④ 계층 재설계. 사전 balance 체크 기각, 주기 모니터링(§8.5) 으로 전환. failure_code 를 Tripo 공식 에러 코드와 1:1 매핑. `tripo_trace_id` 컬럼 추가. |
 | 2026-04-28 | v1.2 | §4 ④ + §8.4 + §11 + §12 + §13 의 "사후 cancel" 가정 정정 — Tripo `cancel` 엔드포인트 미지원 재확인. ④ 계층 의미를 "stranded task 빈도 최소화 + 손실 수용" 으로 재정의. P1-G-γ 영구 폐기, §12 #2 폐기. ADR-011 v1.1 과 동기화. |
+| 2026-05-16 | v1.3 | §3.4 `tripo:queue` 정식 결정(ADR-025) — 동시 생성 입장 큐. `poll:delayed-queue` 와 별개 키·목적 명시. §7[5] 게이트 위치(PrepareWorkflowService, validate 후·락 전) 반영. §6.6 admission↔drainer↔Reconcile 협조 추가. 코드 검증으로 §8.1(backoff)·§8.4(Reconcile=Redrive)·§7[6](trace_id 미구현) 가 코드와 어긋남을 확인 — 해당 §는 코드를 SoT 로 본다(정정은 별도 docs PR). |

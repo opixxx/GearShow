@@ -141,6 +141,16 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 .toList();
     }
 
+    /**
+     * 입장 게이트 hot path + drainer 루프가 반복 호출하므로 클래스 레벨 read-write
+     * {@code @Transactional} 을 읽기 전용으로 오버라이드한다 (flush 사이클 제거 + DB read-only 최적화).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countActive() {
+        return workflowJpaRepository.countActive();
+    }
+
     private StuckWorkflow toStuckWorkflow(ModelGenerationWorkflowJpaEntity entity) {
         return new StuckWorkflow(
                 entity.getId(),

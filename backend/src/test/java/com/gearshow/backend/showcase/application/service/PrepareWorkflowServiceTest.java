@@ -11,9 +11,11 @@ import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -79,9 +81,15 @@ class PrepareWorkflowServiceTest {
     @Mock
     private TripoPendingTaskPort tripoPendingTaskPort;
     @Mock
+    private TripoAdmissionQueuePort admissionQueuePort;
+    @Mock
     private PrepareWorkflowTxHelper txHelper;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    /** 기본 입장 게이트 설정: cap=10, enabled. countActive 기본 0 → 게이트 통과(기존 흐름 보존). */
+    private final AdmissionQueueProperties admissionProperties =
+            new AdmissionQueueProperties(10, true);
 
     private PrepareWorkflowService service;
 
@@ -90,6 +98,7 @@ class PrepareWorkflowServiceTest {
         service = new PrepareWorkflowService(
                 workflowPort, modelSourceImagePort, imageStoragePort,
                 workflowLockPort, modelGenerationClient, tripoPendingTaskPort,
+                admissionQueuePort, admissionProperties,
                 txHelper, eventPublisher);
         // 기본: 락 획득 성공 → action 즉시 실행
         doAnswer(invocation -> {
@@ -341,6 +350,66 @@ class PrepareWorkflowServiceTest {
             verify(tripoPendingTaskPort, times(1)).preserve(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(txHelper, times(1)).executeTx2(WORKFLOW_ID, TRIPO_TASK_ID);
             verify(eventPublisher, never()).publishEvent(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("입장 게이트 (ADR-025)")
+    class AdmissionGate {
+
+        @Test
+        @DisplayName("countActive < cap → 게이트 통과, park 안 함, PREPARING 전이 시도")
+        void underCap_proceedsWithoutPark() {
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
+            given(workflowPort.countActive()).willReturn(5L);  // cap=10
+            given(workflowPort.updateStepIfCurrent(
+                    WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING)).willReturn(1);
+
+            service.prepare(WORKFLOW_ID);
+
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
+            verify(workflowPort, times(1)).updateStepIfCurrent(
+                    WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+        }
+
+        @Test
+        @DisplayName("countActive >= cap → park 후 종료 (전이/Tripo/락 없음, REQUESTED 유지)")
+        void atCap_parksAndReturns() {
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
+            given(workflowPort.countActive()).willReturn(10L);  // cap=10 → 이상
+
+            service.prepare(WORKFLOW_ID);
+
+            verify(admissionQueuePort, times(1)).parkIfAbsent(eq(WORKFLOW_ID), anyLong());
+            verify(workflowPort, never()).updateStepIfCurrent(anyLong(), any(), any());
+            verify(workflowLockPort, never()).withLock(anyLong(), any());
+            verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
+        }
+
+        @Test
+        @DisplayName("enabled=false → cap 초과여도 게이트 통과 (롤백 스위치)")
+        void disabled_bypassesGate() {
+            PrepareWorkflowService disabledService = new PrepareWorkflowService(
+                    workflowPort, modelSourceImagePort, imageStoragePort,
+                    workflowLockPort, modelGenerationClient, tripoPendingTaskPort,
+                    admissionQueuePort, new AdmissionQueueProperties(1, false),
+                    txHelper, eventPublisher);
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(requestedSnapshot()));
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
+            given(workflowPort.updateStepIfCurrent(
+                    WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING)).willReturn(1);
+
+            disabledService.prepare(WORKFLOW_ID);
+
+            verify(workflowPort, never()).countActive();
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
+            verify(workflowPort, times(1)).updateStepIfCurrent(
+                    WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
         }
     }
 }

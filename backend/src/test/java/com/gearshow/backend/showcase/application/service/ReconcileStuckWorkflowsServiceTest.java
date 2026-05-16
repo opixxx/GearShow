@@ -7,10 +7,12 @@ import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.event.TripoSuccessEvent;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import com.gearshow.backend.showcase.infrastructure.config.ReconcileProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,7 +55,7 @@ import static org.mockito.Mockito.verify;
  *   <li>heartbeat 복구 상태 → skip (오판 방어)</li>
  *   <li>GENERATING·Tripo stuck → DelayedQueue 재등록</li>
  *   <li>GENERATING·S3 stuck → TripoSuccessEvent 재발행</li>
- *   <li>REQUESTED stuck → 경고 로그만 (복구 시도 카운트 0)</li>
+ *   <li>REQUESTED stuck → 경고 로그 + 입장 큐 미포함 시 재park (ADR-025) / 포함 시 skip</li>
  * </ul>
  */
 @ExtendWith(MockitoExtension.class)
@@ -75,6 +77,12 @@ class ReconcileStuckWorkflowsServiceTest {
     private WorkflowPollQueuePort workflowPollQueuePort;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private TripoAdmissionQueuePort admissionQueuePort;
+
+    /** 기본: 입장 게이트 활성 (cap=10). enabled=false 롤백 케이스는 별도 서비스 인스턴스로 검증. */
+    private final AdmissionQueueProperties admissionProperties =
+            new AdmissionQueueProperties(10, true);
 
     private ReconcileStuckWorkflowsService service;
 
@@ -84,7 +92,8 @@ class ReconcileStuckWorkflowsServiceTest {
                 true, 60_000L, 50, 60L, 8L, 5L, 30L, 5L);
         service = new ReconcileStuckWorkflowsService(
                 workflowPort, tripoPendingTaskPort, workflowLockPort,
-                workflowPollQueuePort, eventPublisher, properties);
+                workflowPollQueuePort, eventPublisher, properties,
+                admissionQueuePort, admissionProperties);
 
         // 기본: withLock 은 즉시 action 실행
         doAnswer(inv -> {
@@ -478,27 +487,73 @@ class ReconcileStuckWorkflowsServiceTest {
     }
 
     @Nested
-    @DisplayName("REQUESTED 경고")
-    class RequestedWarn {
+    @DisplayName("REQUESTED 복구 (ADR-025)")
+    class RequestedRecovery {
 
-        @Test
-        @DisplayName("경고 로그만, 복구 카운트 0 — 다른 카테고리 tried 에만 합산")
-        void logsOnly() {
+        private StuckWorkflow requestedStuck() {
             // REQUESTED 상태에선 startedAt 이 null — PREPARING 전이 시 초기화되기 때문.
-            StuckWorkflow w = new StuckWorkflow(
+            return new StuckWorkflow(
                     WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.REQUESTED,
                     null, null, null, null, null, Instant.now().minusSeconds(120));
+        }
+
+        private void emptyOtherCategories() {
             given(workflowPort.findStuckPreparing(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingTripo(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingS3(any(Instant.class), anyInt())).willReturn(List.of());
-            given(workflowPort.findStuckRequested(any(Instant.class), anyInt())).willReturn(List.of(w));
+        }
+
+        @Test
+        @DisplayName("입장 큐 미포함 → 경고 로그 + parkIfAbsent 재park, tried 합산 (Redrive — 직접 prepare 안 함)")
+        void reparksWhenNotQueued() {
+            emptyOtherCategories();
+            given(workflowPort.findStuckRequested(any(Instant.class), anyInt()))
+                    .willReturn(List.of(requestedStuck()));
+            given(admissionQueuePort.contains(WORKFLOW_ID)).willReturn(false);
+            given(admissionQueuePort.parkIfAbsent(eq(WORKFLOW_ID), anyLong())).willReturn(true);
 
             int tried = service.reconcileOnce();
 
-            // REQUESTED 는 카운트 합산 안 함 — 경고 로그만
-            assertThat(tried).isZero();
+            assertThat(tried).isEqualTo(1);
+            verify(admissionQueuePort, times(1)).parkIfAbsent(eq(WORKFLOW_ID), anyLong());
+            // Redrive — Reconcile 은 직접 prepare/락/이벤트 하지 않고 drainer 에 위임
             verify(workflowLockPort, never()).withLock(anyLong(), any());
             verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("이미 입장 큐 대기 중 → 재park 안 함 (멱등), tried 0")
+        void skipsWhenAlreadyQueued() {
+            emptyOtherCategories();
+            given(workflowPort.findStuckRequested(any(Instant.class), anyInt()))
+                    .willReturn(List.of(requestedStuck()));
+            given(admissionQueuePort.contains(WORKFLOW_ID)).willReturn(true);
+
+            int tried = service.reconcileOnce();
+
+            assertThat(tried).isZero();
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
+            verify(workflowLockPort, never()).withLock(anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("enabled=false(롤백) → 경고 로그만, 재park 안 함 (도입 전 동작 복원)")
+        void disabledRollback_logsOnlyNoRepark() {
+            ReconcileProperties props = new ReconcileProperties(
+                    true, 60_000L, 50, 60L, 8L, 5L, 30L, 5L);
+            ReconcileStuckWorkflowsService disabledService = new ReconcileStuckWorkflowsService(
+                    workflowPort, tripoPendingTaskPort, workflowLockPort,
+                    workflowPollQueuePort, eventPublisher, props,
+                    admissionQueuePort, new AdmissionQueueProperties(10, false));
+            emptyOtherCategories();
+            given(workflowPort.findStuckRequested(any(Instant.class), anyInt()))
+                    .willReturn(List.of(requestedStuck()));
+
+            int tried = disabledService.reconcileOnce();
+
+            assertThat(tried).isZero();
+            verify(admissionQueuePort, never()).contains(anyLong());
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
         }
     }
 }

@@ -10,9 +10,11 @@ import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,6 +32,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <ol>
  *   <li>(락 밖) 소스 이미지 4장 S3 존재 검증 (HEAD) — 영구 실패성 검증을 먼저 수행해 실패 시 락 획득 비용을 절약하고
  *       PREPARING 일시 전이 없이 바로 {@code REQUESTED → FAILED} 로 종결한다.</li>
+ *   <li>(락 밖) <b>입장 게이트 (ADR-025)</b>: 활성 작업(PREPARING+GENERATING) 이 cap 이상이면
+ *       {@code tripo:queue} 에 park 하고 REQUESTED 유지한 채 종료(과금 전·락 전). 재개는
+ *       drainer + Reconcile REQUESTED-stranded 복구.</li>
  *   <li>TX1: 분산 락 안에서 {@code REQUESTED → PREPARING} 조건부 전이</li>
  *   <li>(락 밖) Tripo 이미지 업로드 + {@code POST /task} — 과금 지점</li>
  *   <li>(락 밖) {@code tripo_pending_task} 선저장 — 워커 크래시 시 task_id 유실 방지</li>
@@ -69,6 +74,10 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     private final WorkflowLockPort workflowLockPort;
     private final ModelGenerationClient modelGenerationClient;
     private final TripoPendingTaskPort tripoPendingTaskPort;
+    /** 입장 큐 (ADR-025) — cap 초과 시 park 대상 ZSET. */
+    private final TripoAdmissionQueuePort admissionQueuePort;
+    /** 입장 게이트 설정 (ADR-025) — cap / 활성화 스위치. */
+    private final AdmissionQueueProperties admissionProperties;
     /**
      * TX2 를 단일 트랜잭션으로 묶기 위한 헬퍼 빈. 같은 클래스 내부 {@code @Transactional} 메서드
      * 호출은 Spring AOP 프록시가 우회되므로 별도 빈으로 분리한다 (설계 §7 [6], 2026-04-28 사고).
@@ -94,6 +103,13 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
         // (이미지 4장 미달 / S3 객체 누락) 이므로 락 진입 비용을 아끼고, PREPARING 일시 전이 없이
         // REQUESTED → FAILED 로 직행해 Reconcile 의 PREPARING stuck 오판 가능성도 줄인다.
         if (!validateSourceImages(workflowId, showcaseId)) {
+            return;
+        }
+
+        // 입장 게이트 (ADR-025): validate 통과 후·락 진입 전·과금 Tripo POST 전.
+        // cap 초과면 park 하고 종료 — 호출자(ModelGenerationWorker)가 markProcessed →
+        // Kafka 재전송 컷. 이후 재개는 drainer + Reconcile REQUESTED 복구뿐.
+        if (!admitOrPark(workflowId)) {
             return;
         }
 
@@ -126,6 +142,41 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
      */
     private void enqueueForPolling(Long workflowId) {
         eventPublisher.publishEvent(new WorkflowGeneratingConfirmedEvent(workflowId));
+    }
+
+    /**
+     * 입장 게이트 (ADR-025). {@code validateSourceImages} 통과 후 ∧ {@code transitionToPreparingUnderLock}
+     * (분산 락) 전 ∧ 과금 {@code POST /task} 전에 호출된다.
+     *
+     * <p>활성 작업 수({@code current_step IN (PREPARING, GENERATING)}) 가 cap 이상이면
+     * {@code tripo:queue} 에 park 하고 {@code false} 를 반환한다. 호출자는 그대로 return 하며
+     * 워크플로우는 REQUESTED 로 남는다. 상위 {@code ModelGenerationWorker} 가 정상 종료로 보고
+     * {@code markProcessed} 하므로 Kafka 재전송이 끊긴다 — 이후 재개 경로는 주기 drainer 와
+     * Reconcile 의 REQUESTED-stranded 복구뿐이다(correctness-critical, 설계 §6.6).</p>
+     *
+     * <p><b>락/예외/sleep 없이 분기 + park 만</b> 한다 (호출 스택 상단의 Kafka 컨슈머 블로킹 금지,
+     * 2026-04-28 사고 클래스). 재전송으로 재진입해도 {@code parkIfAbsent} 가 최초 score 를
+     * 유지해 멱등하다. {@code enabled=false} 면 게이트는 항상 통과(롤백 스위치).</p>
+     *
+     * <p>check(countActive)-then-act(전이) 가 원자적이지 않아 동시 Worker race 로 cap 을 소폭
+     * 초과할 수 있다 — ADR-025 가 soft cap 으로 수용한다(Tripo API rate 는 {@code tripo:semaphore}
+     * 가 하드 제한).</p>
+     *
+     * @return {@code true}=입장 허용(계속 진행), {@code false}=park 됨(호출자 return)
+     */
+    private boolean admitOrPark(Long workflowId) {
+        if (!admissionProperties.enabled()) {
+            return true;
+        }
+        long active = workflowPort.countActive();
+        if (active < admissionProperties.maxConcurrent()) {
+            return true;
+        }
+        admissionQueuePort.parkIfAbsent(workflowId, System.currentTimeMillis());
+        log.info("동시 생성 cap({}) 도달 — tripo:queue park, REQUESTED 유지. "
+                        + "workflowId: {}, active: {}",
+                admissionProperties.maxConcurrent(), workflowId, active);
+        return false;
     }
 
     /**

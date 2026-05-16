@@ -147,4 +147,14 @@ public interface ModelGenerationWorkflowPort {
      * Outbox Relay 점검 트리거.
      */
     List<StuckWorkflow> findStuckRequested(Instant createdBefore, int limit);
+
+    /**
+     * 현재 활성 생성 작업 수 = {@code current_step IN (PREPARING, GENERATING)} 인 워크플로우 수.
+     *
+     * <p>입장 게이트(ADR-025) 의 동시성 cap 판정 지표. DB 가 SoT 이므로 워커 사망/재시작에도
+     * 누수 없이 정확하다. 선행 인덱스가 {@code current_step} 으로 시작하는 복합 인덱스
+     * ({@code idx_mgw_step_*}) 를 활용해 카운트한다. check-then-act 가 원자적이지 않은 점은
+     * ADR-025 가 soft cap 으로 수용한다.</p>
+     */
+    long countActive();
 }

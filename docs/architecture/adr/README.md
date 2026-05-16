@@ -32,6 +32,7 @@
 | [ADR-018](./ADR-018-showcase-search-text-composition.md) | Showcase 검색 텍스트 합성 정책 | Superseded by ADR-024 | 검색 |
 | [ADR-019](./ADR-019-showcase-search-keyword-policy.md) | Showcase 검색 키워드 정책 (`?keyword=` API) | Superseded by ADR-024 | 검색 |
 | [ADR-024](./ADR-024-showcase-search-simplification.md) | Showcase 검색 단순화 — title/description 직접 검색 | Accepted | 검색 |
+| [ADR-025](./ADR-025-3d-generation-admission-queue.md) | 3D 파이프라인 — 동시 생성 입장 큐 (admission queue) | Accepted | 3D 생성 |
 
 > ADR-001 ~ ADR-004 는 향후 기존 주요 결정(헥사고날 채택, Kafka EDA, Tripo 선택 등)을 역추적해 채울 예정.
 > ADR-013 ~ ADR-017, ADR-020 ~ ADR-023 는 인덱스 누락 상태 — 별도 docs cleanup PR 에서 일괄 채울 예정.
