@@ -57,6 +57,7 @@ if grep -q '<TODO:' "$plan" 2>/dev/null; then
   reason="🚫 EXEC_PLAN에 <TODO:...> 마커가 ${unfilled}개 남아있습니다.
 
 먼저 다음 섹션들을 모두 채워야 코드 편집이 허용됩니다:
+  - 컨텍스트: 관련 문서·SoT·금지 가정 (Context)
   - 목표 (Goal)
   - 범위 In/Out (Scope)
   - 변경 대상 (Affected)

@@ -11,7 +11,8 @@
 - 축구 장비(축구화, 유니폼 등)를 3D 모델 기반으로 시각화한다.
 - 사용자 경험 데이터를 함께 제공하는 쇼케이스 플랫폼.
 - 사용자 간 거래 가능.
-- Tech Stack : Java 21, Spring Boot 3.x, JPA, MySQL 8.x, Kafka.
+- Tech Stack : Java 21, Spring Boot 3.x, JPA, MySQL 8.x, Kafka, Redis(Redisson) · Flutter 3.x (`frontend/`) · Python 크롤러 (`tools/catalog-crawler/`).
+- Architecture : 헥사고날 + DDD. Bounded Context = `showcase` · `catalog` · `chat` · `user` · `admin` · `platform`(공용). 패키지 규칙은 `archTest` 로 강제.
 
 ## 하네스: GearShow Backend
 
@@ -20,6 +21,12 @@
 **트리거:** 소스 코드 변경이 예상되는 작업(구현·수정·리팩토링·버그) 요청 시 반드시 `orchestrator` 스킬을 사용한다. 단순 질문·코드 설명·로그 분석은 직접 응답 가능.
 
 **진입점:** `bash scripts/start-task.sh <task-name> <type>` — worktree/플랜/포트/로그를 원자적으로 생성.
+
+**자주 쓰는 명령:**
+- `docker compose up -d` — 로컬 인프라(MySQL · Kafka · Redis)
+- `./gradlew archTest` — 헥사고날 경계만 빠르게 (커밋 직전)
+- `./gradlew check` — test + archTest + JaCoCo 70% 게이트
+- `bash scripts/run-frontend.sh [--env=dev|prod]` — Flutter 실행
 
 **강제 메커니즘 (훅):**
 - `PreToolUse` (Edit/Write): `enforce-worktree.sh`, `enforce-plan.sh`
@@ -45,17 +52,11 @@
 - **리서치 문서** : `docs/research/` — 기능별 설계 근거·외부 소스 종합·미결정 목록. 유사 기능 작업 전 참조.
 
 **변경 이력:**
+> 한 달 이상 경과한 항목은 `git log` · PR 본문으로 위임하고 본 표에서 제거한다. 본 표는 **현재 활성 정책의 근거** 만 남긴다.
+
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
+| 2026-05-15 | Tech Stack 확장 + Bounded Context 명시 + 자주 쓰는 명령 추가 | CLAUDE.md | 풀스택·로컬 부팅 컨텍스트 자립도 보강 |
 | 2026-05-12 | 검색 단순화 — search_text 폐기, brand nullable, Flutter 카탈로그 진입 차단 | Showcase 도메인/엔티티/Repository, schema.sql, ADR-024 외 | 배포 직전 카탈로그 기능 일시 제외에 맞춰 합성 인프라 제거 + title/description 직접 LIKE 전환 |
 | 2026-05-01 | Surgical Changes / Simplicity / 선택지 제시 원칙 추가 | coding-conventions.md, orchestrator/SKILL.md | 인접 코드 동시 수정·speculative feature·임의 해석 선택으로 인한 PR 비대화 방지 |
 | 2026-04-28 | 3D 파이프라인 fix(A/B/C) | 백엔드 코드 + 설계 문서 | 단일 풀 데드락·재시도 누적·TX 누락 수정 (운영 사고 회복) |
-| 2026-04-15 | CLAUDE.md 포인터에 ADR/리서치 디렉토리 추가 | CLAUDE.md | 새 세션 자립도 보강 — 에이전트가 관련 문서 자발적 발견 가능 |
-| 2026-04-14 | 하네스 초기 구성 (포인터화) | 전체 | 수동 당김 → 파이프라인 강제로 전환 |
-| 2026-04-15 | 위험 Bash 명령 차단 훅 추가 | guard-bash.sh, settings.json | 파괴적 명령(파일 일괄 삭제, 강제 push, DDL DROP 등) 사전 차단 |
-| 2026-04-15 | blocked 종료 상태 명시 도입 | escalation.md | 사용자 개입 필요 상황의 명시적 상태값 (completed/error/blocked 3상태) |
-| 2026-04-15 | EXEC_PLAN 템플릿 강화 | EXEC_PLAN.template.md | Step 자기완결성 + AC를 Bash 커맨드로 + Status 필드 |
-| 2026-04-15 | implement에 시그니처 수준 지시 원칙 추가 | implement/SKILL.md | 과도 상세 지시 → 에이전트 사고 정지 방지 |
-| 2026-04-15 | 트레젝토리 누적 컨텍스트 옵션 | start-task.sh `--with-context` | 이전 작업 학습을 새 작업에 자동 주입 |
-| 2026-04-15 | 2단계 커밋 가이드 추가 | pr-guide/SKILL.md | 큰 변경 시 feat+chore 분리로 git history 정리 |
-| 2026-04-15 | 훅 스크립트 unit test 도입 | tools/hooks/__tests__/ | bats 의존 없이 32개 시나리오 자동 검증 |

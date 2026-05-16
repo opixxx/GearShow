@@ -18,3 +18,7 @@ Thumbs.db
 .task/
 /logs/
 EXEC_PLAN.md
+.claude/scheduled_tasks.lock
+
+# 부하 테스트 결과 아티팩트 (대용량, 공유 불필요)
+loadtest/results/
