@@ -60,7 +60,14 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 .orElse(1);
     }
 
+    /**
+     * 입장 게이트(admitOrPark) hot path + 드레이너 루프가 tick 당 최대 maxConcurrent 회
+     * 반복 호출하므로, 클래스 레벨 read-write {@code @Transactional} 을 읽기 전용으로
+     * 오버라이드한다 ({@code countActive} 와 동일 근거 — flush/dirty-checking 사이클 제거 +
+     * drain-lock 보유 시간 단축, ADR-025 db-M1).
+     */
     @Override
+    @Transactional(readOnly = true)
     public Optional<WorkflowSnapshot> findSnapshot(Long workflowId) {
         return workflowJpaRepository.findById(workflowId)
                 .map(this::toSnapshot);
@@ -139,6 +146,16 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
                 .stream()
                 .map(this::toStuckWorkflow)
                 .toList();
+    }
+
+    /**
+     * 입장 게이트 hot path + drainer 루프가 반복 호출하므로 클래스 레벨 read-write
+     * {@code @Transactional} 을 읽기 전용으로 오버라이드한다 (flush 사이클 제거 + DB read-only 최적화).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countActive() {
+        return workflowJpaRepository.countActive();
     }
 
     private StuckWorkflow toStuckWorkflow(ModelGenerationWorkflowJpaEntity entity) {

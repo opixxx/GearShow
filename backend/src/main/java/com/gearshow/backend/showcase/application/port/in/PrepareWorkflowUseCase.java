@@ -24,4 +24,17 @@ public interface PrepareWorkflowUseCase {
      * @param workflowId {@code model_generation_workflow} 행 ID
      */
     void prepare(Long workflowId);
+
+    /**
+     * 입장 큐 drainer 가 재발행한 메시지의 진입점 (ADR-025).
+     *
+     * <p>{@link #prepare(Long)} 와 달리 <b>admission 게이트를 타지 않는다</b> — 이미 큐에서
+     * FIFO 선발된 워크플로우라 게이트를 다시 태우면 재park 되어 score 가 뒤로 밀린다
+     * (ADR-025 양보 불가). 소스 이미지 검증·상태 전이·Tripo·세마포어 등 나머지 흐름은 동일하다.</p>
+     *
+     * @param workflowId          {@code model_generation_workflow} 행 ID
+     * @param dispatchEpochMillis 드레이너가 재발행한 시각(epoch millis).
+     *                            in-flight latency 측정용 (ADR-025 NN7).
+     */
+    void prepareFromAdmissionQueue(Long workflowId, long dispatchEpochMillis);
 }

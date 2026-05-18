@@ -3,6 +3,7 @@ package com.gearshow.backend.showcase.infrastructure.config;
 import com.gearshow.backend.showcase.adapter.in.scheduler.ReconcileScheduler;
 import com.gearshow.backend.showcase.application.port.in.ReconcileStuckWorkflowsUseCase;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
@@ -35,14 +36,18 @@ public class ReconcileBeansConfig {
             WorkflowLockPort workflowLockPort,
             WorkflowPollQueuePort workflowPollQueuePort,
             ApplicationEventPublisher eventPublisher,
-            ReconcileProperties properties) {
+            ReconcileProperties properties,
+            TripoAdmissionQueuePort admissionQueuePort,
+            AdmissionQueueProperties admissionProperties) {
         return new ReconcileStuckWorkflowsService(
                 workflowPort,
                 tripoPendingTaskPort,
                 workflowLockPort,
                 workflowPollQueuePort,
                 eventPublisher,
-                properties);
+                properties,
+                admissionQueuePort,
+                admissionProperties);
     }
 
     @Bean

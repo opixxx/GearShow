@@ -53,6 +53,10 @@ public class KafkaProducerConfig {
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // 일시적 오류 시 자동 재시도
         config.put(ProducerConfig.RETRIES_CONFIG, 3);
+        // ADR-025 NN3: 입장 큐 drainer 가 스케줄러 스레드에서 send() 하므로 메타데이터 미스/
+        // 버퍼 만수위 시 기본 60s 블로킹을 방지한다. drainer 는 .get() 없이 async 송신하지만
+        // send() 자체가 max.block.ms 동안 호출 스레드를 잡을 수 있어 짧게 캡한다.
+        config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000);
         return new DefaultKafkaProducerFactory<>(config);
     }
 

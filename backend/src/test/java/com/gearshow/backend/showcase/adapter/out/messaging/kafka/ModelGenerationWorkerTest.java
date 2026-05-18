@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.out.messaging.kafka;
 
 import com.gearshow.backend.platform.idempotency.application.port.in.MessageIdempotencyUseCase;
 import com.gearshow.backend.platform.idempotency.domain.IdempotencyDomain;
+import com.gearshow.backend.showcase.adapter.out.messaging.AdmissionDrainMessageId;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.port.in.PrepareWorkflowUseCase;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,7 @@ import org.springframework.dao.QueryTimeoutException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -109,6 +111,53 @@ class ModelGenerationWorkerTest {
                     .isInstanceOf(exceptionType);
 
             verify(messageIdempotencyUseCase, never()).markProcessed(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("입장 큐 라우팅 (ADR-025)")
+    class AdmissionRouting {
+
+        @Test
+        @DisplayName("bypassAdmission=true(drain id): prepareFromAdmissionQueue(epoch 파싱) 위임, prepare 미호출")
+        void bypassTrue_routesToFromAdmissionQueue() {
+            String drainId = AdmissionDrainMessageId.build(15L, 1234L);
+            ModelGenerationRequestMessage message =
+                    ModelGenerationRequestMessage.ofDrain(drainId, 15L, 100L);
+            given(messageIdempotencyUseCase.isProcessed(any(), any())).willReturn(false);
+
+            worker.processModelGeneration(message);
+
+            verify(prepareWorkflowUseCase, times(1)).prepareFromAdmissionQueue(15L, 1234L);
+            verify(prepareWorkflowUseCase, never()).prepare(anyLong());
+            verify(messageIdempotencyUseCase, times(1)).markProcessed(
+                    drainId, IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
+        }
+
+        @Test
+        @DisplayName("bypassAdmission=true 이나 messageId 형식 불일치: now() 대체로 prepareFromAdmissionQueue 위임")
+        void bypassTrue_malformedId_fallsBackToNow() {
+            ModelGenerationRequestMessage message =
+                    ModelGenerationRequestMessage.ofDrain("not-a-drain-id", 15L, 100L);
+            given(messageIdempotencyUseCase.isProcessed(any(), any())).willReturn(false);
+
+            worker.processModelGeneration(message);
+
+            verify(prepareWorkflowUseCase, times(1)).prepareFromAdmissionQueue(eq(15L), anyLong());
+            verify(prepareWorkflowUseCase, never()).prepare(anyLong());
+        }
+
+        @Test
+        @DisplayName("bypassAdmission=false(of): prepare 위임, prepareFromAdmissionQueue 미호출")
+        void bypassFalse_routesToPrepare() {
+            ModelGenerationRequestMessage message =
+                    ModelGenerationRequestMessage.of("orig-msg-id", 15L, 100L);
+            given(messageIdempotencyUseCase.isProcessed(any(), any())).willReturn(false);
+
+            worker.processModelGeneration(message);
+
+            verify(prepareWorkflowUseCase, times(1)).prepare(15L);
+            verify(prepareWorkflowUseCase, never()).prepareFromAdmissionQueue(anyLong(), anyLong());
         }
     }
 }

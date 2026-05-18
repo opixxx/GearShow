@@ -7,10 +7,12 @@ import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.event.TripoSuccessEvent;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import com.gearshow.backend.showcase.infrastructure.config.ReconcileProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -75,16 +77,23 @@ class ReconcileStuckWorkflowsServiceTest {
     private WorkflowPollQueuePort workflowPollQueuePort;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private TripoAdmissionQueuePort admissionQueuePort;
 
     private ReconcileStuckWorkflowsService service;
 
-    @BeforeEach
-    void setUp() {
+    private ReconcileStuckWorkflowsService buildService(AdmissionQueueProperties ap) {
         ReconcileProperties properties = new ReconcileProperties(
                 true, 60_000L, 50, 60L, 8L, 5L, 30L, 5L);
-        service = new ReconcileStuckWorkflowsService(
+        return new ReconcileStuckWorkflowsService(
                 workflowPort, tripoPendingTaskPort, workflowLockPort,
-                workflowPollQueuePort, eventPublisher, properties);
+                workflowPollQueuePort, eventPublisher, properties,
+                admissionQueuePort, ap);
+    }
+
+    @BeforeEach
+    void setUp() {
+        service = buildService(new AdmissionQueueProperties(10, true));
 
         // 기본: withLock 은 즉시 action 실행
         doAnswer(inv -> {
@@ -478,27 +487,61 @@ class ReconcileStuckWorkflowsServiceTest {
     }
 
     @Nested
-    @DisplayName("REQUESTED 경고")
-    class RequestedWarn {
+    @DisplayName("REQUESTED-stranded 재park (ADR-025 보상통제)")
+    class RequestedRepark {
 
-        @Test
-        @DisplayName("경고 로그만, 복구 카운트 0 — 다른 카테고리 tried 에만 합산")
-        void logsOnly() {
+        private StuckWorkflow requestedStuck() {
             // REQUESTED 상태에선 startedAt 이 null — PREPARING 전이 시 초기화되기 때문.
-            StuckWorkflow w = new StuckWorkflow(
+            return new StuckWorkflow(
                     WORKFLOW_ID, SHOWCASE_ID, WorkflowStep.REQUESTED,
-                    null, null, null, null, null, Instant.now().minusSeconds(120));
+                    null, null, null, null, null, Instant.now().minusSeconds(400));
+        }
+
+        private void stubOnlyRequested(StuckWorkflow w) {
             given(workflowPort.findStuckPreparing(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingTripo(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckGeneratingS3(any(Instant.class), anyInt())).willReturn(List.of());
             given(workflowPort.findStuckRequested(any(Instant.class), anyInt())).willReturn(List.of(w));
+        }
+
+        @Test
+        @DisplayName("enabled ∧ 큐 미포함: parkIfAbsent 재park, tried 합산(전이/이벤트 없음)")
+        void enabled_notInQueue_reparks() {
+            stubOnlyRequested(requestedStuck());
+            given(admissionQueuePort.contains(WORKFLOW_ID)).willReturn(false);
+            given(admissionQueuePort.parkIfAbsent(eq(WORKFLOW_ID), anyLong())).willReturn(true);
 
             int tried = service.reconcileOnce();
 
-            // REQUESTED 는 카운트 합산 안 함 — 경고 로그만
-            assertThat(tried).isZero();
+            assertThat(tried).isEqualTo(1);
+            verify(admissionQueuePort, times(1)).parkIfAbsent(eq(WORKFLOW_ID), anyLong());
             verify(workflowLockPort, never()).withLock(anyLong(), any());
             verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("enabled ∧ 이미 큐 대기(contains=true): 재park 안 함, tried 0")
+        void enabled_alreadyInQueue_skipsRepark() {
+            stubOnlyRequested(requestedStuck());
+            given(admissionQueuePort.contains(WORKFLOW_ID)).willReturn(true);
+
+            int tried = service.reconcileOnce();
+
+            assertThat(tried).isZero();
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
+        }
+
+        @Test
+        @DisplayName("admission.enabled=false(롤백): 경고만, 재park/contains 호출 없음")
+        void disabled_logsOnly() {
+            service = buildService(new AdmissionQueueProperties(10, false));
+            stubOnlyRequested(requestedStuck());
+
+            int tried = service.reconcileOnce();
+
+            assertThat(tried).isZero();
+            verify(admissionQueuePort, never()).contains(anyLong());
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
         }
     }
 }
