@@ -7,6 +7,7 @@ import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
+import com.gearshow.backend.showcase.application.exception.TripoSemaphoreTimeoutException;
 import com.gearshow.backend.showcase.application.port.out.AdmissionMetricsPort;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -43,6 +45,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -265,16 +268,56 @@ class PrepareWorkflowServiceTest {
         }
 
         @Test
-        @DisplayName("Retryable: 예외 rethrow — markFailed/pending 호출 없음")
-        void retryable_rethrowsWithoutMarkFailed() {
+        @DisplayName("Retryable + 보상 affected=1: PREPARING→REQUESTED 보상 후 예외 rethrow (ADR-026)")
+        void retryable_compensatesAndRethrows() {
             stubThroughImagesValid();
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
                     .willThrow(new ModelGenerationRetryableException(ErrorCode.TRIPO_RATE_LIMITED));
+            given(workflowPort.compensatePreparingToRequested(WORKFLOW_ID)).willReturn(1);
 
             assertThatThrownBy(() -> service.prepare(WORKFLOW_ID))
                     .isInstanceOf(ModelGenerationRetryableException.class);
 
+            // C1 불변식: 보상은 반드시 PREPARING 전이(TX1) *후* 호출돼야 한다.
+            // 누군가 보상을 transitionToPreparing 앞으로 옮기는 회귀를 InOrder 로 차단.
+            InOrder order = inOrder(workflowPort);
+            order.verify(workflowPort).updateStepIfCurrent(
+                    WORKFLOW_ID, WorkflowStep.REQUESTED, WorkflowStep.PREPARING);
+            order.verify(workflowPort).compensatePreparingToRequested(WORKFLOW_ID);
             verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(tripoPendingTaskPort, never()).preserve(anyLong(), anyString());
+        }
+
+        @Test
+        @DisplayName("Retryable + 보상 affected=0(과금됨/이미 전이): rethrow 안 함 — 후속 단계 미진입")
+        void retryable_compensateZero_doesNotRethrow() {
+            stubThroughImagesValid();
+            given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
+                    .willThrow(new ModelGenerationRetryableException(ErrorCode.TRIPO_RATE_LIMITED));
+            given(workflowPort.compensatePreparingToRequested(WORKFLOW_ID)).willReturn(0);
+
+            service.prepare(WORKFLOW_ID);  // throw 금지
+
+            verify(workflowPort, times(1)).compensatePreparingToRequested(WORKFLOW_ID);
+            verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
+            verify(tripoPendingTaskPort, never()).preserve(anyLong(), anyString());
+            // 보상 affected=0 → 호출자 정상 종료(후속 단계 미진입)
+            verify(txHelper, never()).executeTx2(anyLong(), anyString());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("TripoSemaphoreTimeout(=Retryable 하위): 보상 후 rethrow")
+        void semaphoreTimeout_compensatesAndRethrows() {
+            stubThroughImagesValid();
+            given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
+                    .willThrow(new TripoSemaphoreTimeoutException());
+            given(workflowPort.compensatePreparingToRequested(WORKFLOW_ID)).willReturn(1);
+
+            assertThatThrownBy(() -> service.prepare(WORKFLOW_ID))
+                    .isInstanceOf(TripoSemaphoreTimeoutException.class);
+
+            verify(workflowPort, times(1)).compensatePreparingToRequested(WORKFLOW_ID);
             verify(tripoPendingTaskPort, never()).preserve(anyLong(), anyString());
         }
 
@@ -293,21 +336,25 @@ class PrepareWorkflowServiceTest {
                     eq(WorkflowFailureCode.TRIPO_NON_RETRYABLE),
                     anyString(),
                     eq("TRIPO_API"));
+            // 회귀 방지: NonRetryable 은 보상 대상 아님 (ADR-026 — 미과금 확정 retryable 만)
+            verify(workflowPort, never()).compensatePreparingToRequested(anyLong());
             verify(tripoPendingTaskPort, never()).preserve(anyLong(), anyString());
         }
 
         @Test
-        @DisplayName("CircuitBreaker OPEN: CallNotPermittedException rethrow — @RetryableTopic 이 backoff 재시도")
-        void circuitOpen_rethrows() {
+        @DisplayName("CircuitBreaker OPEN + 보상 affected=1: 보상 후 CallNotPermittedException rethrow")
+        void circuitOpen_compensatesAndRethrows() {
             stubThroughImagesValid();
             CircuitBreaker cb = CircuitBreaker.of("test",
                     CircuitBreakerConfig.custom().build());
             given(modelGenerationClient.startGeneration(WORKFLOW_ID, SHOWCASE_ID))
                     .willThrow(CallNotPermittedException.createCallNotPermittedException(cb));
+            given(workflowPort.compensatePreparingToRequested(WORKFLOW_ID)).willReturn(1);
 
             assertThatThrownBy(() -> service.prepare(WORKFLOW_ID))
                     .isInstanceOf(CallNotPermittedException.class);
 
+            verify(workflowPort, times(1)).compensatePreparingToRequested(WORKFLOW_ID);
             verify(workflowPort, never()).markFailed(anyLong(), any(), anyString(), anyString());
             verify(tripoPendingTaskPort, never()).preserve(anyLong(), anyString());
         }
