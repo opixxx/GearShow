@@ -15,7 +15,15 @@ import org.springframework.validation.annotation.Validated;
  * @param preparingStuckSeconds         PREPARING heartbeat 갭 임계.
  * @param generatingTripoStuckMinutes   GENERATING + tripo_succeeded_at IS NULL + last_polled_at 갭 임계.
  * @param generatingS3StuckMinutes      GENERATING + tripo_succeeded_at IS NOT NULL + heartbeat_at 갭 임계.
- * @param requestedStuckSeconds         REQUESTED 경고 임계 (Outbox Relay 점검 신호).
+ * @param requestedStuckSeconds         REQUESTED stuck 임계. <b>이 노브는 두 역할을
+ *                                      멀티플렉싱한다 (ADR-025 NN7)</b>: (i) Outbox-relay-stuck
+ *                                      탐지 지연 ↔ (ii) admission in-flight 오탐 억제(재발행분이
+ *                                      Kafka 왕복+첫 retry backoff 30s 동안 REQUESTED 인데
+ *                                      너무 짧으면 Reconcile 이 곧장 재park → 재시도 체인 증폭).
+ *                                      현실 in-flight+첫 backoff 위로 둔다(기본 300). 상향 시
+ *                                      Outbox-stuck 탐지 지연도 함께 커진다 — 정공법은 옵션 (b)
+ *                                      (DB dispatched_at/ADMITTED, ADR-025 §4 D1, 트리거=
+ *                                      멀티인스턴스∨지속부하∨Outbox-stuck 지연 중 먼저).
  * @param workflowMaxLifetimeMinutes    GENERATING-Tripo 단계 lifetime cap (분). 정상 ~2분 × 2.5배 마진.
  *                                      초과 시 {@code TRIPO_TIMEOUT_GENERATING} 으로 강제 손절해
  *                                      Tripo 가 영원히 running 만 응답하는 시나리오에서 무한 redrive 를
@@ -48,7 +56,7 @@ public record ReconcileProperties(
         long generatingS3StuckMinutes,
 
         @Min(value = 5, message = "requestedStuckSeconds 는 5 이상이어야 합니다")
-        @DefaultValue("30")
+        @DefaultValue("300")
         long requestedStuckSeconds,
 
         @Min(value = 2, message = "workflowMaxLifetimeMinutes 는 2 이상이어야 합니다")

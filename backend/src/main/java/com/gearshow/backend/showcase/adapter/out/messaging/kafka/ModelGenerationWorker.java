@@ -2,6 +2,7 @@ package com.gearshow.backend.showcase.adapter.out.messaging.kafka;
 
 import com.gearshow.backend.platform.idempotency.application.port.in.MessageIdempotencyUseCase;
 import com.gearshow.backend.platform.idempotency.domain.IdempotencyDomain;
+import com.gearshow.backend.showcase.adapter.out.messaging.AdmissionDrainMessageId;
 import com.gearshow.backend.showcase.adapter.out.messaging.dto.ModelGenerationRequestMessage;
 import com.gearshow.backend.showcase.application.dto.WorkflowFailureCode;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
@@ -93,7 +94,27 @@ public class ModelGenerationWorker {
         // 동시성 1회 보장은 워크플로우 단계의 조건부 UPDATE (ADR-012) 가 책임진다.
         // 예외가 던져지면 markProcessed 미호출 → @RetryableTopic 이 retry 토픽으로 라우팅 →
         // 다음 시도에서 isProcessed=false 로 자연스럽게 재진입한다.
-        prepareWorkflowUseCase.prepare(message.workflowId());
+        boolean routedToAdmissionQueue = false;
+        if (message.bypassAdmission()) {
+            // 입장 큐 drainer 재발행분 (ADR-025): admission 게이트 미경유. epoch 은
+            // in-flight latency(NN7) 측정용. drain messageId 형식이 깨지면 게이트 우회를
+            // 허용하지 않고 게이트 경유 prepare() 로 폴백한다 — bypass=true 라도 무결성이
+            // 깨진 입력은 신뢰하지 않는다(CodeRabbit, 게이트 우회 차단).
+            try {
+                long dispatchEpochMillis =
+                        AdmissionDrainMessageId.parseDispatchEpoch(message.messageId());
+                prepareWorkflowUseCase.prepareFromAdmissionQueue(
+                        message.workflowId(), dispatchEpochMillis);
+                routedToAdmissionQueue = true;
+            } catch (IllegalArgumentException e) {
+                log.warn("bypassAdmission=true 이나 drain messageId 형식 불일치 — "
+                                + "게이트 경유 prepare 로 폴백(게이트 우회 차단). messageId: {}",
+                        message.messageId());
+            }
+        }
+        if (!routedToAdmissionQueue) {
+            prepareWorkflowUseCase.prepare(message.workflowId());
+        }
 
         // 정상 종료 시점에 처리 완료 사실을 영구 기록 (ADR-011 §2 양보 불가 규칙).
         messageIdempotencyUseCase.markProcessed(

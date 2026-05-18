@@ -196,4 +196,17 @@ public interface ModelGenerationWorkflowJpaRepository
             """)
     List<ModelGenerationWorkflowJpaEntity> findStuckRequested(
             @Param("threshold") Instant threshold, Pageable pageable);
+
+    /**
+     * 입장 게이트(ADR-025) — 활성 생성 작업 수. {@code current_step IN (PREPARING, GENERATING)}.
+     * {@code current_step} 을 선행으로 갖는 복합 인덱스({@code idx_mgw_step_*}) 로 카운트 스캔된다.
+     */
+    @Query("""
+            SELECT COUNT(w)
+              FROM ModelGenerationWorkflowJpaEntity w
+             WHERE w.currentStep IN (
+                   com.gearshow.backend.showcase.application.dto.WorkflowStep.PREPARING,
+                   com.gearshow.backend.showcase.application.dto.WorkflowStep.GENERATING)
+            """)
+    long countActive();
 }

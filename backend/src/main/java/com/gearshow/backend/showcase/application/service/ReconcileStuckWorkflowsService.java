@@ -8,10 +8,12 @@ import com.gearshow.backend.showcase.application.event.TripoSuccessEvent;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.port.in.ReconcileStuckWorkflowsUseCase;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
 import com.gearshow.backend.showcase.application.port.out.WorkflowPollQueuePort;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import com.gearshow.backend.showcase.infrastructure.config.ReconcileProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +44,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       {@code markFailed} 를 수행.</li>
  *   <li><b>GENERATING + tripo_succeeded_at IS NOT NULL</b>: {@code TripoSuccessEvent} 재발행.
  *       Downloader 가 Tripo GET + S3 mirror + TX_final 을 다시 시도.</li>
- *   <li><b>REQUESTED stuck</b>: 경고 로그만. Outbox Relay 점검 신호.</li>
+ *   <li><b>REQUESTED stuck</b>: 경고 로그(Outbox Relay 점검 신호) + admission 활성 ∧ 입장 큐
+ *       미포함이면 {@code parkIfAbsent} 재park (ADR-025 보상통제 — drainer 가 재발행 위임,
+ *       Redrive). park 후 markProcessed 로 Kafka 가 끊긴 워크플로우의 유일한 잔여 안전망이다.
+ *       {@code admission.enabled=false}(롤백) 면 재park 안 하고 경고만(도입 전 동작).</li>
  * </ul>
  *
  * <p><b>락 정책 (ADR-012)</b>: Reconcile 은 Worker/Downloader 와 동일한 {@code workflow:lock:{id}}
@@ -66,6 +71,10 @@ public class ReconcileStuckWorkflowsService implements ReconcileStuckWorkflowsUs
     private final WorkflowPollQueuePort workflowPollQueuePort;
     private final ApplicationEventPublisher eventPublisher;
     private final ReconcileProperties properties;
+    /** 입장 큐 (ADR-025) — REQUESTED-stranded 재park 대상 ZSET 포트. */
+    private final TripoAdmissionQueuePort admissionQueuePort;
+    /** 입장 게이트 설정 (ADR-025) — enabled=false(롤백) 시 재park 비활성. */
+    private final AdmissionQueueProperties admissionProperties;
 
     @Override
     public int reconcileOnce() {
@@ -301,14 +310,41 @@ public class ReconcileStuckWorkflowsService implements ReconcileStuckWorkflowsUs
         }
     }
 
+    /**
+     * REQUESTED stuck 워크플로우를 경고 로깅하고, 입장 큐에 없으면 재park 한다 (ADR-025 보상통제).
+     *
+     * <p>admission 게이트가 park 한 워크플로우는 Worker {@code markProcessed} 로 Kafka 재전송이
+     * 끊긴다. drainer 재발행 전후 크래시·async send 실패·Redis 유실 시 본 메서드의 재park 가
+     * 유일한 잔여 안전망이며, drainer 가 이후 {@code bypassAdmission=true} 로 재발행한다(Redrive —
+     * Reconcile 이 직접 prepare 하지 않는다). 이미 입장 큐에 있으면(=drainer 가 곧 처리) 재park
+     * 하지 않는다. Outbox Relay 실패로 한 번도 park 안 된 케이스도 재park → drainer 가 복구.
+     * marker 는 도입하지 않으며(옵션 c) 이중 디스패치는 {@code REQUESTED→PREPARING} 조건부
+     * UPDATE 가 최종 방어한다 — 단 이 수용은 본 재park 활성 + 조건부 UPDATE 둘 다를 전제로 한다.
+     * {@code admission.enabled=false}(롤백) 면 게이트/드레이너 비활성이라 재park 시 영구 정체되므로
+     * 경고만 남긴다(도입 전 동작, ADR-025 §2-8).</p>
+     *
+     * @return 재park 한 워크플로우 수 (reconcileOnce 의 tried 합산)
+     */
     private int warnRequested() {
         Instant threshold = Instant.now().minusSeconds(properties.requestedStuckSeconds());
         List<StuckWorkflow> stuck =
                 workflowPort.findStuckRequested(threshold, properties.batchSize());
+        int reparked = 0;
         for (StuckWorkflow w : stuck) {
             log.warn("ALERT: REQUESTED stuck — Outbox Relay 점검 필요. workflowId: {}, createdAt: {}",
                     w.id(), w.createdAt());
+            if (!admissionProperties.enabled()) {
+                continue;
+            }
+            if (admissionQueuePort.contains(w.id())) {
+                continue;
+            }
+            if (admissionQueuePort.parkIfAbsent(w.id(), System.currentTimeMillis())) {
+                reparked++;
+                log.info("REQUESTED-stranded 재park (ADR-025 보상통제) — drainer 재발행 위임. "
+                        + "workflowId: {}", w.id());
+            }
         }
-        return 0;
+        return reparked;
     }
 }

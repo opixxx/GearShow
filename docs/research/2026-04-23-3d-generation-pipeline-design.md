@@ -176,7 +176,8 @@ CREATE TABLE processed_message (
 |---|---|---|---|
 | `workflow:lock:{workflowId}` | 상태 전이 TX 보호 (분산 락) | 10s (watchdog) | ✅ P1-D-α+β |
 | `tripo:semaphore` | 10 슬롯 rate limit | 영구 | ✅ P1-E |
-| `tripo:queue` | ZSET, score=enqueuedAt (피크 시 대기열) | 영구 | ⏳ 보류 (DelayedQueue 로 충분 시 제거) |
+| `tripo:queue` | ZSET, score=enqueueEpochMillis. 입장 게이트가 cap 초과 시 park, 드레이너가 FIFO pop 후 Kafka 재발행 (ADR-025) | 영구 | ✅ ADR-025 (재발행) |
+| `tripo:queue:drain-lock` | Redisson RLock(lease 자동해제). 멀티 인스턴스 드레이너 동시 pop 방지 (ADR-025) | lease | ✅ ADR-025 |
 | `poll:delayed-queue:main` | Redisson DelayedQueue (적응형 폴링) | 영구 | ✅ P1-E |
 
 ### 3.5 Kafka 토픽
@@ -297,6 +298,8 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
 
 같은 `workflow:lock:{workflowId}` 공유 → Worker 가 쥐고 있으면 Reconcile 이 자연스럽게 대기/skip.
 
+**입장 큐 보상통제 (ADR-025)**: 입장 게이트가 park 한 워크플로우는 Worker `markProcessed` 로 Kafka 가 끊긴다. Reconcile `warnRequested` 가 REQUESTED-stuck ∧ admission 활성 ∧ `tripo:queue` 미포함이면 `parkIfAbsent` 재park(Redrive — 직접 prepare 않고 드레이너가 Kafka 재발행). 드레이너 pop~PREPARING 윈도의 중복 재park 는 `REQUESTED→PREPARING` 조건부 UPDATE 가 최종 방어(marker 미도입, 옵션 c). `requested-stuck-seconds` 는 이 윈도 vs Outbox-stuck 탐지 두 역할 멀티플렉싱(기본 300, ADR-025 NN7). `admission.enabled=false`(롤백) 면 재park 안 함.
+
 ---
 
 ## 7. 시퀀스 — Happy Path
@@ -343,7 +346,10 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
     Tripo `POST /upload` × 4 (multipart) → file_token × 4
        # STS 방식(`POST /upload/sts/token`) 은 Phase 2 최적화로 보류
     tripo:semaphore 획득 (10 permits, Redisson RSemaphore)
-       # tripo:queue ZSET 대기 (트래픽 피크 전용) — ⏳ Phase 2 도입 예정 (현재는 미구현)
+       # 입장 게이트(tripo:queue)는 여기가 아니라 [3] TX1 직전(validateSourceImages 후·분산락 전)
+       #   에 위치한다 — cap 초과 시 ZSET park + REQUESTED 유지, 드레이너가 bypassAdmission=true
+       #   로 Kafka 재발행, Reconcile 이 REQUESTED-stranded 보상 (ADR-025, ✅ 구현).
+       #   본 지점의 tripo:semaphore 는 그와 직교한 per-call API rate-limit (불변).
     POST /task
        Body: {
          type: 'multiview_to_model',
@@ -632,3 +638,4 @@ Tripo 공식 에러 코드 (tripo-api-reference §6) 와 1:1 매핑.
 | 2026-04-23 | v1.0 | 초안 — 4-state 머신 (`tripo_succeeded_at` 컬럼) + 폴링 락 제거 방향 확정 |
 | 2026-04-23 | v1.1 | Tripo API 조사 반영 — Idempotency-Key 미지원 확인 후 **사후 cancel 전략** 으로 ④ 계층 재설계. 사전 balance 체크 기각, 주기 모니터링(§8.5) 으로 전환. failure_code 를 Tripo 공식 에러 코드와 1:1 매핑. `tripo_trace_id` 컬럼 추가. |
 | 2026-04-28 | v1.2 | §4 ④ + §8.4 + §11 + §12 + §13 의 "사후 cancel" 가정 정정 — Tripo `cancel` 엔드포인트 미지원 재확인. ④ 계층 의미를 "stranded task 빈도 최소화 + 손실 수용" 으로 재정의. P1-G-γ 영구 폐기, §12 #2 폐기. ADR-011 v1.1 과 동기화. |
+| 2026-05-18 | v1.3 | 입장 큐 정식화 (ADR-025, 재발행 방식). §3.4 `tripo:queue`/`tripo:queue:drain-lock` 정식화, §6.6 Reconcile 보상통제 추가, §7[5] 게이트 위치 정정(미구현→✅, TX1 직전). PR #95 inline-drain 폐기(Critical/H1/H2). marker 미도입(옵션 c)+`requested-stuck-seconds` 30→300(NN7). |

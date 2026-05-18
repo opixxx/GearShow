@@ -6,13 +6,16 @@ import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
 import com.gearshow.backend.showcase.application.port.in.PrepareWorkflowUseCase;
+import com.gearshow.backend.showcase.application.port.out.AdmissionMetricsPort;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationClient;
 import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import com.gearshow.backend.showcase.application.port.out.ModelSourceImagePort;
+import com.gearshow.backend.showcase.application.port.out.TripoAdmissionQueuePort;
 import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
+import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +41,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p><b>락 범위 (설계 §6.1, §6.2)</b>: 상태 전이 TX 만 락 안, 외부 I/O (S3, Tripo) 는 락 밖.
  * 락은 TX 지속시간(ms 수준) 만 보유한다.</p>
+ *
+ * <p><b>입장 게이트 (ADR-025)</b>: {@link #prepare(Long)} 는 소스 이미지 검증 통과 후·분산 락
+ * 진입 전·과금 {@code POST /task} 전에 {@code admitOrPark} 게이트를 탄다 — 활성 작업
+ * (PREPARING+GENERATING) 이 cap 이상이면 {@code tripo:queue} 에 park 하고 REQUESTED 유지한 채
+ * 정상 반환한다(Worker 가 markProcessed → Kafka 컷). 재개는 drainer 의 Kafka 재발행
+ * (bypassAdmission=true) 과 Reconcile REQUESTED-stranded 복구다. 드레이너 재발행분은
+ * {@link #prepareFromAdmissionQueue(Long, long)} 로 진입해 <b>게이트를 다시 타지 않는다</b>
+ * (FIFO score 리셋 방지). 게이트/검증/전이 코어는 {@code doPrepare} 로 공유한다.</p>
  *
  * <p><b>설계 결정 #5 (예외 전파 규칙)</b>:</p>
  * <ul>
@@ -80,25 +91,112 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
      * 수행 — Redis disabled 환경은 Bean 자체가 없어 no-op.
      */
     private final ApplicationEventPublisher eventPublisher;
+    /** 입장 큐 (ADR-025) — cap 초과 시 park 대상 ZSET 포트. */
+    private final TripoAdmissionQueuePort admissionQueuePort;
+    /** 입장 게이트 설정 (ADR-025) — cap / 활성화 스위치. */
+    private final AdmissionQueueProperties admissionProperties;
+    /** 입장 큐 관측 지표 (ADR-025 Counters) — application→micrometer 직접 의존 회피용 포트. */
+    private final AdmissionMetricsPort admissionMetricsPort;
 
     @Override
     public void prepare(Long workflowId) {
+        WorkflowSnapshot snapshot = loadAndValidate(workflowId);
+        if (snapshot == null) {
+            return;
+        }
+        // 이미 진행/종결된 워크플로우(중복 소비·지연 재처리·post-TX1 Tripo Retryable 재전송 등)는
+        // 게이트에 태우지 않는다. 태우면 cap 도달 시 admitOrPark 가 비-REQUESTED 워크플로우를
+        // tripo:queue 에 park → 드레이너가 pop·findSnapshot 후 discard 하는 큐 오염이 발생한다.
+        // 드레이너의 step≠REQUESTED discard 가드와 대칭으로 소스에서 차단한다(방어 심층).
+        if (snapshot.currentStep() != WorkflowStep.REQUESTED) {
+            log.info("prepare 건너뜀 — 이미 진행/종결(다른 경로 처리됨). workflowId: {}, currentStep: {}",
+                    workflowId, snapshot.currentStep());
+            return;
+        }
+        // 입장 게이트 (ADR-025): validate 통과 후·분산 락 전·과금 POST 전.
+        if (!admitOrPark(workflowId)) {
+            return;
+        }
+        doPrepare(workflowId, snapshot, null);
+    }
+
+    @Override
+    public void prepareFromAdmissionQueue(Long workflowId, long dispatchEpochMillis) {
+        WorkflowSnapshot snapshot = loadAndValidate(workflowId);
+        if (snapshot == null) {
+            return;
+        }
+        // 게이트 미경유 (ADR-025): 이미 큐에서 FIFO 선발된 항목 — 재park score 리셋 방지.
+        doPrepare(workflowId, snapshot, dispatchEpochMillis);
+    }
+
+    /**
+     * findSnapshot + 영구 실패 검증(소스 이미지)을 공유 수행한다 (순수 추출).
+     *
+     * <p>영구 실패 검증을 락 밖에서 먼저 수행한다. 실패는 재시도해도 결과가 같은 케이스
+     * (이미지 4장 미달 / S3 객체 누락) 이므로 락 진입 비용을 아끼고, PREPARING 일시 전이 없이
+     * REQUESTED → FAILED 로 직행해 Reconcile 의 PREPARING stuck 오판 가능성도 줄인다.</p>
+     *
+     * @return 진행 가능하면 스냅샷, 조회 실패/검증 실패면 {@code null}
+     */
+    private WorkflowSnapshot loadAndValidate(Long workflowId) {
         Optional<WorkflowSnapshot> snapshot = workflowPort.findSnapshot(workflowId);
         if (snapshot.isEmpty()) {
             log.warn("워크플로우 조회 실패 - 무시 - workflowId: {}", workflowId);
-            return;
+            return null;
         }
-        Long showcaseId = snapshot.get().showcaseId();
+        if (!validateSourceImages(workflowId, snapshot.get().showcaseId())) {
+            return null;
+        }
+        return snapshot.get();
+    }
 
-        // 영구 실패 검증을 락 밖에서 먼저 수행한다. 실패는 재시도해도 결과가 같은 케이스
-        // (이미지 4장 미달 / S3 객체 누락) 이므로 락 진입 비용을 아끼고, PREPARING 일시 전이 없이
-        // REQUESTED → FAILED 로 직행해 Reconcile 의 PREPARING stuck 오판 가능성도 줄인다.
-        if (!validateSourceImages(workflowId, showcaseId)) {
-            return;
+    /**
+     * 입장 게이트 (ADR-025). {@code enabled=false} 면 항상 통과(롤백 스위치). 활성 작업 수
+     * ({@code current_step IN (PREPARING,GENERATING)}) 가 cap 미만이면 통과, 이상이면
+     * {@code tripo:queue} 에 park 하고 {@code false} 반환(호출자 정상 return → Worker
+     * markProcessed → Kafka 컷). check(countActive)-then-act(전이) 가 원자적이지 않아 동시
+     * Worker race 로 cap 을 소폭 초과할 수 있다 — ADR-025 soft cap 수용
+     * ({@code tripo:semaphore} 가 Tripo API rate 를 하드 제한).
+     *
+     * @return {@code true}=입장 허용(계속 진행), {@code false}=park 됨(호출자 return)
+     */
+    private boolean admitOrPark(Long workflowId) {
+        if (!admissionProperties.enabled()) {
+            return true;
         }
+        long active = workflowPort.countActive();
+        if (active < admissionProperties.maxConcurrent()) {
+            return true;
+        }
+        admissionQueuePort.parkIfAbsent(workflowId, System.currentTimeMillis());
+        admissionMetricsPort.parkOccurred();
+        log.info("동시 생성 cap({}) 도달 — tripo:queue park, REQUESTED 유지. workflowId: {}, active: {}",
+                admissionProperties.maxConcurrent(), workflowId, active);
+        return false;
+    }
+
+    /**
+     * 검증·게이트 통과 후 코어 흐름 (TX1 → Tripo → pending → TX2 → poll offer). 로직은
+     * 분리 전과 동일하며 추출만 했다.
+     *
+     * @param dispatchEpochMillis drained(bypass) 경로면 드레이너 재발행 시각, 일반 경로면
+     *                            {@code null}. in-flight latency 측정(ADR-025 NN7) 과 N1
+     *                            중복 디스패치 관측(bypassSkipped) 분기 판정에만 쓰인다.
+     */
+    private void doPrepare(Long workflowId, WorkflowSnapshot snapshot, Long dispatchEpochMillis) {
+        Long showcaseId = snapshot.showcaseId();
 
         if (!transitionToPreparingUnderLock(workflowId)) {
+            // bypass(drained) 경로에서 affected=0 = 다른 경로가 이미 진행 = N1 중복 디스패치 관측.
+            if (dispatchEpochMillis != null) {
+                admissionMetricsPort.bypassSkipped();
+            }
             return;
+        }
+        // drained 경로만: 재발행 시각 → 입장까지의 지연 기록 (NN7).
+        if (dispatchEpochMillis != null) {
+            admissionMetricsPort.recordInflight(dispatchEpochMillis);
         }
 
         String tripoTaskId = callTripoOrHandle(workflowId, showcaseId);

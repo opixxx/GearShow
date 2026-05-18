@@ -91,7 +91,10 @@ app:
     preparing-stuck-seconds: 60
     generating-tripo-stuck-minutes: 8
     generating-s3-stuck-minutes: 5
-    requested-stuck-seconds: 30
+    # ADR-025 NN7: 30→300. @RetryableTopic 첫 backoff(30s)+Kafka 왕복 동안 재발행분이
+    # REQUESTED 인데 30s 면 Reconcile 이 곧장 재park → 재시도 체인 증폭. 이 노브는
+    # Outbox-stuck 탐지지연 ↔ admission in-flight 오탐억제 두 역할 멀티플렉싱(정공법=옵션 b, D1).
+    requested-stuck-seconds: 300
     # GENERATING-Tripo 단계 lifetime cap (분). 정상 ~2분 × 2.5배 마진 (설계 §9 TRIPO_TIMEOUT_GENERATING).
     workflow-max-lifetime-minutes: 5
 
