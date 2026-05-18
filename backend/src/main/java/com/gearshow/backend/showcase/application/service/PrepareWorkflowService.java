@@ -104,6 +104,15 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
         if (snapshot == null) {
             return;
         }
+        // 이미 진행/종결된 워크플로우(중복 소비·지연 재처리·post-TX1 Tripo Retryable 재전송 등)는
+        // 게이트에 태우지 않는다. 태우면 cap 도달 시 admitOrPark 가 비-REQUESTED 워크플로우를
+        // tripo:queue 에 park → 드레이너가 pop·findSnapshot 후 discard 하는 큐 오염이 발생한다.
+        // 드레이너의 step≠REQUESTED discard 가드와 대칭으로 소스에서 차단한다(방어 심층).
+        if (snapshot.currentStep() != WorkflowStep.REQUESTED) {
+            log.info("prepare 건너뜀 — 이미 진행/종결(다른 경로 처리됨). workflowId: {}, currentStep: {}",
+                    workflowId, snapshot.currentStep());
+            return;
+        }
         // 입장 게이트 (ADR-025): validate 통과 후·분산 락 전·과금 POST 전.
         if (!admitOrPark(workflowId)) {
             return;

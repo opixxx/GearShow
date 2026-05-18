@@ -184,4 +184,24 @@ class AdmissionQueueDrainSchedulerTest {
         verify(metricsPort, times(1)).republishFailed();
         verify(drainLockPort, times(1)).unlock();
     }
+
+    @Test
+    @DisplayName("send() 동기 throw(직렬화/버퍼 등): republishFailed + dispatched(0), 예외 흡수")
+    void sendSynchronousThrow_incrementsRepublishFailedAndNotDispatched() {
+        given(drainLockPort.tryLock(any())).willReturn(true);
+        given(workflowPort.countActive()).willReturn(0L);
+        given(admissionQueuePort.pollOldest())
+                .willReturn(Optional.of(8L))
+                .willReturn(Optional.empty());
+        given(workflowPort.findSnapshot(8L))
+                .willReturn(Optional.of(snapshot(8L, 800L, WorkflowStep.REQUESTED)));
+        given(kafkaTemplate.send(anyString(), anyString(), any()))
+                .willThrow(new RuntimeException("동기 전송 실패"));
+
+        scheduler.drain();
+
+        verify(metricsPort, times(1)).republishFailed();
+        verify(metricsPort, times(1)).dispatched(0);
+        verify(drainLockPort, times(1)).unlock();
+    }
 }

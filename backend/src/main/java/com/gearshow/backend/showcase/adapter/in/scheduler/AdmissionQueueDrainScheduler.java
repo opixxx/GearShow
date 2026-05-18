@@ -82,7 +82,7 @@ public class AdmissionQueueDrainScheduler {
     @Scheduled(fixedDelayString = "${app.model-generation.admission.drain-interval-ms:5000}")
     public void drain() {
         if (!drainLockPort.tryLock(DRAIN_LOCK_LEASE)) {
-            log.debug("drain-lock 미획득 — 다른 인스턴스 처리 중, skip");
+            log.debug("drain-lock 미획득 — 다른 인스턴스 처리 중이라 건너뜀");
             return;
         }
         List<DrainTarget> targets = new ArrayList<>();
@@ -104,7 +104,7 @@ public class AdmissionQueueDrainScheduler {
                     // 사실상 없다. 만에 하나 ZSET 에서 제거됐는데 미재발행인 항목이 생기면
                     // Reconcile.warnRequested 가 requested-stuck-seconds(기본 300s) 경과 후
                     // 재park 로 복구한다 (ADR-025 §4 N1 비용 — code-review M-C1).
-                    log.info("drain skip — REQUESTED 아님(다른 경로 처리됨/종결). workflowId: {}, step: {}",
+                    log.info("드레인 건너뜀 — REQUESTED 아님(다른 경로 처리됨/종결). workflowId: {}, step: {}",
                             workflowId, step);
                     continue;
                 }
@@ -128,27 +128,41 @@ public class AdmissionQueueDrainScheduler {
         if (targets.isEmpty()) {
             return;
         }
+        int submitted = 0;
         for (DrainTarget t : targets) {
             ModelGenerationRequestMessage msg = ModelGenerationRequestMessage.ofDrain(
                     t.messageId(), t.workflowId(), t.showcaseId());
-            kafkaTemplate.send(ShowcaseKafkaTopicConfig.MODEL_GENERATION_REQUEST_TOPIC,
-                            String.valueOf(t.showcaseId()), msg)
-                    .whenComplete((result, ex) -> {
-                        if (ex != null) {
-                            metricsPort.republishFailed();
-                            // 의도적 무처리(NN8/C): 회복은 Reconcile REQUESTED-stranded 재park 가
-                            // 단일 보상 경로. silent drop 으로 오인되지 않도록 관측만 남긴다.
-                            log.warn("입장 큐 재발행 실패 — Reconcile 이 복구 예정. "
-                                            + "workflowId: {}, messageId: {}",
-                                    t.workflowId(), t.messageId(), ex);
-                        }
-                    });
+            try {
+                kafkaTemplate.send(ShowcaseKafkaTopicConfig.MODEL_GENERATION_REQUEST_TOPIC,
+                                String.valueOf(t.showcaseId()), msg)
+                        .whenComplete((result, ex) -> {
+                            if (ex != null) {
+                                metricsPort.republishFailed();
+                                // 비동기 전송 실패. 의도적으로 콜백에서 복구하지 않는다(ADR-025) —
+                                // 회복은 Reconcile 의 REQUESTED-stranded 재park 가 단일 보상 경로다.
+                                // 조용한 유실로 오인되지 않도록 카운터+경고만 남긴다.
+                                log.warn("입장 큐 재발행(비동기) 실패 — Reconcile 이 복구 예정. "
+                                                + "workflowId: {}, messageId: {}",
+                                        t.workflowId(), t.messageId(), ex);
+                            }
+                        });
+                submitted++;
+            } catch (RuntimeException e) {
+                // send() 가 Future 반환 전에 던지는 동기 예외(직렬화 오류/버퍼 만수위/
+                // 메타데이터 fetch 실패 등). whenComplete 콜백이 못 잡으므로 여기서 동일하게
+                // 실패 처리한다 — 미처리 시 해당 항목은 Reconcile 주기까지 유실된다(CodeRabbit).
+                metricsPort.republishFailed();
+                log.warn("입장 큐 재발행(동기) 실패 — Reconcile 이 복구 예정. "
+                                + "workflowId: {}, messageId: {}",
+                        t.workflowId(), t.messageId(), e);
+            }
         }
-        // dispatched = 재발행 *송신 시도* 건수 (async). 실제 입장 ≈ dispatched - republish.failed
-        // (ADR-025 Counters, code-review M-C2). 잔여 큐 깊이는 gearshow.admission.queue.size
-        // gauge 가 스크래핑 시점에 제공 — 매 tick ZCARD Redis 왕복을 로그에 두지 않는다.
-        metricsPort.dispatched(targets.size());
-        log.info("입장 큐 drain 재발행 송신 — 시도: {}", targets.size());
+        // dispatched = 재발행 송신 *시도 성공* 건수(동기 throw 제외). 실제 입장 ≈
+        // dispatched - republish.failed (ADR-025 Counters). 잔여 큐 깊이는
+        // gearshow.admission.queue.size gauge 가 제공(매 tick ZCARD 로그 지양).
+        metricsPort.dispatched(submitted);
+        log.info("입장 큐 drain 재발행 송신 — 시도: {}, 동기실패: {}",
+                submitted, targets.size() - submitted);
     }
 
     private record DrainTarget(long workflowId, Long showcaseId, String messageId) {

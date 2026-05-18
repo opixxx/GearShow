@@ -436,5 +436,24 @@ class PrepareWorkflowServiceTest {
             verify(admissionMetricsPort, never()).recordInflight(anyLong());
             verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
         }
+
+        @Test
+        @DisplayName("이미 PREPARING(비-REQUESTED): 게이트 미진입·park 안 함·전이 안 함 (큐 오염 차단)")
+        void notRequested_skipsBeforeGate() {
+            WorkflowSnapshot preparing = new WorkflowSnapshot(
+                    WORKFLOW_ID, SHOWCASE_ID, "it-key", 1, WorkflowStep.PREPARING,
+                    null, null, null, null, null, null);
+            given(workflowPort.findSnapshot(WORKFLOW_ID)).willReturn(Optional.of(preparing));
+            given(modelSourceImagePort.findImageUrlsByShowcaseId(SHOWCASE_ID)).willReturn(FOUR_URLS);
+            given(imageStoragePort.existsByUrl(anyString())).willReturn(true);
+
+            service.prepare(WORKFLOW_ID);
+
+            verify(workflowPort, never()).countActive();
+            verify(admissionQueuePort, never()).parkIfAbsent(anyLong(), anyLong());
+            verify(admissionMetricsPort, never()).parkOccurred();
+            verify(workflowPort, never()).updateStepIfCurrent(anyLong(), any(), any());
+            verify(modelGenerationClient, never()).startGeneration(anyLong(), anyLong());
+        }
     }
 }

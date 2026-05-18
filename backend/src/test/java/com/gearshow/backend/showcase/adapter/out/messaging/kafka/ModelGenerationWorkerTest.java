@@ -20,7 +20,6 @@ import org.springframework.dao.QueryTimeoutException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -135,16 +134,18 @@ class ModelGenerationWorkerTest {
         }
 
         @Test
-        @DisplayName("bypassAdmission=true 이나 messageId 형식 불일치: now() 대체로 prepareFromAdmissionQueue 위임")
-        void bypassTrue_malformedId_fallsBackToNow() {
+        @DisplayName("bypassAdmission=true 이나 messageId 형식 불일치: 게이트 경유 prepare 폴백(게이트 우회 차단)")
+        void bypassTrue_malformedId_fallsBackToGatedPrepare() {
             ModelGenerationRequestMessage message =
                     ModelGenerationRequestMessage.ofDrain("not-a-drain-id", 15L, 100L);
             given(messageIdempotencyUseCase.isProcessed(any(), any())).willReturn(false);
 
             worker.processModelGeneration(message);
 
-            verify(prepareWorkflowUseCase, times(1)).prepareFromAdmissionQueue(eq(15L), anyLong());
-            verify(prepareWorkflowUseCase, never()).prepare(anyLong());
+            verify(prepareWorkflowUseCase, times(1)).prepare(15L);
+            verify(prepareWorkflowUseCase, never()).prepareFromAdmissionQueue(anyLong(), anyLong());
+            verify(messageIdempotencyUseCase, times(1)).markProcessed(
+                    "not-a-drain-id", IdempotencyDomain.SHOWCASE_MODEL_GENERATION);
         }
 
         @Test
