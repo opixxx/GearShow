@@ -32,6 +32,19 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     enabled: ${KAFKA_ENABLED:false}
 
+  # ===========================================
+  # @Scheduled 전용 스레드풀 (F1 — ADR-027)
+  # ===========================================
+  # 기본 ThreadPoolTaskScheduler 는 core=1 이라 OutboxRelay(1s)·Reconcile(60s)·
+  # AdmissionQueueDrain(5s) 가 단일 스레드에서 직렬화 → 한 작업의 블로킹(예: Kafka-down
+  # 시 send() max.block.ms 점유)이 나머지를 굶긴다 (2026-04-28 사고 클래스, PR #96 리뷰 F1).
+  # 풀을 3 으로 두어 서로 독립 관심사(각자 자체 Redis 락 보유)인 이 스케줄러들이 동시
+  # 실행되게 한다. worker/api 프로세스 분리 후에도 각 JVM 이 자기 스케줄러 풀을 갖는다.
+  # (WorkflowPolling 은 tripoPollingExecutor @Async 별도 풀이라 이 설정과 무관)
+  task:
+    scheduling:
+      pool:
+        size: 3
 
   servlet:
     multipart:
@@ -105,6 +118,25 @@ tripo:
 app:
   model-generation:
     daily-limit-per-user: ${MODEL_GENERATION_DAILY_LIMIT:3}
+    # 역할 분리 토글 (ADR-027): 3D 생성 Kafka Consumer(ModelGenerationWorker) 소유 프로세스.
+    # api 프로파일이 false 로 override. 미설정 시 활성 → 운영(현 모놀리스) 무회귀.
+    worker-enabled: true
+
+  # ===========================================
+  # 역할(api/worker) 분리 토글 기본값 (ADR-027)
+  # ===========================================
+  # 공용 플랫폼 인프라(Outbox Relay·정리 배치)는 always-on 인 api 프로세스가 단독 소유한다.
+  # worker 프로파일(application-worker.yml)이 아래를 false 로 override 하여 2-프로세스가
+  # 같은 relay/cleanup 을 중복 실행(중복 발행·중복 정리)하지 않게 한다. 여기 기본값을
+  # 명시적으로 두는 이유: 프로파일 YAML 의 키 오타가 silent-ignore 되어 중복 relay 가
+  # 조용히 활성화되는 사고를 코드 리뷰에서 잡기 위함. application-prod.yml 은 미수정
+  # (운영 무회귀 reviewability 보존 — prod 는 이 기본값 그대로 = 현 동작).
+  outbox:
+    relay-enabled: true
+    cleanup-enabled: true
+  idempotency:
+    cleanup-enabled: true
+
   # 첫 관리자 부트스트랩 — ApplicationStartedEvent 시점에 1회 INSERT.
   # 둘 다 비어있으면 skip. 이미 존재하면 skip. 첫 부트스트랩 후 환경변수 제거 권장.
   bootstrap:

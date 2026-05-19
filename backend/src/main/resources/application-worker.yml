@@ -1,0 +1,31 @@
+# ===========================================
+# 역할 분리 프로파일: worker (ADR-027)
+# ===========================================
+# 같은 JAR 를 api/worker 두 역할로 분기 실행하기 위한 프로파일.
+# worker 프로세스 = 3D 생성 파이프라인 소유:
+#   - ModelGenerationWorker (Kafka Consumer, @RetryableTopic)
+#   - AdmissionQueueDrainScheduler (입장 큐 재발행 드레이너, ADR-025)
+#   - ReconcileScheduler (stuck 복구 안전망, application-prod.yml:88 에서 enabled=true)
+#   - WorkflowPollingScheduler (Tripo 폴링 루프, prod 기본 true)
+# 공용 플랫폼 인프라(Outbox Relay·정리 배치)는 api 프로세스가 단독 소유하므로
+# 아래에서 비활성화하여 2-프로세스 중복 실행(중복 발행·중복 정리)을 차단한다.
+#
+# 사용 예 (PR2 에서 docker-compose.prod.yml 이 주입):
+#   SPRING_PROFILES_ACTIVE=prod,worker
+#
+# worker 컴포넌트(worker-enabled·admission.enabled·reconcile.enabled·
+# workflow-polling.scheduler-enabled)는 application.yml 기본값/application-prod.yml
+# 에서 이미 활성이므로 여기서 재명시하지 않는다(over-specify 금지 — 중복 설정 드리프트 방지).
+#
+# ⚠️ PR1 시점에는 이 파일이 SPRING_PROFILES_ACTIVE 에 포함되지 않으므로 inert(무효)다.
+#    실제 2-프로세스 분리 배포는 PR2(docker-compose.prod·CD)에서 수행한다.
+# ===========================================
+app:
+  outbox:
+    # Outbox → Kafka Relay 비활성 — api 단독 소유(2-프로세스 중복 발행 차단).
+    relay-enabled: false
+    # 발행 완료 Outbox 정리 배치 비활성 — api 단독 소유.
+    cleanup-enabled: false
+  idempotency:
+    # 멱등성 이력 정리 배치 비활성 — api 단독 소유.
+    cleanup-enabled: false

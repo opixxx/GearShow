@@ -1,0 +1,32 @@
+# ===========================================
+# 역할 분리 프로파일: api (ADR-027)
+# ===========================================
+# 같은 JAR 를 api/worker 두 역할로 분기 실행하기 위한 프로파일.
+# api 프로세스 = HTTP API + 공용 플랫폼 인프라(Outbox Relay·정리 배치) 소유 (always-on).
+# 3D 무거운 작업(Kafka Consumer·Reconcile·입장 큐 드레이너·Tripo 폴링)은 비활성화하여
+# worker 프로세스가 단독 소유한다.
+#
+# 사용 예 (PR2 에서 docker-compose.prod.yml 이 주입):
+#   SPRING_PROFILES_ACTIVE=prod,api
+#
+# 프로파일 우선순위: SPRING_PROFILES_ACTIVE 목록의 *뒤*에 온 프로파일이 우선한다.
+# "prod,api" → 이 파일이 application-prod.yml 보다 우선 → 아래 false 가
+#  application-prod.yml 의 reconcile.enabled=true / workflow-polling.scheduler-enabled=true
+#  를 정상적으로 덮어쓴다.
+#
+# ⚠️ PR1 시점에는 이 파일이 SPRING_PROFILES_ACTIVE 에 포함되지 않으므로 inert(무효)다.
+#    실제 2-프로세스 분리 배포는 PR2(docker-compose.prod·CD)에서 수행한다.
+# ===========================================
+app:
+  model-generation:
+    # 3D 생성 Kafka Consumer(ModelGenerationWorker) 비활성 — worker 전용.
+    worker-enabled: false
+    admission:
+      # 입장 큐 드레이너(AdmissionQueueDrainScheduler) 비활성 — worker 전용.
+      enabled: false
+  reconcile:
+    # Reconcile 배치 비활성 — worker 전용. (application-prod.yml:88 의 true 를 덮어씀)
+    enabled: false
+  workflow-polling:
+    # Tripo 폴링 루프 비활성 — worker 전용. (application-prod.yml 의 true 를 덮어씀)
+    scheduler-enabled: false
