@@ -90,6 +90,7 @@ api·worker 둘 다 Kafka 클라이언트가 필요하다(api = Outbox→Kafka p
 - 단일 아티팩트라 빌드/CI 변경 0, 토폴로지 전환 가역적.
 
 ### 잔여 / 수용
+- **worker SPOF — PR2 분리 후 3D 안전망의 단일 프로세스 결합 (수용된 신규 가용성 의존성)**: 현 모놀리스는 단일 프로세스라 "API 살아있음 ⇒ Reconcile 도 살아있음"이 암묵 보장이었다. PR2 분리는 이 결합을 끊는다 — worker 단독 소유 컴포넌트(`ReconcileScheduler`·`AdmissionQueueDrainScheduler`·`WorkflowPollingScheduler`)는 worker 프로세스가 죽거나 재시작 루프에 빠지면 통째로 정지하는데, 그 사이 api 는 살아 `CreateShowcase` 로 outbox·입장 큐에 계속 적재한다. §1 이 규정한 "Reconcile = 입장 큐 유실의 **유일** 보상 경로"가 worker SPOF 가 된다(PR #51 metaspace OOM landmine 과 동급의 운영 리스크). **PR1 자체는 inert(프로파일 미적용 → 단일 프로세스에 Reconcile 잔존)라 미노출** — 실제 노출은 PR2. 대응은 아래 Deferred 의 PR2 배포 게이트로 강제한다.
 - 같은 호스트 2컨테이너는 **CPU 는 여전히 공유**(2 vCPU) — OS 레벨 완전 격리 아님. F1 의 스레드 기아는 해소되나 CPU 경합은 출시 후 트래픽 시점에 별도 인스턴스(대안 C)로 재검토. Tripo 경로는 I/O-bound 라 출시 전 수용 가능.
 - worker 프로세스도 HTTP 컨트롤러 빈을 띄운다(트래픽 미라우팅이라 무해). 컨트롤러 레벨 비활성화는 출시 후(불필요한 선최적화 회피).
 - metaspace 중복(~224m×2)은 단일 JAR 의 본질적 비용. §2.5 예산은 실측 전 제안값 — PR2 배포 검증 게이트로 확정.
@@ -97,7 +98,9 @@ api·worker 둘 다 Kafka 클라이언트가 필요하다(api = Outbox→Kafka p
 - F2~F6 / ADR-025 Deferred D1~D6(메모리 백로그)는 본 ADR 범위 밖 — 보류 유지.
 
 ### Deferred (PR2 — 배포 분리)
-docker-compose.prod.yml 의 `backend` 1서비스 → `api`/`worker` 2서비스 분리(역할별 `SPRING_PROFILES_ACTIVE`·JVM 옵션·포트) · CD 워크플로 2컨테이너 배포 · 배포 후 메모리 실측 검증 게이트 · stale 주석 정정.
+- docker-compose.prod.yml 의 `backend` 1서비스 → `api`/`worker` 2서비스 분리(역할별 `SPRING_PROFILES_ACTIVE`·JVM 옵션·포트) · CD 워크플로 2컨테이너 배포 · 배포 후 메모리 실측 검증 게이트 · stale 주석(line 167-170 t3.small) 정정.
+- **worker SPOF 대응(배포 게이트 필수)**: worker 컨테이너 헬스체크 + 자동 재시작(`restart: unless-stopped` 이상) + worker 다운 알람. 단일 worker 다운 시 보상 지연 허용 한도를 운영 기준으로 명시(예: Reconcile `fixed-delay-ms`(60s) × 복구 N tick). 메모리 백로그 `project_3d_pipeline_review_pr96_gaps` 와 연결.
+- 스케줄러 풀 역할별 분화(`spring.task.scheduling.pool.size` api≤2 / worker 2~3) — PR1 의 전역 3 이 양 역할에 안전 상한이라 필수 아님. 메모리 실측과 함께 필요 시.
 
 ### 검증
 `RoleProfileSplitTest`(ApplicationContextRunner + ConfigDataApplicationContextInitializer): (1) prod 베이스라인 무회귀 가드(신규 토글 전부 활성) · (2) `spring.task.scheduling.pool.size=3` · (3) api/worker 프로파일 번들 정확성 · (4) 신규 조건부 어노테이션 빈 등록/비등록 + `@ConditionalOnProperty→@ConditionalOnExpression` 변환 동등성(kafka-off 무회귀).

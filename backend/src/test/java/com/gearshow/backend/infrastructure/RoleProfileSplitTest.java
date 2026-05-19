@@ -2,10 +2,14 @@ package com.gearshow.backend.infrastructure;
 
 import com.gearshow.backend.platform.idempotency.adapter.in.scheduler.ProcessedMessageCleanupScheduler;
 import com.gearshow.backend.platform.idempotency.application.port.in.CleanupProcessedMessageUseCase;
+import com.gearshow.backend.platform.idempotency.application.port.in.MessageIdempotencyUseCase;
 import com.gearshow.backend.platform.outbox.adapter.in.scheduler.OutboxCleanupScheduler;
 import com.gearshow.backend.platform.outbox.adapter.in.scheduler.OutboxRelayScheduler;
 import com.gearshow.backend.platform.outbox.application.port.in.CleanupOutboxUseCase;
 import com.gearshow.backend.platform.outbox.application.port.in.PublishOutboxUseCase;
+import com.gearshow.backend.showcase.adapter.out.messaging.kafka.ModelGenerationWorker;
+import com.gearshow.backend.showcase.application.port.in.PrepareWorkflowUseCase;
+import com.gearshow.backend.showcase.application.port.out.ModelGenerationWorkflowPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -20,10 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>실제 {@code application.yml} + {@code application-{profile}.yml} 를
  * {@link ConfigDataApplicationContextInitializer} 로 로딩하여 (1) 프로파일 번들이 올바른
  * 플래그를 set 하는지, (2) 신규 조건부 어노테이션이 의도대로 빈을 등록/비등록하는지,
- * (3) F1 스케줄러 풀이 적용되는지를 검증한다. {@code test} 프로파일은
- * {@code spring.kafka.enabled=false} + KafkaAutoConfiguration exclude 라 kafka-게이트 빈을
- * 관측할 수 없으므로, Testcontainers 풀 컨텍스트 대신 {@link ApplicationContextRunner} 로
- * 프로퍼티/조건만 격리 검증한다 (kafka·redis 인프라 불필요).</p>
+ * (3) F1 스케줄러 풀이 적용되는지를 검증한다.</p>
+ *
+ * <p><b>이 테스트는 {@code test} 프로파일을 활성화하지 않는다</b> — prod 베이스라인/
+ * {@code api}/{@code worker} 를 {@link ApplicationContextRunner} 에 명시 주입한다.
+ * (테스트 리소스의 {@code application-test.yml} 은 {@code spring.kafka.enabled=false} +
+ * KafkaAutoConfiguration exclude 라 kafka-게이트 빈을 관측할 수 없는데, 본 테스트는
+ * 그 프로파일을 쓰지 않으므로 영향받지 않는다.) Testcontainers 풀 컨텍스트 대신 경량
+ * 러너로 프로퍼티/조건만 격리 검증한다 — kafka·redis 인프라 불필요.</p>
  *
  * <p><b>운영 무회귀가 본 테스트의 헤드라인</b>: api/worker 프로파일 *미적용* 시
  * 신규 토글이 전부 활성 = 현 모놀리스와 동일 — {@code prod} 베이스라인으로 증명한다.</p>
@@ -179,5 +187,34 @@ class RoleProfileSplitTest {
         // Then 3 — kafka off → 비등록 (변환 전 동작 보존: 기존 kafka-off 테스트 무회귀)
         base.withPropertyValues("spring.kafka.enabled=false")
                 .run(ctx -> assertThat(ctx).doesNotHaveBean(OutboxRelayScheduler.class));
+    }
+
+    @Test
+    @DisplayName("ModelGenerationWorker — @ConditionalOnExpression(kafka AND worker) 변환 동등성")
+    void modelGenerationWorker_조건식_변환_동등성() {
+        // OutboxRelay 와 동일 변환을 받은 빈. @KafkaListener/@RetryableTopic 은 @EnableKafka
+        // 미존재 시 미처리(inert)라 평빈으로 인스턴스화되고, @ConditionalOnExpression 은
+        // 인스턴스화 전 평가되므로 경량 러너로 변환 동등성을 검증할 수 있다.
+        ApplicationContextRunner base = runner()
+                .withBean(PrepareWorkflowUseCase.class,
+                        () -> Mockito.mock(PrepareWorkflowUseCase.class))
+                .withBean(MessageIdempotencyUseCase.class,
+                        () -> Mockito.mock(MessageIdempotencyUseCase.class))
+                .withBean(ModelGenerationWorkflowPort.class,
+                        () -> Mockito.mock(ModelGenerationWorkflowPort.class))
+                .withUserConfiguration(ModelGenerationWorker.class);
+
+        // Then 1 — kafka on + worker 미설정 → 등록 (기존 @ConditionalOnProperty(kafka) 와 동등)
+        base.withPropertyValues("spring.kafka.enabled=true")
+                .run(ctx -> assertThat(ctx).hasSingleBean(ModelGenerationWorker.class));
+
+        // Then 2 — kafka on + worker-enabled=false(api) → 비등록 (신규 역할 게이트)
+        base.withPropertyValues("spring.kafka.enabled=true",
+                        "app.model-generation.worker-enabled=false")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(ModelGenerationWorker.class));
+
+        // Then 3 — kafka off → 비등록 (변환 전 동작 보존: 기존 kafka-off 테스트 무회귀)
+        base.withPropertyValues("spring.kafka.enabled=false")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean(ModelGenerationWorker.class));
     }
 }
