@@ -437,14 +437,27 @@ if (s3.headObject("gearshow-models/" + workflowId + ".glb").isPresent()) {
 
 ### 8.1 Transient 실패 (Tripo 429, S3 일시 장애)
 
+> ⚠️ **stale 정정 (코드가 SoT, ADR-026 / 2026-05-18)**: 아래 의사코드의 "조건부 UPDATE
+> PREPARING → REQUESTED" 는 설계 의도였으나 **코드에 구현된 적이 없었다**(보상 없이 rethrow
+> 만 → 재발행분이 PREPARING 가드/affected=0 에 단락 → 실제 재시도 0회 → ~60s 후
+> `TX2_DB_FAILED`, C1 결함). ADR-026 이 이를 **미과금 확정 retryable 에 한해**
+> `compensatePreparingToRequested`(조건부 UPDATE, `WHERE current_step=PREPARING AND
+> tripo_task_id IS NULL AND NOT EXISTS tripo_pending_task`)로 구현했다. `POST /task` I/O
+> 타임아웃·`preservePendingTask`/TX2 실패는 과금 가능이라 보상 제외(ADR-011 §④).
+> backoff 실제값은 `attempts=5, 30s→60s→120s→240s→480s`(`ModelGenerationWorker:57-69`),
+> `retry_count` 컬럼은 미구현(`@RetryableTopic` 이 재시도 횟수 관리). 정확한 분류·잔여는
+> ADR-026 참조.
+
 ```
-Worker catch RetryableException:
-  조건부 UPDATE: PREPARING → REQUESTED (재시작 가능)
-  publish to model-generation-retry (retry_count++)
+Worker catch RetryableException (미과금 확정: circuit open / 세마포어 타임아웃 / Tripo 4xx5xx 에러응답):
+  조건부 UPDATE: PREPARING → REQUESTED (compensatePreparingToRequested, ADR-026)
+    WHERE current_step=PREPARING AND tripo_task_id IS NULL AND NOT EXISTS tripo_pending_task
+  affected=1 → 원래 예외 재throw → @RetryableTopic 재발행분이 REQUESTED 보고 실제 재시도
+  affected=0 → 재throw 금지(과금됨/이미 전이) → markProcessed
 
 Retry Topic (@RetryableTopic):
-  exponential backoff: 1s → 5s → 30s → 5min
-  retry_count > 3 → DLQ + 운영 알림
+  exponential backoff: 30s → 60s → 120s → 240s → 480s (attempts=5)
+  소진 → DLT → handleDlt markFailed(TRIPO_RETRY_EXHAUSTED)
 ```
 
 ### 8.2 Terminal 실패

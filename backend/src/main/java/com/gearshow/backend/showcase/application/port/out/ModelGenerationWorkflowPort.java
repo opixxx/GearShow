@@ -64,6 +64,19 @@ public interface ModelGenerationWorkflowPort {
     int updateStepIfCurrent(Long workflowId, WorkflowStep expected, WorkflowStep next);
 
     /**
+     * 보상 전이 {@code PREPARING → REQUESTED} (ADR-026). Tripo 호출이 미과금 확정 retryable
+     * 예외로 실패했을 때만 호출되어, {@code @RetryableTopic} 재발행분이 REQUESTED 를 보고
+     * 실제 재시도하게 한다.
+     *
+     * <p>조건부 UPDATE (ADR-012). WHERE {@code current_step = PREPARING AND tripo_task_id IS NULL
+     * AND NOT EXISTS tripo_pending_task} — 과금된 워크플로우를 되돌리지 않아 이중 과금을 차단한다
+     * (ADR-011 §④). {@code started_at} 은 NULL 로 리셋한다.</p>
+     *
+     * @return 1=보상 성공(호출자가 원래 예외 재throw), 0=과금됨/이미 전이됨(재throw 금지)
+     */
+    int compensatePreparingToRequested(Long workflowId);
+
+    /**
      * 워크플로우를 {@code FAILED} 로 마킹한다. {@code failure_code}, {@code failure_message},
      * {@code failure_source} 를 함께 기록하고 {@code finished_at = NOW()}.
      *

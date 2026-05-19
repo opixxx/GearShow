@@ -5,6 +5,7 @@ import com.gearshow.backend.showcase.application.dto.WorkflowSnapshot;
 import com.gearshow.backend.showcase.application.dto.WorkflowStep;
 import com.gearshow.backend.showcase.application.event.WorkflowGeneratingConfirmedEvent;
 import com.gearshow.backend.showcase.application.exception.ModelGenerationNonRetryableException;
+import com.gearshow.backend.showcase.application.exception.ModelGenerationRetryableException;
 import com.gearshow.backend.showcase.application.port.in.PrepareWorkflowUseCase;
 import com.gearshow.backend.showcase.application.port.out.AdmissionMetricsPort;
 import com.gearshow.backend.showcase.application.port.out.ImageStoragePort;
@@ -16,6 +17,7 @@ import com.gearshow.backend.showcase.application.port.out.TripoPendingTaskPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort;
 import com.gearshow.backend.showcase.application.port.out.WorkflowLockPort.WorkflowLockBusyException;
 import com.gearshow.backend.showcase.infrastructure.config.AdmissionQueueProperties;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -286,13 +288,29 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
     /**
      * Tripo 이미지 업로드 + {@code POST /task} 를 호출하고 task_id 를 반환한다.
      *
-     * <p>에러 분류 (설계 결정 #4 / 설계 §5):</p>
+     * <p>에러 분류 (설계 결정 #4 / 설계 §5 / ADR-026):</p>
      * <ul>
      *   <li>{@link ModelGenerationNonRetryableException}: 즉시 FAILED + alertRequired 시 ALERT 로그.
      *       호출자 return 유도 (null 반환).</li>
-     *   <li>Retryable 계열 및 {@code CallNotPermittedException}: 그대로 throw →
-     *       {@code @RetryableTopic} 이 backoff 재시도.</li>
+     *   <li>{@link CallNotPermittedException} / {@link ModelGenerationRetryableException}
+     *       ({@code TripoSemaphoreTimeoutException} 포함): <b>단일 호출 관점 미과금</b> retryable
+     *       실패 (circuit open=이 호출의 HTTP 미발생 / 세마포어 타임아웃=HTTP 전 /
+     *       Tripo 4xx5xx 에러응답=task 미생성). circuit 가 직전 attempt 의 {@code POST /task}
+     *       I/O 타임아웃 누적으로 열렸을 가능성은 ADR-026 §4 잔여(이중 과금 동일 클래스).
+     *       그냥 재throw 하면 1차 TX1 이 이미 PREPARING 을 커밋해 재발행분이
+     *       {@code currentStep != REQUESTED} 가드(또는 affected=0)에 단락되어 실제 재시도가
+     *       일어나지 않는다 (C1, ADR-026). 따라서 {@link
+     *       ModelGenerationWorkflowPort#compensatePreparingToRequested} 로 PREPARING→REQUESTED
+     *       조건부 보상 후 재throw 한다 → {@code @RetryableTopic} 재발행분이 REQUESTED 를 보고
+     *       실제 backoff 재시도. 보상 affected=0 (과금됨/이미 전이됨) 이면 재throw 하지 않고
+     *       null 반환 — 호출자 정상 종료 → {@code markProcessed} (메시지 종결, 워크플로우는
+     *       Reconcile 등 타 경로 책임). 기존 "남이 처리함=affected=0" 의미와 일관.</li>
      * </ul>
+     *
+     * <p><b>의도적 제외</b>: {@code ResourceAccessException}/{@code RestClientException}
+     * ({@code POST /task} I/O 타임아웃 — 송신 결과 불명, 과금 가능) 와 {@code TripoApiException}
+     * 은 이 catch 에 넣지 않는다. 보상 시 재발행이 {@code POST /task} 를 재호출해 이중 과금
+     * 위험이 있어 현행(DLT/Reconcile)을 유지한다 (ADR-011 §④ 본질적 잔여, ADR-026 §범위).</p>
      */
     private String callTripoOrHandle(Long workflowId, Long showcaseId) {
         try {
@@ -308,6 +326,21 @@ public class PrepareWorkflowService implements PrepareWorkflowUseCase {
                 log.error("ALERT: Tripo 전역 장애 (크레딧/인증) 가능 — workflowId: {}, errorCode: {}",
                         workflowId, e.getMessage());
             }
+            return null;
+        } catch (CallNotPermittedException | ModelGenerationRetryableException e) {
+            // 미과금 확정 retryable. 1차 TX1 이 이미 PREPARING 커밋 → 그냥 재throw 하면
+            // 재발행분이 가드/affected=0 에 단락돼 실제 재시도 안 됨 (C1, ADR-026).
+            // PREPARING→REQUESTED 조건부 보상 후 재throw 해야 진짜 재시도된다.
+            int affected = workflowPort.compensatePreparingToRequested(workflowId);
+            if (affected == 1) {
+                log.warn("Tripo retryable 실패 — PREPARING→REQUESTED 보상 후 재시도 위임 "
+                        + "(ADR-026). workflowId: {}, error: {}", workflowId, e.getMessage());
+                throw e;
+            }
+            // affected=0: 과금됨(task/pending 존재) 또는 다른 주체가 이미 전이/종결.
+            // 재throw 금지(이중 과금/중복 재시도 방지) → 호출자 정상 종료 → markProcessed.
+            log.info("Tripo retryable 실패했으나 보상 affected=0 (과금됨/이미 진행·종결) — "
+                    + "재시도 미위임. workflowId: {}, error: {}", workflowId, e.getMessage());
             return null;
         }
     }

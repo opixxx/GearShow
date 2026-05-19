@@ -80,6 +80,11 @@ public class ModelGenerationWorkflowPersistenceAdapter implements ModelGeneratio
     }
 
     @Override
+    public int compensatePreparingToRequested(Long workflowId) {
+        return workflowJpaRepository.compensatePreparingToRequested(workflowId, Instant.now());
+    }
+
+    @Override
     public int markFailed(Long workflowId, WorkflowFailureCode code, String message, String source) {
         return workflowJpaRepository.markFailed(
                 workflowId, code.name(), message, source, Instant.now());

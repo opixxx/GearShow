@@ -49,6 +49,45 @@ public interface ModelGenerationWorkflowJpaRepository
                             @Param("now") Instant now);
 
     /**
+     * 보상 전이 {@code PREPARING → REQUESTED} (ADR-026). {@code startGeneration} 이 미과금 확정
+     * retryable 예외(circuit open / 세마포어 타임아웃 / Tripo 4xx5xx 에러응답)로 실패했을 때만
+     * 호출되어, {@code @RetryableTopic} 재발행분이 REQUESTED 를 보고 실제 재시도하도록 되돌린다.
+     *
+     * <p>ADR-012 양보불가 규칙(모든 상태 전이는 조건부 UPDATE)을 따른다. WHERE 3조건:</p>
+     * <ul>
+     *   <li>{@code current_step = PREPARING} — 내가 방금 만든 PREPARING 만. FAILED/COMPLETED
+     *       부활·GENERATING 회귀 방지. affected=0 이면 다른 주체가 이미 전이/종결.</li>
+     *   <li>{@code tripo_task_id IS NULL} — TX2 미실행 = task 미기록.</li>
+     *   <li>{@code NOT EXISTS tripo_pending_task} — pending 선저장 전.</li>
+     * </ul>
+     * 뒤 두 조건은 <b>과금된 워크플로우를 절대 REQUESTED 로 되돌리지 않기 위함</b> — 위반 시
+     * 재발행이 {@code POST /task} 를 재호출해 이중 과금 (Tripo cancel/idempotency-key 미지원,
+     * ADR-011 §④). {@code started_at = NULL} 로 리셋해 실패한 attempt 시간이 lifetime-cap /
+     * stuck 윈도우에 합산되지 않게 한다 (다음 정식 TX1 이 재-stamp).
+     *
+     * <p>실행 계획: {@code w.id} PK 등치 단건 + {@code NOT EXISTS} 서브쿼리는
+     * {@code tripo_pending_task.workflow_id} 가 PK ({@code TripoPendingTaskJpaEntity @Id},
+     * surrogate 없음) 임에 의존한 PK 점 조회다. surrogate 키 도입 시 풀스캔 퇴화 회귀 주의.</p>
+     *
+     * @return 1=보상 성공(호출자가 원래 예외 재throw), 0=과금됨/이미 전이됨(재throw 금지)
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE ModelGenerationWorkflowJpaEntity w
+               SET w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.REQUESTED,
+                   w.startedAt = NULL,
+                   w.heartbeatAt = :now,
+                   w.updatedAt = :now
+             WHERE w.id = :id
+               AND w.currentStep = com.gearshow.backend.showcase.application.dto.WorkflowStep.PREPARING
+               AND w.tripoTaskId IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM TripoPendingTaskJpaEntity t WHERE t.workflowId = :id
+               )
+            """)
+    int compensatePreparingToRequested(@Param("id") Long id, @Param("now") Instant now);
+
+    /**
      * 워크플로우를 FAILED 로 마킹한다. 이미 종료된 상태(COMPLETED/FAILED)는 덮어쓰지 않는다.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)

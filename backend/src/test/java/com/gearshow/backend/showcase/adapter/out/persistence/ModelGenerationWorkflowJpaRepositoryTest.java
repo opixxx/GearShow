@@ -31,6 +31,9 @@ class ModelGenerationWorkflowJpaRepositoryTest {
     @Autowired
     private ModelGenerationWorkflowJpaRepository repository;
 
+    @Autowired
+    private TripoPendingTaskJpaRepository pendingRepository;
+
     @Nested
     @DisplayName("저장 및 조회")
     class SaveAndFind {
@@ -196,6 +199,92 @@ class ModelGenerationWorkflowJpaRepositoryTest {
             assertThat(affected).isZero();
             ModelGenerationWorkflowJpaEntity reloaded = repository.findById(saved.getId()).orElseThrow();
             assertThat(reloaded.getFailureCode()).isEqualTo("S3_KEY_MISSING"); // 원본 유지
+        }
+    }
+
+    @Nested
+    @DisplayName("보상 전이 PREPARING→REQUESTED (ADR-026)")
+    class CompensateToRequested {
+
+        private Long savePreparing(long showcaseId, String idem) {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(showcaseId, idem, 1));
+            repository.updateStepIfCurrent(
+                    saved.getId(), WorkflowStep.REQUESTED, WorkflowStep.PREPARING, Instant.now());
+            return saved.getId();
+        }
+
+        @Test
+        @DisplayName("PREPARING + task NULL + pending 無 → affected=1, REQUESTED 복귀 + started_at NULL")
+        void preparing_noTaskNoPending_compensates() {
+            Long id = savePreparing(50L, "idem-50a");
+            assertThat(repository.findById(id).orElseThrow().getStartedAt()).isNotNull();
+
+            int affected = repository.compensatePreparingToRequested(id, Instant.now());
+
+            assertThat(affected).isEqualTo(1);
+            ModelGenerationWorkflowJpaEntity reloaded = repository.findById(id).orElseThrow();
+            assertThat(reloaded.getCurrentStep()).isEqualTo(WorkflowStep.REQUESTED);
+            assertThat(reloaded.getStartedAt()).isNull();
+            assertThat(reloaded.getHeartbeatAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("PREPARING + tripo_pending_task 존재(과금됨) → affected=0, PREPARING 유지")
+        void preparing_withPending_doesNotCompensate() {
+            Long id = savePreparing(51L, "idem-51a");
+            pendingRepository.saveAndFlush(
+                    TripoPendingTaskJpaEntity.preservingTaskId(id, "tripo-task-51"));
+
+            int affected = repository.compensatePreparingToRequested(id, Instant.now());
+
+            assertThat(affected).isZero();
+            assertThat(repository.findById(id).orElseThrow().getCurrentStep())
+                    .isEqualTo(WorkflowStep.PREPARING);
+        }
+
+        @Test
+        @DisplayName("GENERATING(tripo_task_id 보유) → affected=0 (PREPARING 아님)")
+        void generating_doesNotCompensate() {
+            Long id = savePreparing(52L, "idem-52a");
+            repository.markGenerating(id, "tripo-task-52", Instant.now());
+
+            int affected = repository.compensatePreparingToRequested(id, Instant.now());
+
+            assertThat(affected).isZero();
+            assertThat(repository.findById(id).orElseThrow().getCurrentStep())
+                    .isEqualTo(WorkflowStep.GENERATING);
+        }
+
+        @Test
+        @DisplayName("FAILED(task_id 없음) → affected=0 — current_step 가드 단독 검증 (terminal 부활 차단)")
+        void failed_doesNotCompensate() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(54L, "idem-54a", 1));
+            repository.markFailed(saved.getId(),
+                    WorkflowFailureCode.SOURCE_IMAGES_MISSING.name(),
+                    "test", "INTERNAL", Instant.now());
+
+            // tripo_task_id 도 pending 도 없으므로, affected=0 의 원인은 오직
+            // current_step != PREPARING (terminal 부활 차단 가드) 임이 격리 검증된다.
+            int affected = repository.compensatePreparingToRequested(saved.getId(), Instant.now());
+
+            assertThat(affected).isZero();
+            assertThat(repository.findById(saved.getId()).orElseThrow().getCurrentStep())
+                    .isEqualTo(WorkflowStep.FAILED);
+        }
+
+        @Test
+        @DisplayName("REQUESTED → affected=0 (PREPARING 아님)")
+        void requested_doesNotCompensate() {
+            ModelGenerationWorkflowJpaEntity saved = repository.saveAndFlush(
+                    ModelGenerationWorkflowJpaEntity.requested(53L, "idem-53a", 1));
+
+            int affected = repository.compensatePreparingToRequested(saved.getId(), Instant.now());
+
+            assertThat(affected).isZero();
+            assertThat(repository.findById(saved.getId()).orElseThrow().getCurrentStep())
+                    .isEqualTo(WorkflowStep.REQUESTED);
         }
     }
 }
