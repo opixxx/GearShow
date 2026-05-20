@@ -12,7 +12,7 @@ import com.gearshow.backend.showcase.infrastructure.config.ShowcaseKafkaTopicCon
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
@@ -43,10 +43,17 @@ import org.springframework.stereotype.Component;
  * markProcessed 를 호출하지 않은 상태로 RetryableTopic 재시도가 진행되어 다음 시도에서 자연스럽게
  * 재진입한다. 동시성 1회 보장은 워크플로우 단계의 조건부 UPDATE (ADR-012) 가 책임지므로,
  * 메시지 멱등성 테이블은 브로커 재전송 시 빠른 컷 역할만 수행한다.</p>
+ *
+ * <p><b>역할(api/worker) 분리 토글 (ADR-027)</b>: 3D 생성 Consumer 는 worker 프로세스가
+ * 단독 소유한다. api 프로세스는 {@code app.model-generation.worker-enabled=false} 로 이 빈을
+ * 비등록하여 3D 무거운 작업(Tripo I/O·재시도)이 API 응답 경로와 섞이지 않게 한다. 미설정 시
+ * 활성(기본 {@code :true}) — 운영 무회귀(현 모놀리스 = 동일 프로세스 소비 유지). kafka 가드와
+ * AND 결합한 형태는 {@code AdmissionQueueDrainScheduler} 의 기존 선례를 따른다.</p>
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true")
+@ConditionalOnExpression(
+        "${spring.kafka.enabled:false} and ${app.model-generation.worker-enabled:true}")
 @RequiredArgsConstructor
 public class ModelGenerationWorker {
 

@@ -68,6 +68,13 @@
                        └──────────────────────────────┘
 ```
 
+> **프로세스 분리 (ADR-027, 2026-05-19)**: 위 "Backend (API Server)" 와 "Worker/Poller/
+> Reconcile/드레이너" 는 같은 JAR 를 `SPRING_PROFILES_ACTIVE=prod,api` / `prod,worker` 로
+> 분기 실행하는 별도 프로세스(같은 EC2, 컨테이너 2개)다. Outbox Relay·정리 배치는 api 단독,
+> 3D Consumer·Reconcile·입장 큐 드레이너·Poller 는 worker 단독 소유. F1(단일 스케줄러 스레드
+> 기아)은 프로세스별 스케줄러 풀(`spring.task.scheduling.pool.size`)로 해소. PR1=스캐폴딩
+> (inert·무회귀), PR2=배포 토폴로지 분리. 상세=ADR-027.
+
 ---
 
 ## 3. 데이터 모델
