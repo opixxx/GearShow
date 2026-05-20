@@ -156,33 +156,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # JVM 이 management 포트(9091) 바인딩 가능하면 healthy.
-    # bash 내장 /dev/tcp 사용 — Dockerfile 에 curl/wget 추가 불요. 깊은 /actuator/health
-    # JSON 체크는 CD post-deploy 의 curl /api/v1/health 가 담당(ADR-027 PR2 실현 노트).
-    healthcheck:
-      # CMD-SHELL 은 /bin/sh -c (temurin:21-jre 의 /bin/sh = dash) 로 실행되므로 bash 내장
-      # /dev/tcp 가 동작하지 않는다. bash 를 명시 호출해야 한다 (/usr/bin/bash 는 base image 에
-      # 포함됨, 별도 설치 불요). CMD 배열 형태로 두면 docker 가 그대로 exec 한다.
-      #
-      # ⚠️ 검출 범위 한정 (ADR-027 §4 잔여): JVM 사망 / 9091 미바인딩(부팅 OOM) / JVM 좀비
-      # deadlock 으로 9091 미응답 케이스만 unhealthy 로 잡힌다. Kafka 연결 끊김으로
-      # KafkaListenerContainer stop / Redisson watchdog 실패로 락 영구 hold / 스케줄러 풀
-      # 굶음(F1 클래스) 등 worker 핵심 컴포넌트만 죽는 사고는 9091 응답이 살아있어 healthy
-      # 로 표시된다. /actuator/health/liveness 기반 HTTP probe 격상은 후속 PR.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9091 && exec 3<&- || exit 1"]
-      # CD post-deploy 폴링이 90s 안에 docker healthy 첫 도달을 기대한다 (cd.yml:188).
-      # start_period 30s + interval 10s × retries 3 = 최단 ~40s, 최장 ~60s 안에 첫 healthy.
-      # PR #51 부팅 OOM 60s 손실 케이스를 흡수할 마진 확보.
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
     # cgroup 단위 메모리 강제 (ADR-027 §2.5 + ~5% 안전 마진).
     # 다른 컨테이너(redis 192m / prometheus 256m / grafana 192m / node-exporter 64m) 와
     # 일관 — JVM 만 단독으로 OOM-killer 가 죽이게 하여 host 전체 swap thrashing 차단.
     # PR #51 metaspace OOM 클래스가 재현되면 docker 가 컨테이너만 재시작한다.
     mem_limit: 800m
     mem_reservation: 512m
+    # 1차 운영 안전망 = restart(JVM die 시 자동 재시작, exit code 기반) + 위 mem_limit.
+    # docker healthcheck 는 의도적으로 두지 않는다 — TCP probe 의 검출력이 worker SPOF 의
+    # 실제 사고 클래스(Kafka 연결 끊김 / Redisson 락 영구 hold / 스케줄러 풀 굶음)를 못 잡고
+    # docker 도 unhealthy 를 자동으로 죽이지 않아 가시성 비용 외 실효가 낮기 때문(ADR-027 §4).
+    # 가시성·검출력 보강은 후속 PR 의 /actuator/health/liveness HTTP probe + Prometheus alert.
     restart: unless-stopped
 
   # ===========================================
@@ -195,8 +179,10 @@ services:
   #   - WorkflowPollingScheduler (Tripo 폴링 루프)
   # 공용 인프라(OutboxRelay·정리 배치)는 application-worker.yml 이 비활성 → api 단독.
   # 외부 포트 노출 없음 — HTTP 컨트롤러는 컨테이너 안에서 떠 있으나 무라우팅.
-  # ⚠️ ADR-027 §4: worker 단독 다운 = 3D 안전망 통째로 정지(SPOF). healthcheck +
-  # restart: unless-stopped 가 1차 완화. 다운 알람(Prometheus alert)은 P1-H 후순위.
+  # ⚠️ ADR-027 §4: worker 단독 다운 = 3D 안전망 통째로 정지(SPOF). 현 PR 의 1차 안전망은
+  # restart: unless-stopped + mem_limit 만(JVM die 자동 재시작 + host swap 차단). docker
+  # healthcheck 는 검출력 부족으로 의도적 미정의. 진짜 검출(Kafka-down/락 hold/스케줄러
+  # 기아) 은 후속 PR 의 /actuator/health/liveness HTTP probe + Prometheus alert(P1-H) 영역.
   # ===========================================
   worker:
     image: ${ECR_REGISTRY}/gearshow-backend:${IMAGE_TAG:-latest}
@@ -222,27 +208,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      # CMD-SHELL 은 /bin/sh -c (temurin:21-jre 의 /bin/sh = dash) 로 실행되므로 bash 내장
-      # /dev/tcp 가 동작하지 않는다. bash 를 명시 호출해야 한다 (/usr/bin/bash 는 base image 에
-      # 포함됨, 별도 설치 불요). CMD 배열 형태로 두면 docker 가 그대로 exec 한다.
-      #
-      # ⚠️ 검출 범위 한정 (ADR-027 §4 잔여): JVM 사망 / 9091 미바인딩(부팅 OOM) / JVM 좀비
-      # deadlock 으로 9091 미응답 케이스만 unhealthy 로 잡힌다. Kafka 연결 끊김으로
-      # KafkaListenerContainer stop / Redisson watchdog 실패로 락 영구 hold / 스케줄러 풀
-      # 굶음(F1 클래스) 등 worker 핵심 컴포넌트만 죽는 사고는 9091 응답이 살아있어 healthy
-      # 로 표시된다. /actuator/health/liveness 기반 HTTP probe 격상은 후속 PR.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9091 && exec 3<&- || exit 1"]
-      # CD post-deploy 폴링이 90s 안에 docker healthy 첫 도달을 기대한다 (cd.yml:188).
-      # start_period 30s + interval 10s × retries 3 = 최단 ~40s, 최장 ~60s 안에 첫 healthy.
-      # PR #51 부팅 OOM 60s 손실 케이스를 흡수할 마진 확보.
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
     # cgroup 단위 메모리 강제 (ADR-027 §2.5 + ~5% 안전 마진).
     mem_limit: 730m
     mem_reservation: 448m
+    # 1차 운영 안전망 = restart + mem_limit. healthcheck 는 의도적으로 미정의 (api 블록 주석 참조).
     restart: unless-stopped
 
   # ===========================================
