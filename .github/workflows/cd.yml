@@ -174,12 +174,12 @@ jobs:
             docker compose -f docker-compose.prod.yml pull api worker
             docker compose -f docker-compose.prod.yml up -d api worker
 
-            # 헬스체크 — api 외부 응답 + worker 프로세스 running 둘 다 통과해야 성공.
+            # 헬스체크 — api 외부 응답 + worker docker healthy 둘 다 통과해야 성공.
             # 최대 90초 대기 (Redisson 추가 로딩 + 첫 부팅 OOM 시 컨테이너 재시작 1회까지 감안).
             # api: 외부 8080 의 /api/v1/health (사용자 영향 직접 확인)
-            # worker: 외부 포트 없음 + docker healthcheck 미정의 → compose ps 의 State=running
-            #         만 검증. docker 자체가 ENTRYPOINT exit 시 컨테이너 State 를 갱신하므로
-            #         JVM 부팅 OOM 무한 재시작 케이스는 State 가 "restarting" 으로 표시되어 구분.
+            # worker: 외부 포트 없음 → docker healthcheck(/actuator/health/liveness, ADR-027
+            #         PR3) 의 (healthy) 상태 폴링. worker liveness 그룹은 kafka indicator
+            #         include 라 Kafka 끊김 시 unhealthy 표시 → CD 차단(자동 restart 는 X).
             api_ok=0
             worker_ok=0
             for i in $(seq 1 18); do
@@ -188,13 +188,13 @@ jobs:
                 api_ok=1
               fi
               if [ "$worker_ok" -eq 0 ]; then
-                worker_state=$(docker compose -f docker-compose.prod.yml ps worker --format "{{.State}}" 2>/dev/null)
-                if [ "$worker_state" = "running" ]; then
-                  echo "✅ worker 프로세스 running"
+                worker_status=$(docker compose -f docker-compose.prod.yml ps worker --format "{{.Status}}" 2>/dev/null)
+                if echo "$worker_status" | grep -q "(healthy)"; then
+                  echo "✅ worker 헬스체크 성공 (healthy)"
                   worker_ok=1
-                elif [ -n "$worker_state" ] && [ "$worker_state" != "running" ]; then
-                  # restarting/exited 등은 진단 가치가 있어 매 tick 표시 (단 폴링은 계속)
-                  echo "⏳ worker state=$worker_state"
+                elif [ -n "$worker_status" ]; then
+                  # starting/unhealthy/restarting 등 = 진단 가치, 매 tick 표시 (폴링은 계속)
+                  echo "⏳ worker status=$worker_status"
                 fi
               fi
               if [ "$api_ok" -eq 1 ] && [ "$worker_ok" -eq 1 ]; then

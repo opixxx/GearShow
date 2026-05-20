@@ -17,6 +17,15 @@ management:
   server:
     port: 9091
     address: 0.0.0.0
+  endpoint:
+    health:
+      # Spring Boot 3.x probes 활성화 → /actuator/health/liveness + /readiness 자동 노출.
+      # docker healthcheck 가 컨테이너 안에서 localhost:9091 으로 호출(외부 노출 없음).
+      # liveness 그룹은 기본(livenessState) — Spring `AvailabilityChangeEvent` self-down
+      # + JVM 부팅 완료 + 9091 응답 가능을 검출 (ADR-027 §4 PR3). 컴포넌트 사고
+      # (Kafka/Redisson/스케줄러 등) 검출은 P1-H 메트릭(Prometheus alert) 영역.
+      probes:
+        enabled: true
 
 spring:
   jpa:

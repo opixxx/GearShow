@@ -162,11 +162,24 @@ services:
     # PR #51 metaspace OOM 클래스가 재현되면 docker 가 컨테이너만 재시작한다.
     mem_limit: 800m
     mem_reservation: 512m
-    # 1차 운영 안전망 = restart(JVM die 시 자동 재시작, exit code 기반) + 위 mem_limit.
-    # docker healthcheck 는 의도적으로 두지 않는다 — TCP probe 의 검출력이 worker SPOF 의
-    # 실제 사고 클래스(Kafka 연결 끊김 / Redisson 락 영구 hold / 스케줄러 풀 굶음)를 못 잡고
-    # docker 도 unhealthy 를 자동으로 죽이지 않아 가시성 비용 외 실효가 낮기 때문(ADR-027 §4).
-    # 가시성·검출력 보강은 후속 PR 의 /actuator/health/liveness HTTP probe + Prometheus alert.
+    # 운영 안전망 (ADR-027 §4 PR3): restart + mem_limit + actuator liveness HTTP probe.
+    # bash 내장 /dev/tcp 로 9091 에 raw HTTP/1.0 GET /actuator/health/liveness 송신 후
+    # 응답 top-level "status":"UP" 매칭. /bin/sh = dash 라 CMD-SHELL 대신 bash 명시 호출
+    # (PR2 의 dash trap 회피). curl/wget 없이 동작 — Dockerfile 무수정.
+    # liveness 그룹 = 기본(livenessState) — JVM 부팅 완료 + Spring self-down + 9091 응답
+    # 가능 검출. 컴포넌트 사고(Kafka/Redisson/스케줄러)는 P1-H 메트릭 영역.
+    # 자동 restart 트리거는 docker compose 한계로 *불가* — 가시성 보강 + CD 폴링 차단만.
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - |
+          exec 3<>/dev/tcp/localhost/9091 && printf 'GET /actuator/health/liveness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '^{"status":"UP"' <&3 && exec 3<&- || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # ===========================================
@@ -179,10 +192,11 @@ services:
   #   - WorkflowPollingScheduler (Tripo 폴링 루프)
   # 공용 인프라(OutboxRelay·정리 배치)는 application-worker.yml 이 비활성 → api 단독.
   # 외부 포트 노출 없음 — HTTP 컨트롤러는 컨테이너 안에서 떠 있으나 무라우팅.
-  # ⚠️ ADR-027 §4: worker 단독 다운 = 3D 안전망 통째로 정지(SPOF). 현 PR 의 1차 안전망은
-  # restart: unless-stopped + mem_limit 만(JVM die 자동 재시작 + host swap 차단). docker
-  # healthcheck 는 검출력 부족으로 의도적 미정의. 진짜 검출(Kafka-down/락 hold/스케줄러
-  # 기아) 은 후속 PR 의 /actuator/health/liveness HTTP probe + Prometheus alert(P1-H) 영역.
+  # ⚠️ ADR-027 §4: worker 단독 다운 = 3D 안전망 통째로 정지(SPOF). PR3 안전망 = restart +
+  # mem_limit + actuator /liveness HTTP probe (api 와 동일, 기본 livenessState 그룹).
+  # 컴포넌트 사고(Kafka 끊김 / KafkaListenerContainer stop / 락 hold / 스케줄러 굶음)은
+  # 9091 응답이 살아 healthy 로 표시 — 검출은 P1-H Prometheus alert 영역. docker compose
+  # 한계로 자동 restart 트리거는 X(autoheal 별도 트랙).
   # ===========================================
   worker:
     image: ${ECR_REGISTRY}/gearshow-backend:${IMAGE_TAG:-latest}
@@ -211,7 +225,24 @@ services:
     # cgroup 단위 메모리 강제 (ADR-027 §2.5 + ~5% 안전 마진).
     mem_limit: 730m
     mem_reservation: 448m
-    # 1차 운영 안전망 = restart + mem_limit. healthcheck 는 의도적으로 미정의 (api 블록 주석 참조).
+    # 운영 안전망 (ADR-027 §4 PR3): restart + mem_limit + actuator liveness HTTP probe.
+    # api 와 동일한 healthcheck — liveness 그룹은 기본(livenessState). 검출 범위:
+    # JVM 부팅 완료 + Spring `AvailabilityChangeEvent` self-down + 9091 응답 가능.
+    # ⚠️ worker SPOF 의 핵심 사고 클래스(Kafka 연결 끊김 / KafkaListenerContainer stop /
+    # Redisson 락 hold / 스케줄러 풀 굶음 / JVM 좀비)는 9091 응답이 살아 검출 안 됨.
+    # 검출은 P1-H Prometheus alert 영역으로 위임 (kafka_consumer_records_consumed_total
+    # lag / gearshow.admission.queue.size / gearshow.scheduler.tasks.active 등).
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - |
+          exec 3<>/dev/tcp/localhost/9091 && printf 'GET /actuator/health/liveness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '^{"status":"UP"' <&3 && exec 3<&- || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # ===========================================
