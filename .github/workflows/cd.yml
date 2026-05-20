@@ -10,7 +10,8 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   ECR_REPOSITORY: gearshow-backend
-  CONTAINER_NAME: gearshow-backend
+  # ADR-027 (PR2): backend 단일 컨테이너 → api + worker 두 컨테이너로 분리.
+  # 같은 이미지(ECR_REPOSITORY)를 SPRING_PROFILES_ACTIVE 로만 역할 분기 실행.
   EC2_APP_DIR: /home/ec2-user/gearshow
 
 jobs:
@@ -131,14 +132,13 @@ jobs:
           source: "observability"
           target: ${{ env.EC2_APP_DIR }}
 
-      - name: EC2 에서 backend 컨테이너 재기동
+      - name: EC2 에서 api / worker 컨테이너 재기동 (ADR-027 PR2 — 2컨테이너 토폴로지)
         uses: appleboy/ssh-action@v1
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
           AWS_REGION: ${{ env.AWS_REGION }}
           EC2_APP_DIR: ${{ env.EC2_APP_DIR }}
-          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
           # EC2 인스턴스에 IAM Role 이 붙어있지 않으므로 ECR 로그인용 자격증명을
           # GitHub Secrets 에서 직접 주입한다. AWS CLI 가 이 환경변수들을 자동 인식.
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -147,7 +147,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,EC2_APP_DIR,CONTAINER_NAME,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
+          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION,EC2_APP_DIR,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
           script: |
             set -e
             cd "$EC2_APP_DIR"
@@ -170,15 +170,27 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d \
               prometheus grafana node-exporter
 
-            # 새 backend 이미지 pull 후 교체
-            docker compose -f docker-compose.prod.yml pull backend
-            docker compose -f docker-compose.prod.yml up -d backend
+            # 새 이미지 pull 후 api/worker 둘 다 교체 (같은 이미지 — 역할은 프로파일로 분기)
+            docker compose -f docker-compose.prod.yml pull api worker
+            docker compose -f docker-compose.prod.yml up -d api worker
 
-            # 헬스체크 (최대 90초 대기 — Redisson 추가 로딩 + 첫 부팅 OOM 시 컨테이너
-            # 재시작 1회까지 감안. 60s 였을 때 PR #50 머지 후 부팅 완료 직전 timeout 발생).
+            # 헬스체크 — api 외부 + worker docker healthy 둘 다 통과해야 성공.
+            # 최대 90초 대기 (Redisson 추가 로딩 + 첫 부팅 OOM 시 컨테이너 재시작 1회까지 감안).
+            # api: 외부 8080 의 /api/v1/health (사용자 영향 직접 확인)
+            # worker: 외부 포트 없음 — docker compose ps 의 health 상태(/dev/tcp:9091 probe) 폴링
+            api_ok=0
+            worker_ok=0
             for i in $(seq 1 18); do
-              if curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
-                echo "✅ 헬스체크 성공 (image: $IMAGE_TAG)"
+              if [ "$api_ok" -eq 0 ] && curl -sf http://localhost:8080/api/v1/health > /dev/null 2>&1; then
+                echo "✅ api 헬스체크 성공"
+                api_ok=1
+              fi
+              if [ "$worker_ok" -eq 0 ] && docker compose -f docker-compose.prod.yml ps worker --format "{{.Status}}" 2>/dev/null | grep -q "(healthy)"; then
+                echo "✅ worker 헬스체크 성공"
+                worker_ok=1
+              fi
+              if [ "$api_ok" -eq 1 ] && [ "$worker_ok" -eq 1 ]; then
+                echo "✅ 전체 헬스체크 성공 (image: $IMAGE_TAG)"
 
                 # 배포 성공 시에만 디스크 정리 실행.
                 # --filter "until=24h" 로 24시간 이내 이미지는 보존하여
@@ -188,10 +200,10 @@ jobs:
                 df -h / | tail -1
                 exit 0
               fi
-              echo "헬스체크 대기중... ($i/18)"
+              echo "헬스체크 대기중... ($i/18) — api=$api_ok worker=$worker_ok"
               sleep 5
             done
 
-            echo "❌ 헬스체크 실패 - 최근 로그"
-            docker compose -f docker-compose.prod.yml logs --tail=200 backend
+            echo "❌ 헬스체크 실패 (api=$api_ok worker=$worker_ok) - 최근 로그"
+            docker compose -f docker-compose.prod.yml logs --tail=200 api worker
             exit 1

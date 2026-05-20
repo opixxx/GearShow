@@ -104,3 +104,17 @@ api·worker 둘 다 Kafka 클라이언트가 필요하다(api = Outbox→Kafka p
 
 ### 검증
 `RoleProfileSplitTest`(ApplicationContextRunner + ConfigDataApplicationContextInitializer): (1) prod 베이스라인 무회귀 가드(신규 토글 전부 활성) · (2) `spring.task.scheduling.pool.size=3` · (3) api/worker 프로파일 번들 정확성 · (4) 신규 조건부 어노테이션 빈 등록/비등록 + `@ConditionalOnProperty→@ConditionalOnExpression` 변환 동등성(kafka-off 무회귀).
+
+### PR2 실현 노트 (2026-05-20, PR refactor/3d-worker-process-split-p2)
+위 Deferred 항목들이 본 PR 에서 다음과 같이 실현/완화됐다. 결정 본문(§1-3)은 미변경.
+
+- ✅ **docker-compose.prod.yml 2서비스 분리**: `backend` 1서비스 → `api` + `worker` 2서비스. 같은 ECR 이미지를 `SPRING_PROFILES_ACTIVE=prod,api` / `prod,worker` 로 역할 분기. 역할별 `JDK_JAVA_OPTIONS`(§2.5 그대로: api `-Xmx384m`, worker `-Xmx320m`, 양쪽 metaspace 224m·direct 80m). `api` 만 8080 외부 노출, `worker` 는 ports 매핑 없음(HTTP 컨트롤러는 컨테이너 안에서만 떠 있음 = §2.2 매트릭스).
+- ✅ **CD 워크플로 2컨테이너 배포**: `.github/workflows/cd.yml` deploy job 의 `docker compose pull/up backend` → `pull/up api worker`. post-deploy 헬스체크가 api 외부(`curl /api/v1/health` on 8080)와 worker 내부 docker healthy 상태(`docker compose ps worker` 의 `(healthy)`) 둘 다 통과해야 성공.
+- ⚠️ **worker SPOF — JVM 사망 케이스 한정 1차 완화 (부분)**: docker `healthcheck`(bash 명시 호출 `/dev/tcp/localhost/9091` TCP probe, curl/wget 불요 → Dockerfile 무수정) + `restart: unless-stopped` + cgroup `mem_limit` 강제. **검출 범위 = JVM 사망 / 9091 미바인딩(부팅 OOM) / JVM 좀비 deadlock으로 9091 미응답 3종**. **검출 못함**: (a) Kafka 연결 끊김으로 `KafkaListenerContainer` stop, (b) Redisson watchdog 실패로 락 영구 hold, (c) 스케줄러 풀(`spring.task.scheduling.pool.size=3`) 굶음 — TCP 소켓은 살아있어 healthy 표시. 즉 "worker 단독 다운 = 3D 안전망 정지" 위협 중 *JVM 레벨만* 완화. 컴포넌트 레벨 사고(Kafka/락/스케줄러)는 Grafana 의 `kafka_consumer_records_consumed_total{component=worker}` / `gearshow.admission.queue.size` / `gearshow.scheduler.tasks.active` 등 *메트릭* 으로 운영자가 모니터링해야 한다(P1-H 미진입 → 알람 자동화 없음, 사람 시야 의존).
+- ✅ **cgroup 메모리 강제** (architecture-review 권장 반영): api `mem_limit: 800m`, worker `mem_limit: 730m` (각자 §2.5 예산 + ~5% 마진). 다른 컨테이너(Kafka/Redis/Observability)와 일관 — PR #51 metaspace OOM 재현 시 docker 가 해당 JVM 만 OOM-killer 로 죽이고 host swap thrashing 차단.
+- 🔁 **후속 PR (SPOF 단독 트랙, P1-H 와 분리)**: TCP probe → `/actuator/health/liveness` HTTP probe 격상. Spring Boot `management.endpoint.health.probes.enabled=true` 활성화 + liveness 그룹 정의 + 컨테이너 안에서 bash 의 `/dev/tcp` 로 raw HTTP 송신(curl 불요). 컴포넌트 사고 검출력 확장.
+- ✅ **prometheus.yml 2타겟**: 단일 `backend:9091` → `api:9091` + `worker:9091` 같은 `gearshow-backend` job 안에 두고 `component` 라벨로 분리(`component: api` / `component: worker`). Grafana 쿼리에서 `{component="worker"}` 로 역할별 메트릭 추출 가능.
+- ✅ **stale 주석 정정**: docker-compose.prod.yml 의 "t3.small" 잔존 3건(Kafka heap 캡, Observability 예산 블록, Prometheus tsdb 보존) 모두 t3.medium 4GB 기준으로 정정. Observability 예산 블록은 본 PR 의 새 메모리 분포(api+worker 2.6GB / 4GB, 여유 ~1.4GB)로 재계산 반영.
+- ⚠️ **배포 후 메모리 실측 (수동, 머지 후 사용자 액션)**: PR #51 metaspace OOM landmine 클래스가 처음 실측되는 시점이다. 머지 후 사용자가 `docker stats --no-stream gearshow-api gearshow-worker` 로 RSS 가 §2.5 예산 ± 20% 안에 들어오는지 + Grafana `jvm.memory.used{component=api|worker}` 패널 확인. 자동 메모리 게이트(CD step)는 첫 배포 안정성 확인 후 후속.
+- ⚠️ **worker 다운 알람**: Prometheus alert rules — P1-H(관찰성) 범위로 남음. 현재는 docker `restart` 정책 + 사람 모니터링 의존.
+- 보류 (변경 없음): 스케줄러 풀 역할별 분화(전역 3 으로 안전 상한 충족).
