@@ -1,7 +1,7 @@
 # ===========================================
 # Prometheus 스크래핑 설정
 # ===========================================
-# - 스크래핑 주기 15초: t3.small 부하를 최소화하면서도
+# - 스크래핑 주기 15초: t3.medium(4GB/2vCPU) 부하를 최소화하면서도
 #   부하 테스트 관찰에 충분한 해상도
 # - 보존 기간은 CLI 플래그(--storage.tsdb.retention.time)로 제어
 # - 스크래핑 대상은 같은 docker compose 네트워크 안의 서비스 이름을 사용
@@ -26,14 +26,23 @@ scrape_configs:
   # 포트 9091 은 application-prod.yml 의 management.server.port 설정에 의해
   # 메인 API 포트(8080) 와 분리된 관리 전용 포트이다. docker compose 내부 네트워크에서만
   # 접근 가능하며, EC2 보안 그룹/인터넷에는 노출되지 않는다.
+  #
+  # ADR-027 (PR2): backend 단일 컨테이너가 api/worker 두 컨테이너로 분리됨에 따라
+  # 두 타겟을 모두 스크래핑한다. 같은 application(=같은 JAR)이므로 단일 job 안에
+  # 두 타겟을 두고 component 라벨로 구분한다. Grafana 쿼리는
+  # {application="gearshow-backend", component="worker"} 형태로 역할별 분리 가능.
   - job_name: gearshow-backend
     metrics_path: /actuator/prometheus
     scrape_interval: 10s
     static_configs:
-      - targets: [ 'backend:9091' ]
+      - targets: [ 'api:9091' ]
         labels:
           application: gearshow-backend
           component: api
+      - targets: [ 'worker:9091' ]
+        labels:
+          application: gearshow-backend
+          component: worker
 
   # 호스트 OS 지표 — CPU, 메모리, 디스크, 네트워크, Swap
   - job_name: node-exporter
