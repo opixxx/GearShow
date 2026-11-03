@@ -34,33 +34,11 @@
 
 ## 아키텍처
 
-```mermaid
-flowchart LR
-    app["Flutter App"]
+<p align="center">
+  <img src="docs/images/architecture.png" alt="GearShow 아키텍처" width="440">
+</p>
 
-    subgraph ec2["AWS EC2 (Docker Compose)"]
-        api["api 컨테이너<br/>HTTP API · WebSocket<br/>Outbox Relay"]
-        worker["worker 컨테이너<br/>3D 생성 Consumer · 폴링 · 복구 배치"]
-        kafka[("Kafka")]
-        redis[("Redis")]
-    end
-
-    rds[("MySQL (RDS)")]
-    s3[("S3")]
-    tripo["Tripo 3D API"]
-
-    app -- "REST · STOMP" --> api
-    app -. "이미지 업로드" .-> s3
-    api --> rds
-    api -- "이벤트 발행" --> kafka
-    kafka -- "3D 생성 요청" --> worker
-    worker --> rds
-    worker <--> redis
-    api <--> redis
-    worker -- "3D 생성 · 폴링" --> tripo
-    worker -- "GLB 저장" --> s3
-```
-
+- **배포 구성**: api · worker · Kafka · Redis는 EC2 한 대에서 Docker Compose로 운영하고, MySQL은 AWS RDS, 파일은 S3에 저장합니다.
 - **단일 JAR, 두 역할**: 같은 이미지를 `api` / `worker` 프로파일로 나눠 실행합니다. API 응답 경로와 무거운 3D 생성 작업(외부 API 호출·폴링·재시도)의 자원을 분리했습니다.
 - **비동기 3D 생성**: 쇼케이스 저장과 이벤트를 한 트랜잭션에 기록하고(Transactional Outbox), Kafka를 거쳐 worker가 처리합니다.
 - **헥사고날 + DDD**: Bounded Context별로 `adapter → application → domain` 방향의 의존만 허용하고, ArchUnit 테스트로 빌드 단계에서 강제합니다.
